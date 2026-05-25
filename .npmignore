@@ -1,0 +1,10 @@
+.git/
+.github/
+copiedTests/
+node_modules/
+scripts/
+tests/
+.editorconfig
+.gitignore
+.npmignore
+eslint.config.js

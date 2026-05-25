@@ -1,0 +1,11 @@
+button:not(:invalid),
+fieldset:not(:invalid),
+form:not(:invalid),
+input:not(:invalid),
+select:not(:invalid),
+textarea:not(:invalid),
+div:not(:invalid),
+custom-element:not(:invalid),
+.foo:not(:invalid) {
+  color: red;
+}
