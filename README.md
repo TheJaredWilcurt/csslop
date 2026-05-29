@@ -194,7 +194,7 @@ Two different cases:
 1. `git add -A && git commit -m "Updated tests"`
 1. Then run `npm t` to see if any tests fail
 1. If they fail, give an AI this prompt:
-  * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src/css`.
+   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src/css`.
 1. Verify only code in the `src/css` folder was modified
 1. Verify `npm t` passes with a 100% score
 1. Run `npm run lint`, if anything fails, have the AI fix it.
