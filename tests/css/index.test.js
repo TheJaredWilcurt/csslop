@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { join } from 'path';
 
-import { minifyCSS } from '../../src/css/index.js';
+import { minifyCSS } from '../../index.js';
 
 let pass = 0;
 let fail = 0;

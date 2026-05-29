@@ -12,8 +12,8 @@ Experimental vibe-coded CSS minification library
 
 * All tests pass.
 * Several new tests were created upstream, and some existing tests were improved/fixed upstream (all manually by me, no AI used).
-* The `src/css` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can report them and I might tell the AI's to fix it.
-* No AI generated code exists outside of the `src/css` folder, this README, for example, is 100% human crafted.
+* The `src` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can report them and I might tell the AI's to fix it.
+* No AI generated code exists outside of the `src` folder, this README, for example, is 100% human crafted.
 
 **AI's used:**
 
@@ -36,7 +36,7 @@ These tools were prompted to pass the tests based in the `/copiedTests` folder t
 1. **Human Linting:** At this point, all the tests are passing, the code is somewhat organized, and mostly bug free. But it all looks like it was written by a toddler, time to apply my extremely strict linting rules. 
 1. **AI Readability improvements:** I had Claude Opus try to make the code easier to read (JSDoc comments, no single character variable names, no abbreviations in variables, grouping logic into related functions, breaking up lines of code, explain complex regex, etc.).
 1. **AI color completeness:** Had Claude Opus handle all named colors, and always convert to the shorter character representation, removing a hard-coded solution.
-1. **Test improvements:** Throughout this process, as upstream tests were improved or created, they were pulled in, and the AI was instructed to pass those new tests with prompts like, "Run `npm t` and fix all failing tests by modifying files in `src/css`."
+1. **Test improvements:** Throughout this process, as upstream tests were improved or created, they were pulled in, and the AI was instructed to pass those new tests with prompts like, "Run `npm t` and fix all failing tests by modifying files in `src`."
 
 
 **Full Notes of AI Experiment:**
@@ -47,17 +47,17 @@ These tools were prompted to pass the tests based in the `/copiedTests` folder t
 * At one point Gemini got 55 failing tests down to 15, then for some reason, reverted back to the previous commit and lost all progress, going back to 55 failing. wtf
 * All of the AI's had a weird proclivity to try to create their own testing file, and to generate random JSON files of failing lists. Even when I already provided a command to give them the same JSON, they ended up generating on their own. fuckin' weird.
 * At one point, while writing the logic of a minification library, one of the AI's decided to pull in a different minification library (LightningCSS) to try to avoid actually solving the problem in this library, which was pretty funny, and resulted in me adding to every prompt from then on out, for it not to do that again. Here is the prompt I used for most of the test categories, only changing the folder location.
-  * **PROMPT:** Get all tests in the `/copiedTests/shorthands` folder to pass by refactoring and updating `/src/css/index.js`. Use `node analyze.js` to see what tests are still failing. Do not use LightningCSS.
-* All of them preferred to just keep adding hundreds of lines of code in the `/src/css/index.js` file, at no point did any of them even consider breaking some of the code out into other files. I assume this is a result of negative reinforcement. In an established project, I probably wouldn't want the AI unilaterally organizing code into a bunch of new files, so coders have probably given it feedback to just put the code into the existing spot and to change as little as possible. I am now realizing that my prompt did say to refactor/update the `index.js` file, so maybe they all just really took that to heart.
+  * **PROMPT:** Get all tests in the `/copiedTests/shorthands` folder to pass by refactoring and updating `/src/index.js`. Use `node analyze.js` to see what tests are still failing. Do not use LightningCSS.
+* All of them preferred to just keep adding hundreds of lines of code in the `/src/index.js` file, at no point did any of them even consider breaking some of the code out into other files. I assume this is a result of negative reinforcement. In an established project, I probably wouldn't want the AI unilaterally organizing code into a bunch of new files, so coders have probably given it feedback to just put the code into the existing spot and to change as little as possible. I am now realizing that my prompt did say to refactor/update the `index.js` file, so maybe they all just really took that to heart.
 * Some of the AI's would take shortcuts, creating comments like:
   * `// We will handle the rgb conversion later, let's just do a hack for the exact test`
   * Where it just hardcodes a value to get the test to pass instead of writing the actual logic that the library should be doing
   * I accepted this during the initial multi-day process of just trying to get all the tests to pass. This was followed by having the AI's find and fix bugs, remove hacks, etc.
-  * **PROMPT:** Look in the `/src/css` folder at all the files, try to find and fix any bugs, or "TODOs", or incomplete code, or hacks. Solidify the codebase to be a robust and reliable minification library.
+  * **PROMPT:** Look in the `/src` folder at all the files, try to find and fix any bugs, or "TODOs", or incomplete code, or hacks. Solidify the codebase to be a robust and reliable minification library.
 * After all tests were passing, I had the GPT-5.4 break the code out into other files and organize the code better.
-  * **PROMPT:** The `/src/css/index.js` contains all logic for the CSS minification library. Refactor this code to retain the same functionality, but better organized. Break the code up into files and folders that would make the most sense for new contributors to know where to look to change the code.
+  * **PROMPT:** The `/src/index.js` contains all logic for the CSS minification library. Refactor this code to retain the same functionality, but better organized. Break the code up into files and folders that would make the most sense for new contributors to know where to look to change the code.
 * After that, I had each AI look for bugs and try to fix them with this
-  * **PROMPT:** Look in the `/src/css` folder at all the files, try to find and fix any bugs, or "TODOs", or incomplete code, or hacks. Solidify the codebase to be a robust and reliable minification library.
+  * **PROMPT:** Look in the `/src` folder at all the files, try to find and fix any bugs, or "TODOs", or incomplete code, or hacks. Solidify the codebase to be a robust and reliable minification library.
   * The results of the AI's attempting to fix bugs are listed below, note that AI's that went later had fewer opportunities to find bugs that weren't already fixed by the prior AI's.
   * GPT 5.4 - Fixed 12, found 1 incorrect upstream test, created 3 new tests and 1 useless one.
   * Claude Sonnet - Fixed 5 bugs, removed 5 hacks
@@ -65,11 +65,11 @@ These tools were prompted to pass the tests based in the `/copiedTests` folder t
   * Gemini 3.1 - Wow, this guy is an idiot. Okay, it rewrote 12 test expectations that were correct and already passing to be wrong. It removed valid CSS transformations calling them "invalid", removed transformations that "don't support older browsers". It removed modern CSS features that it claimed were not part of the language. It found and fixed 2 real bugs, at least, it looked like it did, then I looked into it, and no, it was wrong again on both counts. I know that Gemini went last after the other 3 AI's already fixed things, but yeah, it literally got 100% of this wrong. The first time I got to use the "reject all" button.
 * ESLint found a lot of sloppy regex. Despite asking 4 AI's to remove dead code, there was still a function that was defined and never used, along with a bunch of defined variables/arguments never used. Some unused imports, and an array of array of strings that was exported but never imported.
 * I had Claude Opus add context to all the JSDoc comments, and in one pass it did all of them, no issues.
-  * **PROMPT:** In the `/src/css` folder, fill in any missing descriptions in the JSDoc comment blocks. Add context and intent. Fill out the correct types, and a description for all arguments and returns. Also do a short 1 or 2 sentence summary of the file in the `@file` comment. Run `npm run lint` to validate none were missed.
+  * **PROMPT:** In the `/src` folder, fill in any missing descriptions in the JSDoc comment blocks. Add context and intent. Fill out the correct types, and a description for all arguments and returns. Also do a short 1 or 2 sentence summary of the file in the `@file` comment. Run `npm run lint` to validate none were missed.
 * I then had Claude Opus attempt a readability refactor. It did okay, but has zero idea where to add a return in a line of code to split it into multiple lines. I blame this on the pervasive virus that is "dog shit prettier, the worst formatting tool in the universe, that puts returns in the dumbest possible places". There has to be so much of that garbage in its training data. Tried with a very detailed second prompt with code examples and it cleaned up some of that, but ultimately, I think I'd have to wade through the slop code line-by-line to clean it up to my standards, and I'm not going to bother with that now.
-  * **PROMPT:** Improve the code readability for the files in `/src/css`. Avoid single character variable names (except for colors like `r` instead of `red` in a function that deals with RGB). Avoid abbreviations in variable and function names, except for words that are more commonly seen abbreviated, such as sRGB, HTML, CSS, etc. Avoid ternaries. If a line of code would more commonly be seen broken into multiple lines, prefer that. Most importantly, only convey one idea per line of code. If this means you need to add additional lines to store data in variables that better convey that line's idea in their name, do so.
+  * **PROMPT:** Improve the code readability for the files in `/src`. Avoid single character variable names (except for colors like `r` instead of `red` in a function that deals with RGB). Avoid abbreviations in variable and function names, except for words that are more commonly seen abbreviated, such as sRGB, HTML, CSS, etc. Avoid ternaries. If a line of code would more commonly be seen broken into multiple lines, prefer that. Most importantly, only convey one idea per line of code. If this means you need to add additional lines to store data in variables that better convey that line's idea in their name, do so.
   * **PROMPT:**
-    > Refactor the code in `/src/css`. Do not use shorthand for arrow functions. Always break them up to at least 3 lines, including an explicit return if needed.
+    > Refactor the code in `/src`. Do not use shorthand for arrow functions. Always break them up to at least 3 lines, including an explicit return if needed.
     >
     > You converted some code from this style
     > ```js
@@ -121,10 +121,10 @@ These tools were prompted to pass the tests based in the `/copiedTests` folder t
     > const i = 2;
     > const j = [i, i].join('');
     > ```
-  * **PROMPT:** Refactor the code in `src/css`. Find related logic that could be grouped into small functions. Any time there is a complex regex pattern, either pull it out to a well named variable or function, or add detailed comments explaining what the purpose of the regex is. Include JSDoc comments on new functions. Run `npm run lint` to verify linting passes.
-  * **PROMPT:** Looking at the files in the src/css folder, are there any improvements you can think of to better organize the code?
+  * **PROMPT:** Refactor the code in `src`. Find related logic that could be grouped into small functions. Any time there is a complex regex pattern, either pull it out to a well named variable or function, or add detailed comments explaining what the purpose of the regex is. Include JSDoc comments on new functions. Run `npm run lint` to verify linting passes.
+  * **PROMPT:** Looking at the files in the src folder, are there any improvements you can think of to better organize the code?
     * This resulted in a 6-point plan that I approved.
-  * **PROMPT:** At line 613 of `src/css/value/minify.css` we list a handful of specific colors to minify. This seems like a naive approach. Instead, all color values should be evaluated consistently and converted to all other compatible representations, including checking if their colors are an exact match for a named color (`red`, `tan`, etc.). Then compare all representations to find the version with the shortest length. Preferring hex where possible.
+  * **PROMPT:** At line 613 of `src/value/minify.css` we list a handful of specific colors to minify. This seems like a naive approach. Instead, all color values should be evaluated consistently and converted to all other compatible representations, including checking if their colors are an exact match for a named color (`red`, `tan`, etc.). Then compare all representations to find the version with the shortest length. Preferring hex where possible.
 * I guess this is done now. Only thing left to do is give it a name and release it into the world.
 
 
@@ -182,7 +182,7 @@ Two different cases:
 1. **Use:** Use of the library code is not copyrighted, and therefor cannot be licensed, but also, no one can sue you for using it, but also, you have no legal recourse if anything goes wrong as a result of using it. Similar to the "Unlicense" or other "Public Domain" materials.
 1. **Forking:**
    * The `copiedTests` folder contains code directly copied from https://github.com/keithamus/css-minify-tests which is MIT Licensed
-   * The `src/css` folder contains code 100% written by AI, and cannot be copyrighted, nor licensed.
+   * The `src` folder contains code 100% written by AI, and cannot be copyrighted, nor licensed.
    * All other code in this repo was written by me, and uses the MIT License.
 
 
@@ -194,8 +194,8 @@ Two different cases:
 1. `git add -A && git commit -m "Updated tests"`
 1. Then run `npm t` to see if any tests fail
 1. If they fail, give an AI this prompt:
-   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src/css`.
-1. Verify only code in the `src/css` folder was modified
+   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src`.
+1. Verify only code in the `src` folder was modified
 1. Verify `npm t` passes with a 100% score
 1. Run `npm run lint`, if anything fails, have the AI fix it.
 1. If the code changes look hacky, or hard coded, tell the AI to fix it
