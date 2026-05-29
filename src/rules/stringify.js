@@ -44,6 +44,86 @@ function stringifyChildRules (rules, context) {
 }
 
 /**
+ * Processes a bare `:is()` selector by merging `:link`+`:visited` into `:any-link`,
+ * de-duplicating, sorting alphabetically, and conditionally expanding into individual
+ * selectors when all parts are simple type/universal selectors with no modifications.
+ *
+ * @param  {string} selector  A minified CSS selector string.
+ * @return {Array}            An array of one or more processed selector strings.
+ */
+function processIsSelector (selector) {
+  // Replace :is(:link,:visited) and :is(:visited,:link) with :any-link
+  selector = selector.replace(/:is\(:link,:visited\)/g, ':any-link');
+  selector = selector.replace(/:is\(:visited,:link\)/g, ':any-link');
+  // Only process bare :is() selectors (where :is() is the entire selector)
+  if (!selector.startsWith(':is(')) {
+    return [selector];
+  }
+  let depth = 0;
+  let closingIndex = -1;
+  for (let index = 4; index < selector.length; index++) {
+    if (selector[index] === '(') {
+      depth++;
+    } else if (selector[index] === ')') {
+      if (depth === 0) {
+        closingIndex = index;
+        break;
+      }
+      depth--;
+    }
+  }
+  if (closingIndex !== selector.length - 1) {
+    return [selector];
+  }
+  const content = selector.slice(4, -1);
+  let parts = [];
+  let currentPart = '';
+  let parenDepth = 0;
+  for (const character of content) {
+    if (character === '(') {
+      parenDepth++;
+    } else if (character === ')') {
+      parenDepth--;
+    }
+    if (character === ',' && parenDepth === 0) {
+      parts.push(currentPart);
+      currentPart = '';
+    } else {
+      currentPart += character;
+    }
+  }
+  parts.push(currentPart);
+  const originalCount = parts.length;
+  // Replace :link + :visited with :any-link
+  const hasLink = parts.includes(':link');
+  const hasVisited = parts.includes(':visited');
+  if (hasLink && hasVisited) {
+    parts = parts.filter((part) => {
+      return part !== ':link' && part !== ':visited';
+    });
+    if (!parts.includes(':any-link')) {
+      parts.push(':any-link');
+    }
+  }
+  // De-duplicate
+  parts = [...new Set(parts)];
+  // Sort alphabetically
+  parts.sort();
+  // Unwrap :is() with a single selector
+  if (parts.length === 1) {
+    return parts;
+  }
+  // Expand if all parts are simple type/universal selectors and no dedup/replacement occurred
+  const allSimple = parts.every((part) => {
+    return /^[a-z*][a-z0-9-]*$/i.test(part);
+  });
+  if (allSimple && parts.length === originalCount) {
+    return parts;
+  }
+  return [':is(' + parts.join(',') + ')'];
+}
+
+/**
  * Converts a parsed CSS AST rule node into a minified CSS string, dispatching to specialized handlers for each rule type including selectors, `@media`, `@keyframes`, `@layer`, and other at-rules.
  *
  * @param  {object}  rule     The AST rule node to stringify.
@@ -143,29 +223,11 @@ function stringifyRule (rule, context, nested = false) {
         minified = minified.replace(/(^|[\s,>+~])(a|area|link)(?:\[.*?\])*(?::where\()?:not\(:link\)\)?/g, (match) => {
           return match.replace(':not(:link)', ':visited');
         });
-        minified = minified.replace(/:is\(:link,:visited\)/g, ':any-link');
-        minified = minified.replace(/:is\(:visited,:link\)/g, ':any-link');
         // Remove redundant leading "& " nesting selector
         minified = minified.replace(/^& /, '');
         return minified;
       });
-      uniqueSelectors = uniqueSelectors.flatMap((selector) => {
-        // Check if selector is a bare :is() wrapping simple selectors that can be expanded
-        const isMatch = selector.match(/^:is\(([^()]+)\)$/);
-        if (isMatch) {
-          const parts = isMatch[1].split(',').map((part) => {
-            return part.trim();
-          });
-          // Check each part is a simple type/universal selector (no class, id, or pseudo)
-          const allSimple = parts.every((part) => {
-            return /^[a-z*][a-z0-9-]*$/i.test(part);
-          });
-          if (allSimple) {
-            return parts;
-          }
-        }
-        return [selector];
-      });
+      uniqueSelectors = uniqueSelectors.flatMap(processIsSelector);
       uniqueSelectors = [...new Set(uniqueSelectors)];
       const headingSet = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
       const isAllHeadings = (
