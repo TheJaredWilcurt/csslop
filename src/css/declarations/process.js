@@ -141,6 +141,7 @@ function getOverriddenLonghands (shorthandProp) {
  * @return {boolean}        True if the value contains a var() with a fallback comma.
  */
 function hasVarFallback (value) {
+  // Match var() containing a comma (indicating a fallback value)
   return /var\([^)]*,/.test(value);
 }
 
@@ -152,10 +153,12 @@ function hasVarFallback (value) {
  * @return {boolean}          True if the value is safe to merge into a shorthand.
  */
 function canMergeVarValue (value, context) {
+  // Check if the value contains any var() reference
   const containsVar = /var\(/.test(value);
   if (!containsVar || hasVarFallback(value)) {
     return !hasVarFallback(value);
   }
+  // Extract all var() references with their custom property names
   const matches = [...value.matchAll(/var\((--[A-Za-z0-9_-]+)\)/g)];
   if (!matches.length) {
     return false;
@@ -459,9 +462,11 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
     properties.length === 3 &&
     (properties.includes('border-width') || properties.includes('outline-width')) &&
     properties.some((property) => {
+      // Check if one longhand ends with "-style" (e.g. border-style, outline-style)
       return /-style$/.test(property);
     }) &&
     properties.some((property) => {
+      // Check if one longhand ends with "-color" (e.g. border-color, outline-color)
       return /-color$/.test(property);
     })
   );

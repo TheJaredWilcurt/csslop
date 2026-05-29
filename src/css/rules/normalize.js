@@ -36,6 +36,7 @@ function unescapeSelector (selector) {
     } else {
       precedingCharacter = '';
     }
+    // Check if the unescaped character is a digit that would form an invalid start of a class/id name
     const isLeadingDigitAfterSelector = (
       /[0-9]/.test(character) &&
       (offset === 0 || precedingCharacter === '.' || precedingCharacter === '#')

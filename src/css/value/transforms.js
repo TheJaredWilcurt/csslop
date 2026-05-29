@@ -57,6 +57,7 @@ function splitTransformFunctions (value) {
   const parts = [];
   let position = 0;
   while (position < value.length) {
+    // Skip whitespace between transform functions
     while (position < value.length && /\s/.test(value[position])) {
       position++;
     }
@@ -64,6 +65,7 @@ function splitTransformFunctions (value) {
       break;
     }
     const nameStart = position;
+    // Consume alphanumeric and hyphen characters for the function name
     while (position < value.length && /[A-Za-z0-9-]/.test(value[position])) {
       position++;
     }

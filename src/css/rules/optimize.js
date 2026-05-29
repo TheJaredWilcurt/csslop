@@ -26,6 +26,7 @@ function expandPureNestedRules (rules) {
     });
     if (hasNonRuleDeclarations) {
       rule.selectors.forEach((selector) => {
+        // Normalize selector whitespace to single space for deduplication
         flatSelectors.add(selector.trim().replace(/\s+/g, ' '));
       });
     }
@@ -112,6 +113,7 @@ function tryNestSelector (parentSel, childSel) {
   if (child.startsWith(parent + ' ')) {
     return child.slice(parent.length + 1);
   }
+  // Match child selector that starts with the parent followed by a combinator (>, +, ~)
   const combinatorMatch = child.match(
     new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$')
   );
@@ -293,6 +295,7 @@ function mergeSelectorRules (rules) {
     if (rule.type === 'rule') {
       const selectorKey = rule.selectors ?
         rule.selectors.map((selector) => {
+          // Normalize selector whitespace for consistent comparison
           return selector.trim().replace(/\s+/g, ' ');
         }).sort().join(',') :
         '';

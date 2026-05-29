@@ -177,6 +177,7 @@ function filterRedundantCharsets (rules) {
     if (rule.type === 'charset') {
       if (!firstCharsetFound) {
         firstCharsetFound = true;
+        // Strip surrounding quotes from the charset value for comparison
         const normalizedCharset = rule.charset?.toLowerCase().replace(/["']/g, '');
         if (normalizedCharset === 'utf-8') {
           return false;

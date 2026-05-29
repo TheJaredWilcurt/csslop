@@ -43,8 +43,11 @@ function tryFoldCalcExpression (expression) {
       }
       return '';
     });
+    // Remove additive zero terms
     expr = expr.replace(/\+\s*0\b/g, '');
+    // Remove subtractive zero terms
     expr = expr.replace(/-\s*0\b/g, '');
+    // Collapse whitespace
     expr = expr.replace(/\s+/g, ' ').trim();
   } while (expr !== previous);
 
@@ -53,16 +56,19 @@ function tryFoldCalcExpression (expression) {
     return expr.replace(/^1\s*\/\s*1\s*\/\s*/i, '');
   }
 
-  // Validate that the expression is a simple sequence of signed terms with optional units
+  // Remove all whitespace for validation
   const normalized = expr.replace(/\s+/g, '');
+  // Validate that the expression is a simple sequence of signed terms with optional units
   if (!/^[+-]?(?:\d*\.\d+|\d+)(?:[a-z%]+)?(?:[+-](?:\d*\.\d+|\d+)(?:[a-z%]+)?)*$/i.test(normalized)) {
     return null;
   }
 
+  // Extract each signed term with its optional unit
   const terms = normalized.match(/[+-]?(?:\d*\.\d+|\d+)(?:[a-z%]+)?/gi) || [];
   const totals = new Map();
 
   for (const term of terms) {
+    // Parse each term into sign, number, and unit parts
     const match = term.match(/^([+-]?)(\d*\.\d+|\d+)([a-z%]+)?$/i);
     if (!match) {
       return null;
@@ -144,6 +150,7 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     return 'calc(' + inner + ')';
   });
 
+  // Simplify min()/max() expressions using @csstools/css-calc
   result = result.replace(/\b(min|max)\(([^()]+)\)/gi, (match) => {
     try {
       const simplified = calc(match);
@@ -153,14 +160,18 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     }
   });
 
+  // Simplify calc() expressions using constant folding and @csstools/css-calc
   result = result.replace(/calc\(([^()]+)\)/gi, (match, inner) => {
+    // Collapse whitespace inside calc expression
     const compactInner = inner.replace(/\s+/g, ' ').trim();
     // Preserve percent-times-number expressions (e.g. 50%*2 or 2*50%) — just strip inner spaces
     if (/^(?:-?(?:\d*\.\d+|\d+)%\s*\*\s*-?(?:\d*\.\d+|\d+)|-?(?:\d*\.\d+|\d+)\s*\*\s*-?(?:\d*\.\d+|\d+)%)$/i.test(compactInner)) {
+      // Remove whitespace around multiplication/division operators
       return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
     }
     // Preserve percent/number division expressions (e.g. 100%/3) — just strip inner spaces
     if (/^\d+(?:\.\d+)?%\s*\/\s*\d+(?:\.\d+)?$/i.test(compactInner)) {
+      // Remove whitespace around division operator
       return 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
     }
 
@@ -174,6 +185,7 @@ function normalizeMathFunctions (value, property, originalValue = '') {
       if (typeof simplified !== 'string') {
         return match;
       }
+      // If simplified to a bare percentage but original had division, preserve the calc form
       if (/^-?(?:\d+|\d*\.\d+)%$/.test(simplified) && /%\s*\//.test(match)) {
         return 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
       }
@@ -185,6 +197,7 @@ function normalizeMathFunctions (value, property, originalValue = '') {
 
   // When calc() folded to an absolute-length unit (pt, pc, in, cm, mm, q), convert to pixels
   if (originalValue.includes('calc(') && /^-?(?:\d+|\d*\.\d+)(pt|pc|in|cm|mm|q)$/i.test(result)) {
+    // Extract the absolute-length unit from the folded result
     const [, unit] = result.match(/^-?(?:\d+|\d*\.\d+)(pt|pc|in|cm|mm|q)$/i);
     const numeric = parseFloat(result);
     const pxValue = convertAbsoluteLengthToPx(numeric, unit);
@@ -207,16 +220,20 @@ function normalizeMathFunctions (value, property, originalValue = '') {
  * @return {string}        The simplified value, or the original value if simplification is not applicable.
  */
 function simplifyStandaloneCalc (value) {
+  // Check if value starts with calc( and ends with )
   if (!/^calc\(/i.test(value) || !value.endsWith(')')) {
     return value;
   }
   let inner = value.slice(5, -1).trim();
 
+  // Preserve percent-times-number expressions, only stripping whitespace around operators
   if (/^(?:-?(?:\d*\.\d+|\d+)%\s*\*\s*-?(?:\d*\.\d+|\d+)|-?(?:\d*\.\d+|\d+)\s*\*\s*-?(?:\d*\.\d+|\d+)%)$/i.test(inner.replace(/\s+/g, ' ').trim())) {
     return 'calc(' + inner.replace(/\s*([*/])\s*/g, '$1') + ')';
   }
 
+  // If no nested function calls and no multiplication/division involving parens, try flattening
   if (!/[A-Za-z-]+\(/.test(inner) && !/[*/]\s*\(|\)\s*[*/]/.test(inner)) {
+    // Remove all parentheses and collapse whitespace for folding
     const flattened = inner.replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
     const foldedFlattened = tryFoldCalcExpression(flattened);
     if (foldedFlattened) {
@@ -228,6 +245,7 @@ function simplifyStandaloneCalc (value) {
 
   do {
     previous = inner;
+    // Fold innermost parenthesized sub-expressions that aren't function calls
     inner = inner.replace(/(^|[^A-Za-z-])\(([^()]+)\)/g, (match, prefix, content) => {
       const trimmed = content.trim();
       const folded = tryFoldCalcExpression(trimmed);
@@ -246,11 +264,14 @@ function simplifyStandaloneCalc (value) {
     return folded;
   }
 
+  // Collapse whitespace and check for percent-division expressions
   const compactInner = inner.replace(/\s+/g, ' ').trim();
+  // Preserve percent/number division, just strip whitespace around the operator
   if (/^\d+(?:\.\d+)?%\s*\/\s*\d+(?:\.\d+)?$/i.test(compactInner)) {
     return 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
   }
 
+  // Default: strip whitespace around multiplication/division operators
   return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
 }
 

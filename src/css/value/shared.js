@@ -27,6 +27,7 @@ function formatCompactNumber (value) {
  */
 function normalizeScaleComponent (value) {
   const trimmed = value.trim();
+  // Match a percentage value (e.g. "150%", "-50%") and capture the numeric portion
   const percentMatch = trimmed.match(/^(-?(?:\d+|\d*\.\d+))%$/);
   if (!percentMatch) {
     return trimmed;
@@ -46,6 +47,7 @@ function roundCompactNumber (value, precision = 3) {
   if (!Number.isFinite(number)) {
     return String(value);
   }
+  // Strip trailing zeros and trailing decimal point from the fixed-precision string
   let result = number.toFixed(precision).replace(/0+$/, '').replace(/\.$/, '');
   if (result.startsWith('0.')) {
     result = result.slice(1);

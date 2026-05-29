@@ -308,6 +308,7 @@ function interpolateHueShorter (h1, h2, t) {
  * @return {Array|null}      An [r, g, b, a] array (r,g,b: 0–255, a: 0–1), or null for invalid lengths.
  */
 function parseHex (hex) {
+  // Strip leading # from hex string
   hex = hex.replace(/^#/, '');
   if (hex.length === 3) {
     return [parseInt(hex[0] + hex[0], 16), parseInt(hex[1] + hex[1], 16), parseInt(hex[2] + hex[2], 16), 1];
@@ -453,8 +454,10 @@ function formatOklch (L, C, H, alpha) {
  */
 function findNoneChannels (rawColorStr) {
   const indices = [];
+  // Match rgb/rgba/hsl/hsla/hwb function calls and extract their arguments
   const functionMatch = rawColorStr.match(/\b(?:rgba?|hsla?|hwb)\(([^)]*)\)/i);
   if (functionMatch) {
+    // Split arguments on whitespace, commas, or slash separators
     const parts = functionMatch[1].trim().split(/[\s,/]+/).map((part) => {
       return part.trim();
     }).filter((part) => {
@@ -661,6 +664,7 @@ function parseColorMixArg (arg) {
     const colorStr = match[1].trim();
     const percentage = parseFloat(match[2]);
     const color = parseColor(colorStr);
+    // Check if color contains var() or currentcolor (cannot be evaluated statically)
     return { color, percentage, raw: colorStr, hasVar: /var\(|currentcolor/i.test(colorStr) };
   }
 
@@ -670,11 +674,13 @@ function parseColorMixArg (arg) {
     const colorStr = match[2].trim();
     const percentage = parseFloat(match[1]);
     const color = parseColor(colorStr);
+    // Check if color contains var() or currentcolor (cannot be evaluated statically)
     return { color, percentage, raw: colorStr, hasVar: /var\(|currentcolor/i.test(colorStr) };
   }
 
   // No percentage
   const color = parseColor(arg);
+  // Check if color contains var() or currentcolor (cannot be evaluated statically)
   return { color, percentage: null, raw: arg, hasVar: /var\(|currentcolor/i.test(arg) };
 }
 
@@ -740,7 +746,7 @@ function convertOklabToHex (L, a, b, alpha) {
  * @return {string|null}       A hex color string if the relative color is a simple identity transform, or null otherwise.
  */
 function evaluateRelativeColor (expr) {
-  // Only handle: color(from <color> srgb r g b [/ <alpha>])
+  // Match: color(from <base-color> srgb r g b [/ <alpha>]) identity transform pattern
   const match = expr.match(/^color\(\s*from\s+(.+?)\s+srgb\s+r\s+g\s+b(?:\s*\/\s*([\d.]+%?))?\s*\)$/i);
   if (!match) {
     return null;

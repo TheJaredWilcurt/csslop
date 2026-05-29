@@ -73,7 +73,9 @@ function processGradientArgs (func, argsStr) {
   }
 
   if (args.length > 0) {
+    // Remove default 0% stop position from the first gradient stop
     args[0] = args[0].replace(/^(.*\S)\s+0%$/, '$1');
+    // Remove default 100% stop position from the last gradient stop
     args[args.length - 1] = args[args.length - 1].replace(/^(.*\S)\s+100%$/, '$1');
   }
 

@@ -183,6 +183,7 @@ function normalizeWhitespaceAndQuotes (val, property) {
   // Whitespace minification
   val = val.replace(/\s*!\s*important/i, '!important');
   // val = val.replace(/\s*([+*/=])\s*/g, '$1');
+  // Strip whitespace around commas
   val = val.replace(/\s*([,])\s*/g, '$1');
   // Match quoted strings (to skip them) or parentheses with surrounding whitespace (to strip whitespace)
   val = val.replace(/("[^"]*"|'[^']*')|\s*([()])\s*/g, (match, str, paren) => {
@@ -233,16 +234,23 @@ function convertColorsToHex (val) {
 
   // Minify whitespace and numeric precision inside wide-gamut and functional color notations
   val = val.replace(/\b(oklab|oklch|lch|lab|color|hwb)\((.*?)\)/gi, (match, func, inner) => {
+    // Collapse whitespace to single space
     let minified = inner.replace(/\s+/g, ' ');
+    // Remove space after commas
     minified = minified.replace(/, /g, ',');
+    // Remove spaces around slash separator (alpha delimiter)
     minified = minified.replace(/ \/ /g, '/');
+    // Strip leading zeros from decimal numbers (e.g. 0.5 → .5)
     minified = minified.replace(/\b0+(\.[\d]+)/g, '$1');
+    // Strip leading zeros from decimals preceded by a keyword (e.g. srgb 0.5 → srgb .5)
     minified = minified.replace(/([A-Za-z]) 0+(\.[\d]+)/g, '$1 $2');
+    // Check if function uses a wide-gamut color space requiring higher numeric precision
     const useWidePrecision = func.toLowerCase() === 'color' && /\b(srgb-linear|xyz-d65|xyz-d50|xyz)\b/i.test(inner);
     // Round numbers with 3+ decimal places, using context-aware precision
     minified = minified.replace(/(^|[\s(,/-])(-?\d*\.\d{3,})/g, (match, before, num) => {
       const isAlpha = before === '/';
       const absoluteValue = Math.abs(parseFloat(num));
+      // Check if function is a Lab/LCH color notation with a large channel value (less precision needed)
       const isLargeLabValue = /^(?:lch|lab|oklch|oklab)$/i.test(func) && absoluteValue >= 10;
       let precision;
       if (isAlpha) {
@@ -256,6 +264,7 @@ function convertColorsToHex (val) {
       }
       const factor = Math.pow(10, precision);
       const roundedNum = Math.round(parseFloat(num) * factor) / factor;
+      // Strip trailing zeros and trailing decimal point from the rounded number
       let rounded = roundedNum.toFixed(precision).replace(/0+$/, '').replace(/\.$/, '');
       if (rounded.startsWith('0.')) {
         rounded = rounded.substring(1);
@@ -343,11 +352,14 @@ function convertColorsToHex (val) {
  */
 function applyPropertyOptimizations (val, property) {
   if (property === 'font-weight') {
+    // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
+    // Replace font-weight keyword "normal" with its numeric equivalent
     val = val.replace(/\bnormal\b/gi, '400');
   }
 
   if (property === 'transition-duration') {
+    // Convert millisecond duration to seconds when the result is shorter (e.g. 200ms → .2s)
     val = val.replace(/^(-?(?:\d+|\d*\.\d+))ms$/i, (match, amount) => {
       return roundCompactNumber(parseFloat(amount) / 1000) + 's';
     });
@@ -355,8 +367,11 @@ function applyPropertyOptimizations (val, property) {
 
   // Transition: remove " 0s" duration (transition: all 0s -> transition: all)
   if (property === 'transition') {
+    // Remove zero-second duration from transition shorthand
     val = val.replace(/\s+0s/g, ' ');
+    // Remove leading zero-pixel value from transition shorthand
     val = val.replace(/^0px\s*/, '');
+    // Replace cubic-bezier functions with their equivalent named timing-function keywords
     val = val.replace(/cubic-bezier\(0,0,1,1\)/g, 'linear');
     val = val.replace(/cubic-bezier\(\.25,\.1,\.25,1\)/g, 'ease');
     val = val.replace(/cubic-bezier\(\.42,0,1,1\)/g, 'ease-in');
@@ -365,15 +380,20 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'animation') {
+    // Replace steps() functions with their equivalent named timing-function keywords
     val = val.replace(/steps\(1,start\)/g, 'step-start');
     val = val.replace(/steps\(1,end\)/g, 'step-end');
   }
 
   // Flex: remove " 0px" from flex shorthand (flex: 0 0 0px -> flex: 0 0)
   if (property === 'flex') {
+    // Remove trailing zero-pixel basis value
     val = val.replace(/\s+0px/g, ' ');
+    // Remove leading zero-pixel value
     val = val.replace(/^0px\s*/, '');
+    // Remove trailing zero
     val = val.replace(/\s+0$/, '');
+    // Remove standalone zero-pixel value
     val = val.replace(/^0px$/, '');
     val = val.trim();
   }
@@ -431,15 +451,19 @@ function applyPropertyOptimizations (val, property) {
     }
   }
 
+  // Check if border value starts with a style keyword, and reorder to canonical width-style-color order
   if (property === 'border' && /^(?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+/i.test(val)) {
+    // Reorder border shorthand from style-width-color to width-style-color
     val = val.replace(/^((?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none))\s+([^\s]+)\s+(.+)$/i, '$2 $1 $3');
   }
 
   if (property === 'flex-flow') {
+    // Reorder flex-flow from wrap-direction to direction-wrap (canonical order)
     val = val.replace(/^(nowrap|wrap|wrap-reverse)\s+(row|row-reverse|column|column-reverse)$/i, '$2 $1');
   }
 
   if (property === 'font-family') {
+    // Strip quotes from simple multi-word font family names that don't require quoting
     val = val.replace(/"([A-Za-z0-9-]+(?: [A-Za-z0-9-]+)+)"/g, '$1');
     const seenFamilies = new Set();
     val = val.split(',').map((part) => {
@@ -455,19 +479,24 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'grid-template-areas') {
+    // Normalize each quoted grid-template-areas row string
     val = val.replace(/"([^"]*)"/g, (match, inner) => {
+      // Collapse whitespace to single space within grid row
       let normalized = inner.replace(/\s+/g, ' ').trim();
+      // Collapse consecutive dots (null cell tokens) to a single dot
       normalized = normalized.replace(/(^| )\.{2,}(?= |$)/g, '$1.');
       return '"' + normalized + '"';
     });
   }
 
   if (property === 'font-size') {
+    // Convert point (pt) font-size values to their pixel (px) equivalent
     val = val.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
       return roundCompactNumber(parseFloat(amount) * (96 / 72)) + 'px';
     });
   }
 
+  // Simplify clamp() where all three arguments are identical (e.g. clamp(1rem,1rem,1rem) → 1rem)
   val = val.replace(/\bclamp\(([^,]+),\1,\1\)/gi, '$1');
 
   // Convert display-p3 neutral grays to sRGB (equal channels are identical across gamuts)
@@ -490,7 +519,9 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'font') {
+    // Split font shorthand on whitespace
     const parts = val.split(/\s+/);
+    // Find the font-size part: contains a digit and a recognized CSS length/percentage unit
     const sizeIndex = parts.findIndex((part) => {
       return /\d/.test(part) && /(?:px|em|rem|%|pt|pc|vw|vh|vmin|vmax|ch|ex|cm|mm|in|lh|rlh)/i.test(part);
     });
@@ -503,11 +534,17 @@ function applyPropertyOptimizations (val, property) {
 
   if (property === 'background' && val !== 'none') {
     const normalized = val
+      // Remove default "0 0" background-position values
       .replace(/(?:^|\s)0(?:%|px)? 0(?:%|px)?(?=\s|$)/g, ' ')
+      // Remove "0 0" background-position after a close-paren (e.g. after url())
       .replace(/\)0(?:%|px)? 0(?:%|px)?(?=\s|$)/g, ') ')
+      // Remove default "repeat" background-repeat keyword (excluding compound values like no-repeat)
       .replace(/(?<!-)\brepeat\b(?!-)/g, ' ')
+      // Remove default "scroll" background-attachment keyword
       .replace(/\bscroll\b/g, ' ')
+      // Remove default "none" background-image keyword
       .replace(/\bnone\b/g, ' ')
+      // Collapse whitespace to single space
       .replace(/\s+/g, ' ')
       .trim();
     if (normalized) {
@@ -516,6 +553,7 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'border') {
+    // Remove default "medium" border-width keyword
     val = val.replace(/\bmedium\s+/g, '');
   }
 
@@ -526,10 +564,12 @@ function applyPropertyOptimizations (val, property) {
 
   if (property === 'transform') {
     val = minifyTransformValue(val);
+    // Remove whitespace between consecutive transform functions
     val = val.replace(/\)\s+(?=[a-z-]+\()/gi, ')');
   }
 
   if (property === 'scale') {
+    // Split scale value on whitespace into individual axis components
     const parts = val.split(/\s+/).filter(Boolean).map(normalizeScaleComponent);
     if (parts.length === 2 && parts[0] === parts[1]) {
       val = parts[0];
@@ -548,6 +588,7 @@ function applyPropertyOptimizations (val, property) {
   val = val.replace(/\s+/g, ' ');
 
   // Shorthands: margin, padding, border-width, border-style, border-color, inset
+  // Check if property supports box-model shorthand collapsing (4 → 3 → 2 → 1 values)
   if (/^(margin|padding|inset|border-width|border-style|border-color|gap|overflow)$/.test(property)) {
     val = collapseShorthandParts(val.split(' ')).join(' ');
   }
@@ -556,6 +597,7 @@ function applyPropertyOptimizations (val, property) {
     const segments = val.split('/').map((segment) => {
       return segment.trim();
     }).filter(Boolean).map((segment) => {
+      // Split each segment on whitespace and collapse redundant parts
       return collapseShorthandParts(segment.split(/\s+/)).join(' ');
     });
     val = segments.join('/');
@@ -584,12 +626,17 @@ function minifyValue (declaration) {
     val = normalizeWhitespaceAndQuotes(val, declaration.property);
 
     // Instead of unconditionally removing spaces around + and - and *, handle math vs non-math
+    // Collapse spaces around division operator
     val = val.replace(/ \/ /g, '/');
-    val = val.replace(/\s*([*/])\s*/g, '$1'); // Space around * and / is safely removable
+    // Remove whitespace around * and / operators (safe outside calc context)
+    val = val.replace(/\s*([*/])\s*/g, '$1');
     val = normalizeMathFunctions(val, declaration.property, declaration.value || '');
     val = simplifyStandaloneCalc(val);
+    // Simplify calc() expressions containing zero-percent additive terms
     val = val.replace(/calc\(([^()]+)\)/gi, (match, inner) => {
+      // Collapse whitespace inside calc expression
       const compactInner = inner.replace(/\s+/g, ' ').trim();
+      // Extract all percentage terms from the expression
       const percentTerms = compactInner.match(/[+-]?\s*(?:\d*\.\d+|\d+)%/g) || [];
       const hasNonZeroPercent = percentTerms.some((term) => {
         return Math.abs(parseFloat(term)) > 0;
@@ -597,6 +644,7 @@ function minifyValue (declaration) {
       if (!hasNonZeroPercent) {
         return match;
       }
+      // Remove trailing "+ 0%" and leading "0% +" additive identity terms
       return 'calc(' + compactInner.replace(/\s*\+\s*0%(?=\s*$)/g, '').replace(/^0%\s*\+\s*/g, '').trim() + ')';
     });
 
@@ -607,6 +655,7 @@ function minifyValue (declaration) {
     }
     val = val.replace(/(^|\s|,|\()(-?)0+(\.\d+)/g, '$1$2$3'); // e.g. 0.5 -> .5, -0.5 -> -.5
 
+    // If value is a standalone number with optional unit, round it compactly
     if (/^[+-]?(?:\d+|\d*\.\d+)([a-z%]+)?$/i.test(val)) {
       const [, rawNumber, rawUnit = ''] = val.match(/^([+-]?(?:\d+|\d*\.\d+))([a-z%]+)?$/i);
       val = roundCompactNumber(rawNumber, 4) + rawUnit;
@@ -615,6 +664,7 @@ function minifyValue (declaration) {
     // Remove space before hex colors
     val = replaceOutsideStringsAndUrls(val, (segment) => {
       segment = segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
+      // Lowercase hex color tokens for consistency and shorter output
       segment = segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (m) => {
         return m.toLowerCase();
       });
@@ -632,6 +682,7 @@ function minifyValue (declaration) {
   }
 
   // Gradient optimizations
+  // Check if value contains a gradient function
   if (/gradient\(/.test(val)) {
     val = minifyGradients(val);
   }
@@ -648,8 +699,10 @@ function minifyValue (declaration) {
       }
       const suffixS = s.slice(prefixLen);
       const suffixE = e.slice(prefixLen);
+      // Check if the suffix range spans all values (all-zeros start, all-F end) for wildcard replacement
       if (/^0*$/.test(suffixS) && /^F*$/i.test(suffixE)) {
         const wildcardCount = len - prefixLen;
+        // Strip leading zeros from the common prefix
         const prefix = s.slice(0, prefixLen).replace(/^0+/, '');
         return 'U+' + prefix + '?'.repeat(wildcardCount);
       }

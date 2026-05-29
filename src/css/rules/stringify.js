@@ -75,45 +75,58 @@ function stringifyRule (rule, context, nested = false) {
       // Minify spacing within selectors (e.g. inside :is(), :where(), etc)
       uniqueSelectors = uniqueSelectors.map((selector) => {
         let minified = unescapeSelector(selector);
-        // Basic selector minify
+        // Collapse whitespace to single space
         minified = minified.replace(/\s+/g, ' ');
+        // Strip whitespace around selector combinators and commas
         minified = minified.replace(/\s*([,>+~])\s*/g, '$1');
-        // Space around parenthesis for pseudo-classes
+        // Strip whitespace inside parentheses for pseudo-class arguments
         minified = minified.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
-        // Minify nth-child
-        // Simplify common :nth-child() expressions to shorter equivalents
+        // Simplify :nth-child(2n+1) to :nth-child(odd)
         minified = minified.replace(/:nth-child\(2n\s*\+\s*1\)/g, ':nth-child(odd)');
+        // Simplify :nth-child(2n+0) to :nth-child(2n)
         minified = minified.replace(/:nth-child\(2n\s*\+\s*0\)/g, ':nth-child(2n)');
+        // Simplify :nth-child(1n) to :nth-child(n)
         minified = minified.replace(/:nth-child\(1n\)/g, ':nth-child(n)');
+        // Remove unnecessary leading + sign from :nth-child()
         minified = minified.replace(/:nth-child\(\+\s*(\d+)\)/g, ':nth-child($1)');
+        // Simplify :nth-child(0n+N) to :nth-child(N)
         minified = minified.replace(/:nth-child\(0n\s*\+\s*(\d+)\)/g, ':nth-child($1)');
+        // Replace :nth-child(1) with :first-child
         minified = minified.replace(/:nth-child\(1\)/g, ':first-child');
+        // Replace :nth-last-child(1) with :last-child
         minified = minified.replace(/:nth-last-child\(1\)/g, ':last-child');
+        // Replace :nth-of-type(1) with :first-of-type
         minified = minified.replace(/:nth-of-type\(1\)/g, ':first-of-type');
+        // Replace :nth-last-of-type(1) with :last-of-type
         minified = minified.replace(/:nth-last-of-type\(1\)/g, ':last-of-type');
-        minified = minified.replace(/::before/g, ':before'); // Some legacy conversions
+        // Convert double-colon pseudo-elements to single-colon legacy form
+        minified = minified.replace(/::before/g, ':before');
         minified = minified.replace(/::after/g, ':after');
 
         // Strip redundant universal selector `*` when it precedes an ID, class, or attribute selector
         minified = minified.replace(/\*([#.[])/g, '$1');
 
-        // Minify attribute selectors: remove inner whitespace and strip quotes when the escaped form is shorter
+        // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
-          // If the value contains characters that need quoting vs escaping, decide based on length
+          // Escape special characters that require quoting, and compare lengths
           let escaped = value.replace(/([#.:/])/g, '\\$1');
           if (escaped.length < value.length + 2) {
             return '[' + attribute + '=' + escaped + ']';
           }
           return '[' + attribute + '="' + value + '"]';
         });
+        // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
+          // Escape special characters that require quoting, and compare lengths
           let escaped = value.replace(/([#.:/])/g, '\\$1');
           if (escaped.length < value.length + 2) {
             return '[' + attribute + '=' + escaped + ']';
           }
           return '[' + attribute + '="' + value + '"]';
         });
+        // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
+          // Unescape special characters and compare with quoted form
           let unescaped = value.replace(/\\([#.:/])/g, '$1');
           if (unescaped.length + 2 < value.length) {
             return '[' + attribute + '="' + unescaped + '"]';
@@ -132,15 +145,18 @@ function stringifyRule (rule, context, nested = false) {
         });
         minified = minified.replace(/:is\(:link,:visited\)/g, ':any-link');
         minified = minified.replace(/:is\(:visited,:link\)/g, ':any-link');
+        // Remove redundant leading "& " nesting selector
         minified = minified.replace(/^& /, '');
         return minified;
       });
       uniqueSelectors = uniqueSelectors.flatMap((selector) => {
+        // Check if selector is a bare :is() wrapping simple selectors that can be expanded
         const isMatch = selector.match(/^:is\(([^()]+)\)$/);
         if (isMatch) {
           const parts = isMatch[1].split(',').map((part) => {
             return part.trim();
           });
+          // Check each part is a simple type/universal selector (no class, id, or pseudo)
           const allSimple = parts.every((part) => {
             return /^[a-z*][a-z0-9-]*$/i.test(part);
           });
@@ -196,6 +212,7 @@ function stringifyRule (rule, context, nested = false) {
             const trimmedRawValue = rawValue.trim();
             if (trimmedRawValue === '') {
               value = ' ';
+            // Preserve leading space for rgb() space-syntax values in custom properties
             } else if (/^rgb\(\s*\d+\s+\d+\s+\d+\s*\)$/i.test(trimmedRawValue)) {
               value = ' ' + trimmedRawValue;
             } else {
@@ -260,6 +277,7 @@ function stringifyRule (rule, context, nested = false) {
   }
 
   if (rule.type === 'scope') {
+    // Collapse whitespace around "to" keyword in @scope condition
     const scope = (rule.scope || '').trim().replace(/\s+to\s+/g, 'to ');
     const children = stringifyChildRules(rule.rules, context);
     if (!children) {
@@ -277,6 +295,7 @@ function stringifyRule (rule, context, nested = false) {
     if (canUnwrapSupports(supports)) {
       return children;
     }
+    // Check if @supports condition has adjacent logical operators that allow tight spacing
     const needsTightSpacing = supports.startsWith('(') && /\)(?:and|or)\s*\(/.test(supports);
     let supportsSeparator;
     if (needsTightSpacing) {
@@ -337,14 +356,17 @@ function stringifyRule (rule, context, nested = false) {
 
   if (rule.type === 'import') {
     let importStatement = rule.import;
+    // Unwrap url() with a quoted string to just the quoted string
     importStatement = importStatement.replace(/url\(\s*(".*?"|'.*?')\s*\)/g, '$1');
+    // Unwrap url() with an unquoted path and add quotes
     importStatement = importStatement.replace(/url\(\s*(.*?)\s*\)/g, '"$1"');
+    // Collapse whitespace in the import statement
     importStatement = importStatement.replace(/\s+/g, ' ').trim();
-    // Remove space immediately after the quoted URL
+    // Remove space immediately after the quoted URL path
     importStatement = importStatement.replace(/^(".*?"|'.*?') /, '$1');
-    // Remove spaces between adjacent at-rule conditions (after ')' before next word)
+    // Remove space between closing paren and next at-rule condition keyword
     importStatement = importStatement.replace(/\) ([a-zA-Z])/g, ')$1');
-    // Minify property:value pairs inside supports()
+    // Minify property:value pairs inside supports() by removing whitespace around colons
     importStatement = importStatement.replace(
       /supports\(([^()]*)\)/g,
       (fullMatch, content) => {
@@ -378,12 +400,14 @@ function stringifyRule (rule, context, nested = false) {
   }
 
   if (rule.type === 'container') {
+    // Minify @container condition: collapse whitespace and strip spaces around punctuation
     let container = rule.container
       .replace(/\s+/g, ' ')
       .replace(/\s*([:,])\s*/g, '$1')
       .replace(/\s*([=<>])\s*/g, '$1')
       .replace(/\(\s+/g, '(')
       .replace(/\s+\)/g, ')');
+    // Convert min-width/max-width to range syntax (e.g. min-width:768px → width>=768px)
     container = container.replace(/min-width:(\d+px)/gi, 'width>=$1').replace(/max-width:(\d+px)/gi, 'width<=$1');
     let children = stringifyChildRules(rule.rules, context);
     if (!children) {
