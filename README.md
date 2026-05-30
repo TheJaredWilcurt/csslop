@@ -11,7 +11,7 @@
 
 * Use the tests from the open source, 3rd-party, CSS minification auditing library `css-minify-tests`.
 * Have AI completely generate the library logic to pass all tests.
-* Have me (an experience library author) validate the outcomes and make upstream corrections to the tests library.
+* Have me (an experienced library author) validate the outcomes and make upstream corrections to the tests library.
 
 **The Results:**
 
