@@ -156,13 +156,21 @@ The portmanteau does the work without needing context. Anyone reading it in a `p
 
 True dat, clanker
 
+So now that Claude and I both agree on the package name, all that's left to do is publish it to...
+
+<p align="center"><img width="450" height="415" alt="npm does not consent to this package name (meme)" src="https://github.com/user-attachments/assets/784018e4-8b43-47b5-9b7e-09a37be0a2f6" /></p>
+
+> Package name too similar to existing packages `csso`,`cssom`. Try renaming your package to '@thejaredwilcurt/csslop'.
+
+Ughhhh, fine, whatever, I don't care. In what universe is someone typing `cssom` going to accidentally type `csslop`. What an incredibly stupid rule.
+
 
 ## Usage
 
-`npm i --save-dev csslop`
+`npm i --save-dev @thejaredwilcurt/csslop`
 
 ```js
-import { minifyCSS } from 'csslop';
+import { minifyCSS } from '@thejaredwilcurt/csslop';
 
 const input = 'body { color: blue; color: #FF0000FF; }';
 const output = minifyCSS(input);

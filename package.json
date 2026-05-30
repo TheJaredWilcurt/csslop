@@ -1,5 +1,5 @@
 {
-  "name": "csslop",
+  "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
   "version": "0.0.1",
@@ -7,7 +7,8 @@
   "scripts": {
     "copy": "node ./scripts/copyTests.js",
     "test": "node ./tests/css/index.test.js",
-    "lint": "eslint *.js scripts src tests --fix"
+    "lint": "eslint *.js scripts src tests --fix",
+    "publish": "npm publish --access=public"
   },
   "dependencies": {
     "@csstools/css-calc": "^3.2.1",
