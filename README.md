@@ -1,6 +1,11 @@
 # CSSLOP
 
-Experimental vibe-coded CSS minification library
+
+## NOT FOR PRODUCTION USE
+
+
+### Experimental, vibe-coded, CSS minification library
+
 
 **The experiment:**
 
