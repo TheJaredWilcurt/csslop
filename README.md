@@ -27,7 +27,7 @@
 * Gemini 3.1 Pro (High Thinking)
 * GPT-5.4 High (Thinking)
 
-These tools were prompted to pass the tests based in the `/copiedTests` folder that come from `keithamus/css-minify-tests`.
+These tools were prompted to pass the tests in the `/copiedTests` folder that came from `keithamus/css-minify-tests`.
 
 **Summary of project phases:**
 
