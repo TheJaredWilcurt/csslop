@@ -211,7 +211,7 @@ Two different cases:
 1. `git add -A && git commit -m "Updated tests"`
 1. Then run `npm t` to see if any tests fail
 1. If they fail, give an AI this prompt:
-   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src`.
+   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src`. Do not use naive solutions, hacks, or hard coded values. Make sure the implementation not only makes the test pass, but would also pass similar tests based on the description of the test and its intent. Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB. Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc). Group related logic into well named functions. Ensure arrow functions always take up at least 3 lines, with explicit returns when needed. Always comment regex if used. Run `npm run lint` and ensure the linter passes when done.
 1. Verify only code in the `src` folder was modified
 1. Verify `npm t` passes with a 100% score
 1. Run `npm run lint`, if anything fails, have the AI fix it.

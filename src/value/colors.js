@@ -473,6 +473,172 @@ function findNoneChannels (rawColorStr) {
 }
 
 /**
+ * Evaluate an N-color (3+) color-mix() expression. Returns a minified CSS color string or null.
+ *
+ * @param  {string}      colorSpace  The interpolation color space ("srgb", "oklab", or "oklch").
+ * @param  {Array}       args        The raw argument strings for each color.
+ * @return {string|null}             A minified CSS color string, or null if the expression cannot be evaluated.
+ */
+function evaluateNColorMix (colorSpace, args) {
+  const parsedArgs = [];
+  for (const arg of args) {
+    const parsed = parseColorMixArg(arg.trim());
+    if (!parsed) {
+      return null;
+    }
+    parsedArgs.push(parsed);
+  }
+
+  // If any color is unresolvable (var(), currentcolor), whitespace-strip only
+  if (parsedArgs.some((parsedArg) => {
+    return !parsedArg.color;
+  })) {
+    return normalizeUnresolvableNColorMix(colorSpace, parsedArgs);
+  }
+
+  const percentages = normalizeNColorPercentages(parsedArgs);
+  const percentageSum = percentages.reduce((sum, value) => {
+    return sum + value;
+  }, 0);
+
+  // All-zero percentages → transparent black
+  if (percentageSum === 0) {
+    return rgbaToHex(0, 0, 0, 0);
+  }
+
+  let alphaMultiplier = 1;
+  if (percentageSum < 100) {
+    alphaMultiplier = percentageSum / 100;
+  } else if (percentageSum > 100) {
+    for (let i = 0; i < percentages.length; i++) {
+      percentages[i] = percentages[i] / percentageSum * 100;
+    }
+  }
+
+  // Compute weights
+  const totalPercentage = percentages.reduce((sum, value) => {
+    return sum + value;
+  }, 0);
+  const weights = percentages.map((value) => {
+    return value / totalPercentage;
+  });
+  const colors = parsedArgs.map((parsedArg) => {
+    return parsedArg.color;
+  });
+
+  if (colorSpace === 'srgb') {
+    return mixNColorsSrgb(colors, weights, alphaMultiplier);
+  }
+
+  if (colorSpace === 'oklab') {
+    return mixNColorsOklab(colors, weights, alphaMultiplier);
+  }
+
+  return null;
+}
+
+/**
+ * Normalize percentages for an N-color color-mix() expression.
+ * When no percentages are specified, each color gets an equal share of 100%.
+ * When some are unspecified, the remaining percentage is split equally among them.
+ *
+ * @param  {Array} parsedArgs  The parsed color-mix arguments.
+ * @return {Array}             An array of normalized percentage values.
+ */
+function normalizeNColorPercentages (parsedArgs) {
+  const percentages = parsedArgs.map((parsedArg) => {
+    return parsedArg.percentage;
+  });
+  if (percentages.every((value) => {
+    return value === null;
+  })) {
+    const equalWeight = 100 / parsedArgs.length;
+    return parsedArgs.map(() => {
+      return equalWeight;
+    });
+  }
+  const specifiedSum = percentages.reduce((sum, value) => {
+    return sum + (value !== null ? value : 0);
+  }, 0);
+  const unspecifiedCount = percentages.filter((value) => {
+    return value === null;
+  }).length;
+  if (unspecifiedCount > 0) {
+    const remaining = Math.max(0, 100 - specifiedSum);
+    const percentagePerUnspecified = remaining / unspecifiedCount;
+    return percentages.map((value) => {
+      return value !== null ? value : percentagePerUnspecified;
+    });
+  }
+  return percentages;
+}
+
+/**
+ * Build a whitespace-stripped color-mix() string for an unresolvable N-color expression.
+ *
+ * @param  {string} colorSpace  The interpolation color space.
+ * @param  {Array}  parsedArgs  The parsed color-mix arguments.
+ * @return {string}             A whitespace-stripped color-mix() expression.
+ */
+function normalizeUnresolvableNColorMix (colorSpace, parsedArgs) {
+  const parts = parsedArgs.map((parsedArg) => {
+    const rawColor = parsedArg.raw.trim();
+    const percentageString = parsedArg.percentage !== null ? ' ' + parsedArg.percentage + '%' : '';
+    return rawColor + percentageString;
+  });
+  return 'color-mix(in ' + colorSpace + ',' + parts.join(',') + ')';
+}
+
+/**
+ * Mix N colors in the sRGB color space using weighted averages.
+ *
+ * @param  {Array}  colors           Array of [r, g, b, a] color arrays.
+ * @param  {Array}  weights          Array of weight values for each color.
+ * @param  {number} alphaMultiplier  Multiplier for the final alpha channel.
+ * @return {string}                  A hex color string.
+ */
+function mixNColorsSrgb (colors, weights, alphaMultiplier) {
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let alpha = 0;
+  for (let i = 0; i < colors.length; i++) {
+    r += colors[i][0] * weights[i];
+    g += colors[i][1] * weights[i];
+    b += colors[i][2] * weights[i];
+    alpha += colors[i][3] * weights[i];
+  }
+  return rgbaToHex(Math.round(r), Math.round(g), Math.round(b), alpha * alphaMultiplier);
+}
+
+/**
+ * Mix N colors in the OKLab color space using weighted averages.
+ *
+ * @param  {Array}  colors           Array of [r, g, b, a] color arrays.
+ * @param  {Array}  weights          Array of weight values for each color.
+ * @param  {number} alphaMultiplier  Multiplier for the final alpha channel.
+ * @return {string}                  A hex color string.
+ */
+function mixNColorsOklab (colors, weights, alphaMultiplier) {
+  const oklabValues = colors.map((color) => {
+    return rgbToOklab(color[0], color[1], color[2]);
+  });
+  let L = 0;
+  let a = 0;
+  let b = 0;
+  let alpha = 0;
+  for (let i = 0; i < oklabValues.length; i++) {
+    L += oklabValues[i].L * weights[i];
+    a += oklabValues[i].a * weights[i];
+    b += oklabValues[i].b * weights[i];
+    alpha += colors[i][3] * weights[i];
+  }
+  alpha *= alphaMultiplier;
+  const rgb = oklabToRgb(L, a, b);
+  return rgbaToHex(rgb[0], rgb[1], rgb[2], alpha >= 1 ? 1 : alpha);
+}
+
+/**
  * Evaluate a color-mix() expression. Returns a minified CSS color string or null.
  *
  * @param  {string}      expr  The full color-mix() expression string.
@@ -495,15 +661,20 @@ function evaluateColorMix (expr) {
   const colorSpace = inMatch[1].toLowerCase();
   const rest = inner.slice(inMatch[0].length);
 
-  // Split the two color arguments (handling nested parens)
-  const [arg1, arg2] = splitColorMixArgs(rest);
-  if (!arg1 || !arg2) {
+  // Split color arguments (handling nested parens)
+  const args = splitColorMixArgs(rest);
+  if (args.length < 2) {
     return null;
   }
 
+  // N-color path (3+ colors)
+  if (args.length > 2) {
+    return evaluateNColorMix(colorSpace, args);
+  }
+
   // Parse each argument: "<color> [<percentage>]"
-  const parsed1 = parseColorMixArg(arg1.trim());
-  const parsed2 = parseColorMixArg(arg2.trim());
+  const parsed1 = parseColorMixArg(args[0].trim());
+  const parsed2 = parseColorMixArg(args[1].trim());
   if (!parsed1 || !parsed2) {
     return null;
   }
@@ -630,23 +801,27 @@ function extractBalancedArgs (expr, funcName) {
 }
 
 /**
- * Split color-mix arguments at the top-level comma (handling nested parens).
+ * Split color-mix arguments at top-level commas (handling nested parens).
  *
- * @param  {string} str  The two color arguments string, separated by a comma.
- * @return {Array}       A two-element array of [firstArg, secondArg], or [null, null] if no split point.
+ * @param  {string} str  The color arguments string, with arguments separated by commas.
+ * @return {Array}       An array of argument strings split at each top-level comma.
  */
 function splitColorMixArgs (str) {
+  const args = [];
   let depth = 0;
+  let start = 0;
   for (let position = 0; position < str.length; position++) {
     if (str[position] === '(') {
       depth++;
     } else if (str[position] === ')') {
       depth--;
     } else if (str[position] === ',' && depth === 0) {
-      return [str.slice(0, position), str.slice(position + 1)];
+      args.push(str.slice(start, position));
+      start = position + 1;
     }
   }
-  return [null, null];
+  args.push(str.slice(start));
+  return args;
 }
 
 /**
