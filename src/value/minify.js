@@ -74,11 +74,16 @@ const COLOR_TOKEN_PATTERN = new RegExp(
  * @return {string}          The segment with all colors shortened to their minimal form.
  */
 function shortenColorValues (segment) {
+  // Match "color-mix(" as a whole word, case-insensitive
+  const hasColorMix = /\bcolor-mix\(/i.test(segment);
   return segment.replace(COLOR_TOKEN_PATTERN, (match) => {
     let channels;
     if (match.startsWith('#')) {
       channels = parseHex(match);
     } else {
+      if (hasColorMix) {
+        return match;
+      }
       const rgb = namedColors[match.toLowerCase()];
       if (rgb) {
         channels = [rgb[0], rgb[1], rgb[2], 1];
