@@ -216,7 +216,9 @@ Two different cases:
 1. Verify `npm t` passes with a 100% score
 1. Run `npm run lint`, if anything fails, have the AI fix it.
 1. If the code changes look hacky, or hard coded, tell the AI to fix it
+1. `npm run bump`
 1. `git add -A && git commit -m "Fix newly added tests" && git push`
-1. Bump the version number
-1. Do a new release
-1. Publish the release to npm
+1. Merge the code into `main` on GitHub
+1. Do a new release on GitHub
+1. `git checkout main && git pull origin main && git pull`
+1. `npm run publish`
