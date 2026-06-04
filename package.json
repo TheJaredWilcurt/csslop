@@ -7,6 +7,7 @@
   "scripts": {
     "copy": "node ./scripts/copyTests.js",
     "test": "node ./tests/css/index.test.js",
+    "real": "node ./tests/css/realworld.test.js",
     "lint": "eslint *.js scripts src tests --fix",
     "bump": "npx --yes -- @jsdevtools/version-bump-prompt && npm i",
     "publish": "npm publish --access=public"
@@ -25,7 +26,8 @@
     "eslint-config-tjw-jsdoc": "^2.0.1",
     "eslint-plugin-import-x": "^4.16.2",
     "eslint-plugin-jsdoc": "^63.0.0",
-    "globals": "^17.6.0"
+    "globals": "^17.6.0",
+    "real-world-css-libraries": "^1.0.0"
   },
   "author": "The Jared Wilcurt",
   "homepage": "https://github.com/TheJaredWilcurt/csslop#readme",

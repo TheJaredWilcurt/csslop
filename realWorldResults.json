@@ -1,0 +1,1361 @@
+{
+  "totals": {
+    "inputSize": 34853574,
+    "outputSize": 32896629,
+    "duration": 4618088,
+    "durationHuman": "1:16:58.088",
+    "percent": "94%"
+  },
+  "libraries": [
+    {
+      "name": "3D transforms",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 5,
+      "inputSize": 13615,
+      "outputSize": 13615,
+      "percent": 100
+    },
+    {
+      "name": "960.gs",
+      "version": "v0.0.0",
+      "license": "GPL-3.0 or MIT",
+      "duration": 1,
+      "inputSize": 9920,
+      "outputSize": 9920,
+      "percent": 100
+    },
+    {
+      "name": "98",
+      "version": "v0.1.18",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 23105,
+      "outputSize": 23105,
+      "percent": 100
+    },
+    {
+      "name": "Academicons",
+      "version": "v1.9.6",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 9250,
+      "outputSize": 9250,
+      "percent": 100
+    },
+    {
+      "name": "AdminLTE",
+      "version": "v4.0.0",
+      "license": "MIT",
+      "duration": 161,
+      "inputSize": 409797,
+      "outputSize": 409797,
+      "percent": 100
+    },
+    {
+      "name": "Animate",
+      "version": "v4.1.1",
+      "license": "Hippocratic-2.1",
+      "duration": 1,
+      "inputSize": 95314,
+      "outputSize": 95314,
+      "percent": 100
+    },
+    {
+      "name": "Animo",
+      "version": "v1.0.3",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 67438,
+      "outputSize": 67438,
+      "percent": 100
+    },
+    {
+      "name": "Animsition",
+      "version": "v4.0.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 38443,
+      "outputSize": 38443,
+      "percent": 100
+    },
+    {
+      "name": "Awesome Bootstrap Checkbox",
+      "version": "v0.3.7",
+      "license": "MIT",
+      "duration": 31,
+      "inputSize": 9073,
+      "outputSize": 7379,
+      "percent": 81
+    },
+    {
+      "name": "Balloon",
+      "version": "v1.0.0",
+      "license": "MIT",
+      "duration": 12,
+      "inputSize": 7577,
+      "outputSize": 6456,
+      "percent": 85
+    },
+    {
+      "name": "Basscss",
+      "version": "v8.1.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 47226,
+      "outputSize": 47226,
+      "percent": 100
+    },
+    {
+      "name": "Beer CSS",
+      "version": "v4.0.21",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 107027,
+      "outputSize": 107027,
+      "percent": 100
+    },
+    {
+      "name": "Blue-Topaz Obsidian",
+      "version": "v6.0.0",
+      "license": "MIT",
+      "duration": 22,
+      "inputSize": 3201619,
+      "outputSize": 3201619,
+      "percent": 100
+    },
+    {
+      "name": "Boilerform",
+      "version": "v1.1.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 5506,
+      "outputSize": 5506,
+      "percent": 100
+    },
+    {
+      "name": "Bojler",
+      "version": "v3.2.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 21317,
+      "outputSize": 21317,
+      "percent": 100
+    },
+    {
+      "name": "Bootstrap",
+      "version": "v4.6.2",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 200384,
+      "outputSize": 200384,
+      "percent": 100
+    },
+    {
+      "name": "Bootstrap",
+      "version": "v5.3.8",
+      "license": "MIT",
+      "duration": 242,
+      "inputSize": 280272,
+      "outputSize": 180025,
+      "percent": 64
+    },
+    {
+      "name": "Bttn",
+      "version": "v0.2.4",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 42325,
+      "outputSize": 42325,
+      "percent": 100
+    },
+    {
+      "name": "Bulma",
+      "version": "v1.0.4",
+      "license": "MIT",
+      "duration": 5,
+      "inputSize": 763865,
+      "outputSize": 763865,
+      "percent": 100
+    },
+    {
+      "name": "Carbon",
+      "version": "v1.107.0",
+      "license": "Apache-2.0",
+      "duration": 14,
+      "inputSize": 957179,
+      "outputSize": 957179,
+      "percent": 100
+    },
+    {
+      "name": "Cardinal",
+      "version": "v3.7.0",
+      "license": "MIT",
+      "duration": 31,
+      "inputSize": 160102,
+      "outputSize": 160102,
+      "percent": 100
+    },
+    {
+      "name": "Chota",
+      "version": "v0.9.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 24263,
+      "outputSize": 24263,
+      "percent": 100
+    },
+    {
+      "name": "Cirrus",
+      "version": "v0.8.0",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 941876,
+      "outputSize": 941876,
+      "percent": 100
+    },
+    {
+      "name": "Classless",
+      "version": "v1.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 23188,
+      "outputSize": 23188,
+      "percent": 100
+    },
+    {
+      "name": "CodeFrame",
+      "version": "v4.0.9",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 233147,
+      "outputSize": 233147,
+      "percent": 100
+    },
+    {
+      "name": "Concise",
+      "version": "v4.0.1",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 17044,
+      "outputSize": 0,
+      "percent": 0
+    },
+    {
+      "name": "CrookedStyleSheets",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 4,
+      "inputSize": 4735,
+      "outputSize": 3505,
+      "percent": 74
+    },
+    {
+      "name": "cs16.css",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 23538,
+      "outputSize": 23538,
+      "percent": 100
+    },
+    {
+      "name": "CSS Diner",
+      "version": "v0.0.0",
+      "license": "MPL-2.0",
+      "duration": 1,
+      "inputSize": 22303,
+      "outputSize": 22303,
+      "percent": 100
+    },
+    {
+      "name": "css-extras",
+      "version": "v0.4.0",
+      "license": "CC0-1.0 or MIT",
+      "duration": 0,
+      "inputSize": 22935,
+      "outputSize": 22935,
+      "percent": 100
+    },
+    {
+      "name": "Css Social Buttons",
+      "version": "v1.4.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 49479,
+      "outputSize": 49479,
+      "percent": 100
+    },
+    {
+      "name": "CSS Spinners",
+      "version": "v2.2.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 143596,
+      "outputSize": 143596,
+      "percent": 100
+    },
+    {
+      "name": "CSS3 Buttons",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 33173,
+      "outputSize": 33173,
+      "percent": 100
+    },
+    {
+      "name": "CSSCO",
+      "version": "v1.1.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 8027,
+      "outputSize": 8027,
+      "percent": 100
+    },
+    {
+      "name": "cssicon",
+      "version": "v1.0.0",
+      "license": "CC0-1.0",
+      "duration": 14,
+      "inputSize": 293395,
+      "outputSize": 293395,
+      "percent": 100
+    },
+    {
+      "name": "CSS Plot",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 47,
+      "inputSize": 28706,
+      "outputSize": 12265,
+      "percent": 43
+    },
+    {
+      "name": "CSS Zen Garden #215",
+      "version": "v0.0.0",
+      "license": "CC-BY-NC-SA-1.0",
+      "duration": 0,
+      "inputSize": 68672,
+      "outputSize": 68672,
+      "percent": 100
+    },
+    {
+      "name": "Cutestrap1",
+      "version": "v1.3.1",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 53931,
+      "outputSize": 53931,
+      "percent": 100
+    },
+    {
+      "name": "Cutestrap2",
+      "version": "v2.0.0",
+      "license": "GPL-3.0",
+      "duration": 0,
+      "inputSize": 21392,
+      "outputSize": 21392,
+      "percent": 100
+    },
+    {
+      "name": "Destyle",
+      "version": "v4.0.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 5913,
+      "outputSize": 5913,
+      "percent": 100
+    },
+    {
+      "name": "Devices",
+      "version": "v0.2.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 59291,
+      "outputSize": 59291,
+      "percent": 100
+    },
+    {
+      "name": "Doxygen Awesome",
+      "version": "v2.4.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 77874,
+      "outputSize": 77874,
+      "percent": 100
+    },
+    {
+      "name": "Effeckt",
+      "version": "v0.5.0",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 149780,
+      "outputSize": 149780,
+      "percent": 100
+    },
+    {
+      "name": "ElegantFin",
+      "version": "v25.12.31",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 96458,
+      "outputSize": 96458,
+      "percent": 100
+    },
+    {
+      "name": "Evil",
+      "version": "v0.0.0",
+      "license": "Public Domain",
+      "duration": 0,
+      "inputSize": 3420,
+      "outputSize": 3420,
+      "percent": 100
+    },
+    {
+      "name": "FF-Ultima",
+      "version": "v4.3.0",
+      "license": "MPL-2.0",
+      "duration": 0,
+      "inputSize": 58013,
+      "outputSize": 58013,
+      "percent": 100
+    },
+    {
+      "name": "Flakes",
+      "version": "v1.0.1",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 243822,
+      "outputSize": 1232,
+      "percent": 1
+    },
+    {
+      "name": "Flex Layout Attribute",
+      "version": "v1.0.3",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 10958,
+      "outputSize": 10958,
+      "percent": 100
+    },
+    {
+      "name": "Fomantic UI",
+      "version": "v2.9.4",
+      "license": "MIT",
+      "duration": 62,
+      "inputSize": 2027025,
+      "outputSize": 2027025,
+      "percent": 100
+    },
+    {
+      "name": "Font Awesome",
+      "version": "v7.2.0",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 111970,
+      "outputSize": 111970,
+      "percent": 100
+    },
+    {
+      "name": "Foundation",
+      "version": "v6.9.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 161289,
+      "outputSize": 161289,
+      "percent": 100
+    },
+    {
+      "name": "Furatto",
+      "version": "v3.1.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 95146,
+      "outputSize": 95146,
+      "percent": 100
+    },
+    {
+      "name": "Gallery",
+      "version": "v1.0.2",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 12003,
+      "outputSize": 12003,
+      "percent": 100
+    },
+    {
+      "name": "GitHub-Dark",
+      "version": "v6.3.0",
+      "license": "BSD-2-Clause",
+      "duration": 325,
+      "inputSize": 669873,
+      "outputSize": 272251,
+      "percent": 41
+    },
+    {
+      "name": "GitHub-Markdown",
+      "version": "v5.9.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 31046,
+      "outputSize": 31046,
+      "percent": 100
+    },
+    {
+      "name": "GitHub-Windows",
+      "version": "v0.6.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 30575,
+      "outputSize": 30575,
+      "percent": 100
+    },
+    {
+      "name": "google-type",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 51943,
+      "outputSize": 51943,
+      "percent": 100
+    },
+    {
+      "name": "Gridlex",
+      "version": "v2.7.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 45341,
+      "outputSize": 45341,
+      "percent": 100
+    },
+    {
+      "name": "Gumby",
+      "version": "v2.6.4",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 167013,
+      "outputSize": 0,
+      "percent": 0
+    },
+    {
+      "name": "Gutenberg",
+      "version": "v0.7.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 9923,
+      "outputSize": 9923,
+      "percent": 100
+    },
+    {
+      "name": "Halfmoon",
+      "version": "v2.0.2",
+      "license": "MIT",
+      "duration": 9,
+      "inputSize": 461997,
+      "outputSize": 461997,
+      "percent": 100
+    },
+    {
+      "name": "HalfStyle",
+      "version": "v2.0.2",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 7239,
+      "outputSize": 7239,
+      "percent": 100
+    },
+    {
+      "name": "Hint",
+      "version": "v3.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 10753,
+      "outputSize": 10753,
+      "percent": 100
+    },
+    {
+      "name": "HTML Sheets of Paper",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 5080,
+      "outputSize": 5080,
+      "percent": 100
+    },
+    {
+      "name": "Hugo Universal Theme",
+      "version": "v1.4.1",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 77467,
+      "outputSize": 77467,
+      "percent": 100
+    },
+    {
+      "name": "Icon Hover Effects",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 16270,
+      "outputSize": 16270,
+      "percent": 100
+    },
+    {
+      "name": "Instagram.css",
+      "version": "v0.1.4",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 15053,
+      "outputSize": 15053,
+      "percent": 100
+    },
+    {
+      "name": "Jupyter Themes",
+      "version": "v0.20.0",
+      "license": "MIT",
+      "duration": 111,
+      "inputSize": 72719,
+      "outputSize": 56191,
+      "percent": 77
+    },
+    {
+      "name": "Load Awesome",
+      "version": "v1.1.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 190177,
+      "outputSize": 190177,
+      "percent": 100
+    },
+    {
+      "name": "Loaders",
+      "version": "v0.1.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 56494,
+      "outputSize": 56494,
+      "percent": 100
+    },
+    {
+      "name": "Luxbar",
+      "version": "v0.3.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 8256,
+      "outputSize": 8256,
+      "percent": 100
+    },
+    {
+      "name": "markdown-css",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 6,
+      "inputSize": 3693,
+      "outputSize": 2705,
+      "percent": 73
+    },
+    {
+      "name": "Material for Bootstrap",
+      "version": "v4.1.1",
+      "license": "MIT",
+      "duration": 73,
+      "inputSize": 311659,
+      "outputSize": 311659,
+      "percent": 100
+    },
+    {
+      "name": "Meyer",
+      "version": "v2.0.0",
+      "license": "Public Domain",
+      "duration": 0,
+      "inputSize": 1101,
+      "outputSize": 1101,
+      "percent": 100
+    },
+    {
+      "name": "Microsoft Metro Buttons",
+      "version": "v1.2.0",
+      "license": "CC-BY-3.0",
+      "duration": 0,
+      "inputSize": 20423,
+      "outputSize": 20423,
+      "percent": 100
+    },
+    {
+      "name": "Microtip",
+      "version": "v0.2.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 8504,
+      "outputSize": 8504,
+      "percent": 100
+    },
+    {
+      "name": "Mini",
+      "version": "v3.0.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 55874,
+      "outputSize": 55874,
+      "percent": 100
+    },
+    {
+      "name": "Mini Reset",
+      "version": "v0.0.7",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 619,
+      "outputSize": 619,
+      "percent": 100
+    },
+    {
+      "name": "Missing",
+      "version": "v1.3.0",
+      "license": "BSD-2-Clause",
+      "duration": 1,
+      "inputSize": 75980,
+      "outputSize": 75980,
+      "percent": 100
+    },
+    {
+      "name": "Mobi",
+      "version": "v3.1.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 13756,
+      "outputSize": 13756,
+      "percent": 100
+    },
+    {
+      "name": "Mocka",
+      "version": "v1.0.1",
+      "license": "MIT",
+      "duration": 5,
+      "inputSize": 2797,
+      "outputSize": 1558,
+      "percent": 56
+    },
+    {
+      "name": "Modern CSS Resets",
+      "version": "v1.4.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 1195,
+      "outputSize": 1195,
+      "percent": 100
+    },
+    {
+      "name": "MVP",
+      "version": "v1.17.3",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 10216,
+      "outputSize": 10216,
+      "percent": 100
+    },
+    {
+      "name": "Natural Selection",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 6430,
+      "outputSize": 6430,
+      "percent": 100
+    },
+    {
+      "name": "NES.css",
+      "version": "v2.3.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 308219,
+      "outputSize": 308219,
+      "percent": 100
+    },
+    {
+      "name": "Normalize",
+      "version": "v8.0.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 5925,
+      "outputSize": 5925,
+      "percent": 100
+    },
+    {
+      "name": "object-fit Polyfill",
+      "version": "v0.3.4",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 2033,
+      "outputSize": 2033,
+      "percent": 100
+    },
+    {
+      "name": "Obsidian Colored Sidebar",
+      "version": "v2.0.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 17710,
+      "outputSize": 17710,
+      "percent": 100
+    },
+    {
+      "name": "Obsidian Modular CSS Layout",
+      "version": "v0.10.0",
+      "license": "GPL-3.0",
+      "duration": 1,
+      "inputSize": 42865,
+      "outputSize": 42865,
+      "percent": 100
+    },
+    {
+      "name": "Orbit",
+      "version": "v1.4.11",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 155861,
+      "outputSize": 155861,
+      "percent": 100
+    },
+    {
+      "name": "Paper",
+      "version": "v0.4.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 1509,
+      "outputSize": 1509,
+      "percent": 100
+    },
+    {
+      "name": "PatternFly",
+      "version": "v6.5.2",
+      "license": "MIT",
+      "duration": 133280,
+      "inputSize": 1976773,
+      "outputSize": 1793360,
+      "percent": 91
+    },
+    {
+      "name": "Pesticide",
+      "version": "v1.3.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 20077,
+      "outputSize": 20077,
+      "percent": 100
+    },
+    {
+      "name": "Photon",
+      "version": "v0.1.2",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 31807,
+      "outputSize": 31807,
+      "percent": 100
+    },
+    {
+      "name": "Picnic",
+      "version": "v7.1.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 58636,
+      "outputSize": 58636,
+      "percent": 100
+    },
+    {
+      "name": "Pico",
+      "version": "v2.1.1",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 96964,
+      "outputSize": 96964,
+      "percent": 100
+    },
+    {
+      "name": "Pills",
+      "version": "v1.0.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 6104,
+      "outputSize": 6104,
+      "percent": 100
+    },
+    {
+      "name": "Portfolio Template",
+      "version": "v0.0.0",
+      "license": "GPL-3.0",
+      "duration": 0,
+      "inputSize": 10815,
+      "outputSize": 10815,
+      "percent": 100
+    },
+    {
+      "name": "Preboot",
+      "version": "v2.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 16673,
+      "outputSize": 16673,
+      "percent": 100
+    },
+    {
+      "name": "Pretty Checkbox",
+      "version": "v3.0.3",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 22623,
+      "outputSize": 22623,
+      "percent": 100
+    },
+    {
+      "name": "Pure",
+      "version": "v3.0.0",
+      "license": "BSD-3-Clause",
+      "duration": 1,
+      "inputSize": 25841,
+      "outputSize": 25841,
+      "percent": 100
+    },
+    {
+      "name": "Pygments Fruity",
+      "version": "v1.0.0",
+      "license": "Unlicense",
+      "duration": 0,
+      "inputSize": 4870,
+      "outputSize": 4870,
+      "percent": 100
+    },
+    {
+      "name": "Ratchet",
+      "version": "v2.0.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 24857,
+      "outputSize": 24857,
+      "percent": 100
+    },
+    {
+      "name": "Remedy Quotes",
+      "version": "v0.1.0",
+      "license": "MPL-2.0",
+      "duration": 0,
+      "inputSize": 21423,
+      "outputSize": 21423,
+      "percent": 100
+    },
+    {
+      "name": "Remedy",
+      "version": "v0.1.0",
+      "license": "MPL-2.0",
+      "duration": 0,
+      "inputSize": 3987,
+      "outputSize": 3987,
+      "percent": 100
+    },
+    {
+      "name": "Repaintless",
+      "version": "v1.4.0",
+      "license": "MIT",
+      "duration": 9,
+      "inputSize": 15985,
+      "outputSize": 5832,
+      "percent": 36
+    },
+    {
+      "name": "Reset",
+      "version": "v1.0.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 2377,
+      "outputSize": 2377,
+      "percent": 100
+    },
+    {
+      "name": "Responsive",
+      "version": "v4.1.4",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 70874,
+      "outputSize": 70874,
+      "percent": 100
+    },
+    {
+      "name": "Responsive",
+      "version": "v5.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 63117,
+      "outputSize": 63117,
+      "percent": 100
+    },
+    {
+      "name": "Ress",
+      "version": "v5.0.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 6583,
+      "outputSize": 6583,
+      "percent": 100
+    },
+    {
+      "name": "Ripple UI",
+      "version": "v1.12.1",
+      "license": "MIT",
+      "duration": 4462952,
+      "inputSize": 4740747,
+      "outputSize": 4726689,
+      "percent": 100
+    },
+    {
+      "name": "Sakura",
+      "version": "v1.5.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 4080,
+      "outputSize": 4080,
+      "percent": 100
+    },
+    {
+      "name": "Sanitize",
+      "version": "v13.0.0",
+      "license": "CC0-1.0",
+      "duration": 0,
+      "inputSize": 7060,
+      "outputSize": 7060,
+      "percent": 100
+    },
+    {
+      "name": "Select",
+      "version": "v3.2.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 3125,
+      "outputSize": 3125,
+      "percent": 100
+    },
+    {
+      "name": "Semantic UI",
+      "version": "v2.5.0",
+      "license": "MIT",
+      "duration": 13,
+      "inputSize": 745929,
+      "outputSize": 745929,
+      "percent": 100
+    },
+    {
+      "name": "Shards",
+      "version": "v3.0.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 113240,
+      "outputSize": 113240,
+      "percent": 100
+    },
+    {
+      "name": "Sierra",
+      "version": "v3.5.0",
+      "license": "GPL-2.0",
+      "duration": 0,
+      "inputSize": 51570,
+      "outputSize": 51570,
+      "percent": 100
+    },
+    {
+      "name": "Simple Grid",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 2486,
+      "outputSize": 2486,
+      "percent": 100
+    },
+    {
+      "name": "Simple Line Icons",
+      "version": "v2.5.4",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 12964,
+      "outputSize": 12964,
+      "percent": 100
+    },
+    {
+      "name": "Simple",
+      "version": "v2.3.7",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 13953,
+      "outputSize": 13953,
+      "percent": 100
+    },
+    {
+      "name": "Skeleton",
+      "version": "v2.0.4",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 9859,
+      "outputSize": 9859,
+      "percent": 100
+    },
+    {
+      "name": "SPCSS",
+      "version": "v0.9.0",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 1793,
+      "outputSize": 1317,
+      "percent": 73
+    },
+    {
+      "name": "Spectre",
+      "version": "v0.5.9",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 62108,
+      "outputSize": 62108,
+      "percent": 100
+    },
+    {
+      "name": "Spicetify Dribbblish",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 1,
+      "inputSize": 25719,
+      "outputSize": 25719,
+      "percent": 100
+    },
+    {
+      "name": "Spicetify Text",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 34814,
+      "outputSize": 34814,
+      "percent": 100
+    },
+    {
+      "name": "Spinkit",
+      "version": "v2.0.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 14738,
+      "outputSize": 0,
+      "percent": 0
+    },
+    {
+      "name": "Stackicons",
+      "version": "v1.13.0",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 1050212,
+      "outputSize": 1050212,
+      "percent": 100
+    },
+    {
+      "name": "Stacks",
+      "version": "v2.8.6",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 620026,
+      "outputSize": 620026,
+      "percent": 100
+    },
+    {
+      "name": "System",
+      "version": "v0.1.11",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 17601,
+      "outputSize": 17601,
+      "percent": 100
+    },
+    {
+      "name": "Tablecloth",
+      "version": "v1.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 11029,
+      "outputSize": 11029,
+      "percent": 100
+    },
+    {
+      "name": "Tachyons",
+      "version": "v4.12.0",
+      "license": "MIT",
+      "duration": 59,
+      "inputSize": 114551,
+      "outputSize": 12681,
+      "percent": 11
+    },
+    {
+      "name": "Tailwind",
+      "version": "v2.2.19",
+      "license": "MIT",
+      "duration": 20497,
+      "inputSize": 3642126,
+      "outputSize": 2979609,
+      "percent": 82
+    },
+    {
+      "name": "The New CSS Reset",
+      "version": "v1.11.3",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 2844,
+      "outputSize": 2844,
+      "percent": 100
+    },
+    {
+      "name": "Toast",
+      "version": "v1.1.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 7268,
+      "outputSize": 7268,
+      "percent": 100
+    },
+    {
+      "name": "Tooltip Twispy",
+      "version": "v1.0.6",
+      "license": "MIT",
+      "duration": 4,
+      "inputSize": 6291,
+      "outputSize": 3497,
+      "percent": 56
+    },
+    {
+      "name": "Tufte",
+      "version": "v1.8.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 11176,
+      "outputSize": 11176,
+      "percent": 100
+    },
+    {
+      "name": "Tui",
+      "version": "v2.1.2",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 46127,
+      "outputSize": 46127,
+      "percent": 100
+    },
+    {
+      "name": "tw-animate-css",
+      "version": "v1.4.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 17405,
+      "outputSize": 17405,
+      "percent": 100
+    },
+    {
+      "name": "UIkit",
+      "version": "v3.25.17",
+      "license": "MIT",
+      "duration": 2,
+      "inputSize": 396229,
+      "outputSize": 396229,
+      "percent": 100
+    },
+    {
+      "name": "Universal.css",
+      "version": "v0.0.0",
+      "license": "WTFPL",
+      "duration": 28,
+      "inputSize": 5020668,
+      "outputSize": 5020668,
+      "percent": 100
+    },
+    {
+      "name": "USWDS",
+      "version": "v3.13.0",
+      "license": "CC0-1.0",
+      "duration": 3,
+      "inputSize": 652620,
+      "outputSize": 652620,
+      "percent": 100
+    },
+    {
+      "name": "VitePress",
+      "version": "v1.6.4",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 12135,
+      "outputSize": 12135,
+      "percent": 100
+    },
+    {
+      "name": "Vivify",
+      "version": "v1.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 71698,
+      "outputSize": 71698,
+      "percent": 100
+    },
+    {
+      "name": "Voxels",
+      "version": "v1.0.0",
+      "license": "MIT",
+      "duration": 10,
+      "inputSize": 4735,
+      "outputSize": 3505,
+      "percent": 74
+    },
+    {
+      "name": "Water",
+      "version": "v2.1.1",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 32359,
+      "outputSize": 32359,
+      "percent": 100
+    },
+    {
+      "name": "Weather Icons",
+      "version": "v2.0.10",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 175925,
+      "outputSize": 175925,
+      "percent": 100
+    },
+    {
+      "name": "Webgradients",
+      "version": "v0.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 22368,
+      "outputSize": 22368,
+      "percent": 100
+    },
+    {
+      "name": "Windows 98",
+      "version": "v0.0.1",
+      "license": "MIT",
+      "duration": 4,
+      "inputSize": 4547,
+      "outputSize": 2608,
+      "percent": 57
+    },
+    {
+      "name": "Wing",
+      "version": "v1.0.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 8310,
+      "outputSize": 8310,
+      "percent": 100
+    },
+    {
+      "name": "WTF Forms",
+      "version": "v2.2.0",
+      "license": "MIT",
+      "duration": 0,
+      "inputSize": 10449,
+      "outputSize": 10449,
+      "percent": 100
+    }
+  ]
+}
