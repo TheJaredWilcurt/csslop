@@ -46,6 +46,8 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
 1. **AI Readability improvements:** I had Claude Opus try to make the code easier to read (JSDoc comments, no single character variable names, no abbreviations in variables, grouping logic into related functions, breaking up lines of code, explain complex regex, etc.).
 1. **AI color completeness:** Had Claude Opus handle all named colors, and always convert to the shorter character representation, removing a hard-coded solution.
 1. **Test improvements:** Throughout this process, as upstream tests were improved or created, they were pulled in, and the AI was instructed to pass those new tests with prompts like, "Run `npm t` and fix all failing tests by modifying files in `src`."
+1. **Publish:** I had the AI pick a name for the library, and publish it to npm. It was then actually added to the `css-minify-tests` repo as evidence that it is possible to get all tests to pass and none are conflicting.
+1. **Real world testing:** I created a [separate repo](https://github.com/TheJaredWilcurt/real-world-css-libraries) with copies of 150+ real-world CSS files from open source licensed repos. Then ran all of those CSS files through CSSLOP. One file found a bug in CSSLOP, so I had Claude fix it with a one-line change.
 
 
 **Full Notes of AI Experiment:**

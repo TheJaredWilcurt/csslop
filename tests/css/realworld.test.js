@@ -35,7 +35,7 @@ for (let i = 0; i < libraries.length; i++) {
   const difference = library.source.length - output.length;
   const percent = Math.round((output.length / library.source.length) * 100);
   console.log(
-    (duration + 'ms').padEnd(longestName) +
+    ((duration / 1000) + 's').padEnd(longestName) +
     ' - ' +
     output.length +
     ' - ' +
@@ -66,7 +66,7 @@ function timeFromMs (ms) {
   const minute = Math.floor(remaining / 1000 / 60);
   let minuteToSubtract = minute * 1000 * 60;
   remaining = remaining - minuteToSubtract;
-  second = remaining / 1000;
+  let second = remaining / 1000;
   return (
     hour +
     ':' +

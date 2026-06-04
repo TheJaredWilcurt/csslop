@@ -1,89 +1,89 @@
 {
   "totals": {
-    "inputSize": 34853574,
-    "outputSize": 32896629,
-    "duration": 4618088,
-    "durationHuman": "1:16:58.088",
-    "percent": "94%"
+    "inputSize": 34898052,
+    "outputSize": 29207724,
+    "duration": 11004565,
+    "durationHuman": "3:03:24.565",
+    "percent": "84%"
   },
   "libraries": [
     {
       "name": "3D transforms",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 5,
-      "inputSize": 13615,
-      "outputSize": 13615,
-      "percent": 100
+      "duration": 47,
+      "inputSize": 13747,
+      "outputSize": 9381,
+      "percent": 68
     },
     {
       "name": "960.gs",
       "version": "v0.0.0",
       "license": "GPL-3.0 or MIT",
-      "duration": 1,
-      "inputSize": 9920,
-      "outputSize": 9920,
-      "percent": 100
+      "duration": 24,
+      "inputSize": 9989,
+      "outputSize": 5772,
+      "percent": 58
     },
     {
       "name": "98",
       "version": "v0.1.18",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 23105,
-      "outputSize": 23105,
-      "percent": 100
+      "duration": 37,
+      "inputSize": 23150,
+      "outputSize": 17654,
+      "percent": 76
     },
     {
       "name": "Academicons",
       "version": "v1.9.6",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 9250,
-      "outputSize": 9250,
-      "percent": 100
+      "duration": 27,
+      "inputSize": 9256,
+      "outputSize": 6611,
+      "percent": 71
     },
     {
       "name": "AdminLTE",
       "version": "v4.0.0",
       "license": "MIT",
-      "duration": 161,
-      "inputSize": 409797,
-      "outputSize": 409797,
-      "percent": 100
+      "duration": 1303,
+      "inputSize": 409926,
+      "outputSize": 324108,
+      "percent": 79
     },
     {
       "name": "Animate",
       "version": "v4.1.1",
       "license": "Hippocratic-2.1",
-      "duration": 1,
-      "inputSize": 95314,
-      "outputSize": 95314,
-      "percent": 100
+      "duration": 46,
+      "inputSize": 95377,
+      "outputSize": 36221,
+      "percent": 38
     },
     {
       "name": "Animo",
       "version": "v1.0.3",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 67438,
-      "outputSize": 67438,
-      "percent": 100
+      "duration": 32,
+      "inputSize": 67468,
+      "outputSize": 17396,
+      "percent": 26
     },
     {
       "name": "Animsition",
       "version": "v4.0.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 38443,
-      "outputSize": 38443,
-      "percent": 100
+      "duration": 18,
+      "inputSize": 38452,
+      "outputSize": 14423,
+      "percent": 38
     },
     {
       "name": "Awesome Bootstrap Checkbox",
       "version": "v0.3.7",
       "license": "MIT",
-      "duration": 31,
+      "duration": 9,
       "inputSize": 9073,
       "outputSize": 7379,
       "percent": 81
@@ -92,7 +92,7 @@
       "name": "Balloon",
       "version": "v1.0.0",
       "license": "MIT",
-      "duration": 12,
+      "duration": 5,
       "inputSize": 7577,
       "outputSize": 6456,
       "percent": 85
@@ -101,145 +101,145 @@
       "name": "Basscss",
       "version": "v8.1.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 47226,
-      "outputSize": 47226,
-      "percent": 100
+      "duration": 37,
+      "inputSize": 47232,
+      "outputSize": 15689,
+      "percent": 33
     },
     {
       "name": "Beer CSS",
       "version": "v4.0.21",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 107027,
-      "outputSize": 107027,
-      "percent": 100
+      "duration": 279,
+      "inputSize": 107060,
+      "outputSize": 85159,
+      "percent": 80
     },
     {
       "name": "Blue-Topaz Obsidian",
       "version": "v6.0.0",
       "license": "MIT",
-      "duration": 22,
-      "inputSize": 3201619,
-      "outputSize": 3201619,
-      "percent": 100
+      "duration": 3762,
+      "inputSize": 3204106,
+      "outputSize": 2964206,
+      "percent": 93
     },
     {
       "name": "Boilerform",
       "version": "v1.1.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 5506,
-      "outputSize": 5506,
-      "percent": 100
+      "duration": 7,
+      "inputSize": 5533,
+      "outputSize": 2815,
+      "percent": 51
     },
     {
       "name": "Bojler",
       "version": "v3.2.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 21317,
-      "outputSize": 21317,
+      "duration": 1,
+      "inputSize": 21368,
+      "outputSize": 21368,
       "percent": 100
     },
     {
       "name": "Bootstrap",
       "version": "v4.6.2",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 200384,
-      "outputSize": 200384,
-      "percent": 100
+      "duration": 265,
+      "inputSize": 200387,
+      "outputSize": 147604,
+      "percent": 74
     },
     {
       "name": "Bootstrap",
       "version": "v5.3.8",
       "license": "MIT",
-      "duration": 242,
-      "inputSize": 280272,
-      "outputSize": 180025,
-      "percent": 64
+      "duration": 636,
+      "inputSize": 280308,
+      "outputSize": 220735,
+      "percent": 79
     },
     {
       "name": "Bttn",
       "version": "v0.2.4",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 42325,
-      "outputSize": 42325,
-      "percent": 100
+      "duration": 43,
+      "inputSize": 42334,
+      "outputSize": 26016,
+      "percent": 61
     },
     {
       "name": "Bulma",
       "version": "v1.0.4",
       "license": "MIT",
-      "duration": 5,
-      "inputSize": 763865,
-      "outputSize": 763865,
-      "percent": 100
+      "duration": 271086,
+      "inputSize": 763916,
+      "outputSize": 674211,
+      "percent": 88
     },
     {
       "name": "Carbon",
       "version": "v1.107.0",
       "license": "Apache-2.0",
-      "duration": 14,
-      "inputSize": 957179,
-      "outputSize": 957179,
-      "percent": 100
+      "duration": 4809,
+      "inputSize": 957320,
+      "outputSize": 802032,
+      "percent": 84
     },
     {
       "name": "Cardinal",
       "version": "v3.7.0",
       "license": "MIT",
-      "duration": 31,
-      "inputSize": 160102,
-      "outputSize": 160102,
-      "percent": 100
+      "duration": 121,
+      "inputSize": 160807,
+      "outputSize": 70316,
+      "percent": 44
     },
     {
       "name": "Chota",
       "version": "v0.9.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 24263,
-      "outputSize": 24263,
-      "percent": 100
+      "duration": 27,
+      "inputSize": 24284,
+      "outputSize": 15984,
+      "percent": 66
     },
     {
       "name": "Cirrus",
       "version": "v0.8.0",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 941876,
-      "outputSize": 941876,
-      "percent": 100
+      "duration": 3933,
+      "inputSize": 944537,
+      "outputSize": 687338,
+      "percent": 73
     },
     {
       "name": "Classless",
       "version": "v1.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 23188,
-      "outputSize": 23188,
-      "percent": 100
+      "duration": 23,
+      "inputSize": 23296,
+      "outputSize": 17406,
+      "percent": 75
     },
     {
       "name": "CodeFrame",
       "version": "v4.0.9",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 233147,
-      "outputSize": 233147,
-      "percent": 100
+      "duration": 690,
+      "inputSize": 233717,
+      "outputSize": 181873,
+      "percent": 78
     },
     {
       "name": "Concise",
       "version": "v4.0.1",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 17044,
-      "outputSize": 0,
-      "percent": 0
+      "duration": 25,
+      "inputSize": 17050,
+      "outputSize": 11347,
+      "percent": 67
     },
     {
       "name": "CrookedStyleSheets",
@@ -254,79 +254,79 @@
       "name": "cs16.css",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 23538,
-      "outputSize": 23538,
-      "percent": 100
+      "duration": 22,
+      "inputSize": 23574,
+      "outputSize": 19856,
+      "percent": 84
     },
     {
       "name": "CSS Diner",
       "version": "v0.0.0",
       "license": "MPL-2.0",
-      "duration": 1,
-      "inputSize": 22303,
-      "outputSize": 22303,
-      "percent": 100
+      "duration": 31,
+      "inputSize": 22330,
+      "outputSize": 15121,
+      "percent": 68
     },
     {
       "name": "css-extras",
       "version": "v0.4.0",
       "license": "CC0-1.0 or MIT",
-      "duration": 0,
-      "inputSize": 22935,
-      "outputSize": 22935,
-      "percent": 100
+      "duration": 2,
+      "inputSize": 23103,
+      "outputSize": 0,
+      "percent": 0
     },
     {
       "name": "Css Social Buttons",
       "version": "v1.4.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 49479,
-      "outputSize": 49479,
-      "percent": 100
+      "duration": 48,
+      "inputSize": 49521,
+      "outputSize": 42474,
+      "percent": 86
     },
     {
       "name": "CSS Spinners",
       "version": "v2.2.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 143596,
-      "outputSize": 143596,
-      "percent": 100
+      "duration": 46,
+      "inputSize": 143659,
+      "outputSize": 62321,
+      "percent": 43
     },
     {
       "name": "CSS3 Buttons",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 33173,
-      "outputSize": 33173,
-      "percent": 100
+      "duration": 27,
+      "inputSize": 33239,
+      "outputSize": 13227,
+      "percent": 40
     },
     {
       "name": "CSSCO",
       "version": "v1.1.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 8027,
-      "outputSize": 8027,
-      "percent": 100
+      "duration": 6,
+      "inputSize": 8075,
+      "outputSize": 3040,
+      "percent": 38
     },
     {
       "name": "cssicon",
       "version": "v1.0.0",
       "license": "CC0-1.0",
-      "duration": 14,
-      "inputSize": 293395,
-      "outputSize": 293395,
-      "percent": 100
+      "duration": 654,
+      "inputSize": 293404,
+      "outputSize": 217041,
+      "percent": 74
     },
     {
       "name": "CSS Plot",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 47,
+      "duration": 50,
       "inputSize": 28706,
       "outputSize": 12265,
       "percent": 43
@@ -335,286 +335,286 @@
       "name": "CSS Zen Garden #215",
       "version": "v0.0.0",
       "license": "CC-BY-NC-SA-1.0",
-      "duration": 0,
-      "inputSize": 68672,
-      "outputSize": 68672,
-      "percent": 100
+      "duration": 22,
+      "inputSize": 68690,
+      "outputSize": 59549,
+      "percent": 87
     },
     {
       "name": "Cutestrap1",
       "version": "v1.3.1",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 53931,
-      "outputSize": 53931,
-      "percent": 100
+      "duration": 9,
+      "inputSize": 53970,
+      "outputSize": 7508,
+      "percent": 14
     },
     {
       "name": "Cutestrap2",
       "version": "v2.0.0",
       "license": "GPL-3.0",
-      "duration": 0,
-      "inputSize": 21392,
-      "outputSize": 21392,
-      "percent": 100
+      "duration": 16,
+      "inputSize": 21440,
+      "outputSize": 10974,
+      "percent": 51
     },
     {
       "name": "Destyle",
       "version": "v4.0.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 5913,
-      "outputSize": 5913,
-      "percent": 100
+      "duration": 3,
+      "inputSize": 6132,
+      "outputSize": 2111,
+      "percent": 34
     },
     {
       "name": "Devices",
       "version": "v0.2.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 59291,
-      "outputSize": 59291,
-      "percent": 100
+      "duration": 60,
+      "inputSize": 59294,
+      "outputSize": 44639,
+      "percent": 75
     },
     {
       "name": "Doxygen Awesome",
       "version": "v2.4.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 77874,
-      "outputSize": 77874,
-      "percent": 100
+      "duration": 88,
+      "inputSize": 78045,
+      "outputSize": 58862,
+      "percent": 75
     },
     {
       "name": "Effeckt",
       "version": "v0.5.0",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 149780,
-      "outputSize": 149780,
-      "percent": 100
+      "duration": 152,
+      "inputSize": 149789,
+      "outputSize": 85914,
+      "percent": 57
     },
     {
       "name": "ElegantFin",
       "version": "v25.12.31",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 96458,
-      "outputSize": 96458,
-      "percent": 100
+      "duration": 120,
+      "inputSize": 96797,
+      "outputSize": 68163,
+      "percent": 70
     },
     {
       "name": "Evil",
       "version": "v0.0.0",
       "license": "Public Domain",
-      "duration": 0,
-      "inputSize": 3420,
-      "outputSize": 3420,
-      "percent": 100
+      "duration": 4,
+      "inputSize": 3543,
+      "outputSize": 1148,
+      "percent": 32
     },
     {
       "name": "FF-Ultima",
       "version": "v4.3.0",
       "license": "MPL-2.0",
-      "duration": 0,
-      "inputSize": 58013,
-      "outputSize": 58013,
-      "percent": 100
+      "duration": 66,
+      "inputSize": 58457,
+      "outputSize": 38578,
+      "percent": 66
     },
     {
       "name": "Flakes",
       "version": "v1.0.1",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 243822,
-      "outputSize": 1232,
-      "percent": 1
+      "duration": 387,
+      "inputSize": 243978,
+      "outputSize": 131385,
+      "percent": 54
     },
     {
       "name": "Flex Layout Attribute",
       "version": "v1.0.3",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 10958,
-      "outputSize": 10958,
-      "percent": 100
+      "duration": 12,
+      "inputSize": 11006,
+      "outputSize": 5950,
+      "percent": 54
     },
     {
       "name": "Fomantic UI",
       "version": "v2.9.4",
       "license": "MIT",
-      "duration": 62,
-      "inputSize": 2027025,
-      "outputSize": 2027025,
-      "percent": 100
+      "duration": 13565,
+      "inputSize": 2033757,
+      "outputSize": 1652553,
+      "percent": 81
     },
     {
       "name": "Font Awesome",
       "version": "v7.2.0",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 111970,
-      "outputSize": 111970,
-      "percent": 100
+      "duration": 912,
+      "inputSize": 112042,
+      "outputSize": 76292,
+      "percent": 68
     },
     {
       "name": "Foundation",
       "version": "v6.9.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 161289,
-      "outputSize": 161289,
-      "percent": 100
+      "duration": 239,
+      "inputSize": 161298,
+      "outputSize": 116178,
+      "percent": 72
     },
     {
       "name": "Furatto",
       "version": "v3.1.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 95146,
-      "outputSize": 95146,
-      "percent": 100
+      "duration": 56,
+      "inputSize": 96841,
+      "outputSize": 51531,
+      "percent": 53
     },
     {
       "name": "Gallery",
       "version": "v1.0.2",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 12003,
-      "outputSize": 12003,
-      "percent": 100
+      "duration": 7,
+      "inputSize": 12006,
+      "outputSize": 5829,
+      "percent": 49
     },
     {
       "name": "GitHub-Dark",
       "version": "v6.3.0",
       "license": "BSD-2-Clause",
-      "duration": 325,
-      "inputSize": 669873,
-      "outputSize": 272251,
-      "percent": 41
+      "duration": 239,
+      "inputSize": 670539,
+      "outputSize": 0,
+      "percent": 0
     },
     {
       "name": "GitHub-Markdown",
       "version": "v5.9.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 31046,
-      "outputSize": 31046,
-      "percent": 100
+      "duration": 31,
+      "inputSize": 31067,
+      "outputSize": 23365,
+      "percent": 75
     },
     {
       "name": "GitHub-Windows",
       "version": "v0.6.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 30575,
-      "outputSize": 30575,
-      "percent": 100
+      "duration": 7,
+      "inputSize": 30578,
+      "outputSize": 0,
+      "percent": 0
     },
     {
       "name": "google-type",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 51943,
-      "outputSize": 51943,
+      "duration": 3,
+      "inputSize": 52213,
+      "outputSize": 52213,
       "percent": 100
     },
     {
       "name": "Gridlex",
       "version": "v2.7.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 45341,
-      "outputSize": 45341,
-      "percent": 100
+      "duration": 22,
+      "inputSize": 45359,
+      "outputSize": 34453,
+      "percent": 76
     },
     {
       "name": "Gumby",
       "version": "v2.6.4",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 167013,
-      "outputSize": 0,
-      "percent": 0
+      "duration": 190,
+      "inputSize": 167127,
+      "outputSize": 140099,
+      "percent": 84
     },
     {
       "name": "Gutenberg",
       "version": "v0.7.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 9923,
-      "outputSize": 9923,
-      "percent": 100
+      "duration": 10,
+      "inputSize": 10139,
+      "outputSize": 4717,
+      "percent": 47
     },
     {
       "name": "Halfmoon",
       "version": "v2.0.2",
       "license": "MIT",
-      "duration": 9,
-      "inputSize": 461997,
-      "outputSize": 461997,
-      "percent": 100
+      "duration": 31723,
+      "inputSize": 462723,
+      "outputSize": 364988,
+      "percent": 79
     },
     {
       "name": "HalfStyle",
       "version": "v2.0.2",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 7239,
-      "outputSize": 7239,
+      "duration": 0,
+      "inputSize": 7473,
+      "outputSize": 7473,
       "percent": 100
     },
     {
       "name": "Hint",
       "version": "v3.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 10753,
-      "outputSize": 10753,
-      "percent": 100
+      "duration": 13,
+      "inputSize": 10831,
+      "outputSize": 6785,
+      "percent": 63
     },
     {
       "name": "HTML Sheets of Paper",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 5080,
-      "outputSize": 5080,
-      "percent": 100
+      "duration": 2,
+      "inputSize": 5233,
+      "outputSize": 1215,
+      "percent": 23
     },
     {
       "name": "Hugo Universal Theme",
       "version": "v1.4.1",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 77467,
-      "outputSize": 77467,
-      "percent": 100
+      "duration": 71,
+      "inputSize": 77539,
+      "outputSize": 55339,
+      "percent": 71
     },
     {
       "name": "Icon Hover Effects",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 16270,
-      "outputSize": 16270,
-      "percent": 100
+      "duration": 16,
+      "inputSize": 16330,
+      "outputSize": 9026,
+      "percent": 55
     },
     {
       "name": "Instagram.css",
       "version": "v0.1.4",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 15053,
-      "outputSize": 15053,
-      "percent": 100
+      "duration": 12,
+      "inputSize": 15056,
+      "outputSize": 7210,
+      "percent": 48
     },
     {
       "name": "Jupyter Themes",
       "version": "v0.20.0",
       "license": "MIT",
-      "duration": 111,
+      "duration": 79,
       "inputSize": 72719,
       "outputSize": 56191,
       "percent": 77
@@ -623,34 +623,34 @@
       "name": "Load Awesome",
       "version": "v1.1.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 190177,
-      "outputSize": 190177,
-      "percent": 100
+      "duration": 167,
+      "inputSize": 190180,
+      "outputSize": 112023,
+      "percent": 59
     },
     {
       "name": "Loaders",
       "version": "v0.1.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 56494,
-      "outputSize": 56494,
-      "percent": 100
+      "duration": 30,
+      "inputSize": 56509,
+      "outputSize": 22409,
+      "percent": 40
     },
     {
       "name": "Luxbar",
       "version": "v0.3.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 8256,
-      "outputSize": 8256,
-      "percent": 100
+      "duration": 7,
+      "inputSize": 8259,
+      "outputSize": 6626,
+      "percent": 80
     },
     {
       "name": "markdown-css",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 6,
+      "duration": 2,
       "inputSize": 3693,
       "outputSize": 2705,
       "percent": 73
@@ -659,79 +659,79 @@
       "name": "Material for Bootstrap",
       "version": "v4.1.1",
       "license": "MIT",
-      "duration": 73,
-      "inputSize": 311659,
-      "outputSize": 311659,
-      "percent": 100
+      "duration": 465,
+      "inputSize": 311662,
+      "outputSize": 230292,
+      "percent": 74
     },
     {
       "name": "Meyer",
       "version": "v2.0.0",
       "license": "Public Domain",
-      "duration": 0,
-      "inputSize": 1101,
-      "outputSize": 1101,
-      "percent": 100
+      "duration": 1,
+      "inputSize": 1107,
+      "outputSize": 747,
+      "percent": 67
     },
     {
       "name": "Microsoft Metro Buttons",
       "version": "v1.2.0",
       "license": "CC-BY-3.0",
-      "duration": 0,
-      "inputSize": 20423,
-      "outputSize": 20423,
-      "percent": 100
+      "duration": 20,
+      "inputSize": 20474,
+      "outputSize": 9916,
+      "percent": 48
     },
     {
       "name": "Microtip",
       "version": "v0.2.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 8504,
-      "outputSize": 8504,
-      "percent": 100
+      "duration": 4,
+      "inputSize": 8537,
+      "outputSize": 5668,
+      "percent": 66
     },
     {
       "name": "Mini",
       "version": "v3.0.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 55874,
-      "outputSize": 55874,
-      "percent": 100
+      "duration": 44,
+      "inputSize": 55940,
+      "outputSize": 44688,
+      "percent": 80
     },
     {
       "name": "Mini Reset",
       "version": "v0.0.7",
       "license": "MIT",
       "duration": 0,
-      "inputSize": 619,
-      "outputSize": 619,
-      "percent": 100
+      "inputSize": 622,
+      "outputSize": 469,
+      "percent": 75
     },
     {
       "name": "Missing",
       "version": "v1.3.0",
       "license": "BSD-2-Clause",
-      "duration": 1,
-      "inputSize": 75980,
-      "outputSize": 75980,
-      "percent": 100
+      "duration": 98,
+      "inputSize": 76016,
+      "outputSize": 55477,
+      "percent": 73
     },
     {
       "name": "Mobi",
       "version": "v3.1.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 13756,
-      "outputSize": 13756,
-      "percent": 100
+      "duration": 18,
+      "inputSize": 13762,
+      "outputSize": 9602,
+      "percent": 70
     },
     {
       "name": "Mocka",
       "version": "v1.0.1",
       "license": "MIT",
-      "duration": 5,
+      "duration": 2,
       "inputSize": 2797,
       "outputSize": 1558,
       "percent": 56
@@ -740,97 +740,97 @@
       "name": "Modern CSS Resets",
       "version": "v1.4.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 1195,
-      "outputSize": 1195,
-      "percent": 100
+      "duration": 1,
+      "inputSize": 1222,
+      "outputSize": 611,
+      "percent": 50
     },
     {
       "name": "MVP",
       "version": "v1.17.3",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 10216,
-      "outputSize": 10216,
-      "percent": 100
+      "duration": 9,
+      "inputSize": 10267,
+      "outputSize": 7973,
+      "percent": 78
     },
     {
       "name": "Natural Selection",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 6430,
-      "outputSize": 6430,
-      "percent": 100
+      "duration": 6,
+      "inputSize": 6505,
+      "outputSize": 133,
+      "percent": 2
     },
     {
       "name": "NES.css",
       "version": "v2.3.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 308219,
-      "outputSize": 308219,
+      "duration": 17,
+      "inputSize": 308246,
+      "outputSize": 308246,
       "percent": 100
     },
     {
       "name": "Normalize",
       "version": "v8.0.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 5925,
-      "outputSize": 5925,
-      "percent": 100
+      "duration": 2,
+      "inputSize": 6138,
+      "outputSize": 1695,
+      "percent": 28
     },
     {
       "name": "object-fit Polyfill",
       "version": "v0.3.4",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 2033,
-      "outputSize": 2033,
-      "percent": 100
+      "duration": 1,
+      "inputSize": 2036,
+      "outputSize": 1698,
+      "percent": 83
     },
     {
       "name": "Obsidian Colored Sidebar",
       "version": "v2.0.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 17710,
-      "outputSize": 17710,
-      "percent": 100
+      "duration": 9,
+      "inputSize": 17815,
+      "outputSize": 13515,
+      "percent": 76
     },
     {
       "name": "Obsidian Modular CSS Layout",
       "version": "v0.10.0",
       "license": "GPL-3.0",
-      "duration": 1,
-      "inputSize": 42865,
-      "outputSize": 42865,
-      "percent": 100
+      "duration": 37,
+      "inputSize": 43210,
+      "outputSize": 20310,
+      "percent": 47
     },
     {
       "name": "Orbit",
       "version": "v1.4.11",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 155861,
-      "outputSize": 155861,
-      "percent": 100
+      "duration": 948,
+      "inputSize": 155954,
+      "outputSize": 132623,
+      "percent": 85
     },
     {
       "name": "Paper",
       "version": "v0.4.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 1509,
-      "outputSize": 1509,
-      "percent": 100
+      "duration": 4,
+      "inputSize": 1521,
+      "outputSize": 1070,
+      "percent": 70
     },
     {
       "name": "PatternFly",
       "version": "v6.5.2",
       "license": "MIT",
-      "duration": 133280,
+      "duration": 119011,
       "inputSize": 1976773,
       "outputSize": 1793360,
       "percent": 91
@@ -839,124 +839,124 @@
       "name": "Pesticide",
       "version": "v1.3.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 20077,
-      "outputSize": 20077,
-      "percent": 100
+      "duration": 20,
+      "inputSize": 20080,
+      "outputSize": 9034,
+      "percent": 45
     },
     {
       "name": "Photon",
       "version": "v0.1.2",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 31807,
-      "outputSize": 31807,
-      "percent": 100
+      "duration": 92,
+      "inputSize": 32662,
+      "outputSize": 19831,
+      "percent": 61
     },
     {
       "name": "Picnic",
       "version": "v7.1.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 58636,
-      "outputSize": 58636,
-      "percent": 100
+      "duration": 52,
+      "inputSize": 58813,
+      "outputSize": 37264,
+      "percent": 63
     },
     {
       "name": "Pico",
       "version": "v2.1.1",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 96964,
-      "outputSize": 96964,
-      "percent": 100
+      "duration": 135,
+      "inputSize": 97069,
+      "outputSize": 82377,
+      "percent": 85
     },
     {
       "name": "Pills",
       "version": "v1.0.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 6104,
-      "outputSize": 6104,
-      "percent": 100
+      "duration": 8,
+      "inputSize": 6107,
+      "outputSize": 4741,
+      "percent": 78
     },
     {
       "name": "Portfolio Template",
       "version": "v0.0.0",
       "license": "GPL-3.0",
-      "duration": 0,
-      "inputSize": 10815,
-      "outputSize": 10815,
-      "percent": 100
+      "duration": 11,
+      "inputSize": 10914,
+      "outputSize": 6909,
+      "percent": 63
     },
     {
       "name": "Preboot",
       "version": "v2.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 16673,
-      "outputSize": 16673,
-      "percent": 100
+      "duration": 18,
+      "inputSize": 17006,
+      "outputSize": 7365,
+      "percent": 43
     },
     {
       "name": "Pretty Checkbox",
       "version": "v3.0.3",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 22623,
-      "outputSize": 22623,
-      "percent": 100
+      "duration": 13,
+      "inputSize": 22629,
+      "outputSize": 16033,
+      "percent": 71
     },
     {
       "name": "Pure",
       "version": "v3.0.0",
       "license": "BSD-3-Clause",
-      "duration": 1,
-      "inputSize": 25841,
-      "outputSize": 25841,
-      "percent": 100
+      "duration": 16,
+      "inputSize": 26207,
+      "outputSize": 15520,
+      "percent": 59
     },
     {
       "name": "Pygments Fruity",
       "version": "v1.0.0",
       "license": "Unlicense",
-      "duration": 0,
-      "inputSize": 4870,
-      "outputSize": 4870,
-      "percent": 100
+      "duration": 5,
+      "inputSize": 5098,
+      "outputSize": 1969,
+      "percent": 39
     },
     {
       "name": "Ratchet",
       "version": "v2.0.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 24857,
-      "outputSize": 24857,
-      "percent": 100
+      "duration": 35,
+      "inputSize": 24863,
+      "outputSize": 18057,
+      "percent": 73
     },
     {
       "name": "Remedy Quotes",
       "version": "v0.1.0",
       "license": "MPL-2.0",
-      "duration": 0,
-      "inputSize": 21423,
-      "outputSize": 21423,
-      "percent": 100
+      "duration": 51,
+      "inputSize": 21954,
+      "outputSize": 11046,
+      "percent": 50
     },
     {
       "name": "Remedy",
       "version": "v0.1.0",
       "license": "MPL-2.0",
-      "duration": 0,
-      "inputSize": 3987,
-      "outputSize": 3987,
-      "percent": 100
+      "duration": 1,
+      "inputSize": 4038,
+      "outputSize": 765,
+      "percent": 19
     },
     {
       "name": "Repaintless",
       "version": "v1.4.0",
       "license": "MIT",
-      "duration": 9,
+      "duration": 8,
       "inputSize": 15985,
       "outputSize": 5832,
       "percent": 36
@@ -965,43 +965,43 @@
       "name": "Reset",
       "version": "v1.0.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 2377,
-      "outputSize": 2377,
-      "percent": 100
+      "duration": 2,
+      "inputSize": 2416,
+      "outputSize": 1258,
+      "percent": 52
     },
     {
       "name": "Responsive",
       "version": "v4.1.4",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 70874,
-      "outputSize": 70874,
-      "percent": 100
+      "duration": 64,
+      "inputSize": 70886,
+      "outputSize": 50463,
+      "percent": 71
     },
     {
       "name": "Responsive",
       "version": "v5.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 63117,
-      "outputSize": 63117,
-      "percent": 100
+      "duration": 54,
+      "inputSize": 63129,
+      "outputSize": 44299,
+      "percent": 70
     },
     {
       "name": "Ress",
       "version": "v5.0.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 6583,
-      "outputSize": 6583,
-      "percent": 100
+      "duration": 5,
+      "inputSize": 6769,
+      "outputSize": 2224,
+      "percent": 33
     },
     {
       "name": "Ripple UI",
       "version": "v1.12.1",
       "license": "MIT",
-      "duration": 4462952,
+      "duration": 4327734,
       "inputSize": 4740747,
       "outputSize": 4726689,
       "percent": 100
@@ -1010,97 +1010,97 @@
       "name": "Sakura",
       "version": "v1.5.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 4080,
-      "outputSize": 4080,
-      "percent": 100
+      "duration": 5,
+      "inputSize": 4098,
+      "outputSize": 3023,
+      "percent": 74
     },
     {
       "name": "Sanitize",
       "version": "v13.0.0",
       "license": "CC0-1.0",
-      "duration": 0,
-      "inputSize": 7060,
-      "outputSize": 7060,
-      "percent": 100
+      "duration": 7,
+      "inputSize": 7267,
+      "outputSize": 2018,
+      "percent": 28
     },
     {
       "name": "Select",
       "version": "v3.2.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 3125,
-      "outputSize": 3125,
-      "percent": 100
+      "duration": 2,
+      "inputSize": 3161,
+      "outputSize": 1843,
+      "percent": 58
     },
     {
       "name": "Semantic UI",
       "version": "v2.5.0",
       "license": "MIT",
-      "duration": 13,
-      "inputSize": 745929,
-      "outputSize": 745929,
-      "percent": 100
+      "duration": 4452,
+      "inputSize": 752082,
+      "outputSize": 507856,
+      "percent": 68
     },
     {
       "name": "Shards",
       "version": "v3.0.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 113240,
-      "outputSize": 113240,
-      "percent": 100
+      "duration": 144,
+      "inputSize": 113246,
+      "outputSize": 89989,
+      "percent": 79
     },
     {
       "name": "Sierra",
       "version": "v3.5.0",
       "license": "GPL-2.0",
-      "duration": 0,
-      "inputSize": 51570,
-      "outputSize": 51570,
-      "percent": 100
+      "duration": 47,
+      "inputSize": 51645,
+      "outputSize": 26982,
+      "percent": 52
     },
     {
       "name": "Simple Grid",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 2486,
-      "outputSize": 2486,
-      "percent": 100
+      "duration": 4,
+      "inputSize": 2513,
+      "outputSize": 1652,
+      "percent": 66
     },
     {
       "name": "Simple Line Icons",
       "version": "v2.5.4",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 12964,
-      "outputSize": 12964,
-      "percent": 100
+      "duration": 28,
+      "inputSize": 12973,
+      "outputSize": 10184,
+      "percent": 79
     },
     {
       "name": "Simple",
       "version": "v2.3.7",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 13953,
-      "outputSize": 13953,
-      "percent": 100
+      "duration": 10,
+      "inputSize": 14088,
+      "outputSize": 9694,
+      "percent": 69
     },
     {
       "name": "Skeleton",
       "version": "v2.0.4",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 9859,
-      "outputSize": 9859,
-      "percent": 100
+      "duration": 8,
+      "inputSize": 9952,
+      "outputSize": 5646,
+      "percent": 57
     },
     {
       "name": "SPCSS",
       "version": "v0.9.0",
       "license": "MIT",
-      "duration": 2,
+      "duration": 4,
       "inputSize": 1793,
       "outputSize": 1317,
       "percent": 73
@@ -1109,109 +1109,109 @@
       "name": "Spectre",
       "version": "v0.5.9",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 62108,
-      "outputSize": 62108,
-      "percent": 100
+      "duration": 76,
+      "inputSize": 62360,
+      "outputSize": 43514,
+      "percent": 70
     },
     {
       "name": "Spicetify Dribbblish",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 1,
-      "inputSize": 25719,
-      "outputSize": 25719,
-      "percent": 100
+      "duration": 22,
+      "inputSize": 25863,
+      "outputSize": 20096,
+      "percent": 78
     },
     {
       "name": "Spicetify Text",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 34814,
-      "outputSize": 34814,
-      "percent": 100
+      "duration": 24,
+      "inputSize": 34970,
+      "outputSize": 27024,
+      "percent": 77
     },
     {
       "name": "Spinkit",
       "version": "v2.0.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 14738,
-      "outputSize": 0,
-      "percent": 0
+      "duration": 9,
+      "inputSize": 14783,
+      "outputSize": 7895,
+      "percent": 53
     },
     {
       "name": "Stackicons",
       "version": "v1.13.0",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 1050212,
-      "outputSize": 1050212,
-      "percent": 100
+      "duration": 234,
+      "inputSize": 1055930,
+      "outputSize": 865171,
+      "percent": 82
     },
     {
       "name": "Stacks",
       "version": "v2.8.6",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 620026,
-      "outputSize": 620026,
-      "percent": 100
+      "duration": 2048,
+      "inputSize": 620329,
+      "outputSize": 512710,
+      "percent": 83
     },
     {
       "name": "System",
       "version": "v0.1.11",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 17601,
-      "outputSize": 17601,
-      "percent": 100
+      "duration": 21,
+      "inputSize": 17664,
+      "outputSize": 13403,
+      "percent": 76
     },
     {
       "name": "Tablecloth",
       "version": "v1.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 11029,
-      "outputSize": 11029,
+      "duration": 1,
+      "inputSize": 11041,
+      "outputSize": 11041,
       "percent": 100
     },
     {
       "name": "Tachyons",
       "version": "v4.12.0",
       "license": "MIT",
-      "duration": 59,
-      "inputSize": 114551,
-      "outputSize": 12681,
-      "percent": 11
+      "duration": 228,
+      "inputSize": 114983,
+      "outputSize": 71354,
+      "percent": 62
     },
     {
       "name": "Tailwind",
       "version": "v2.2.19",
       "license": "MIT",
-      "duration": 20497,
-      "inputSize": 3642126,
-      "outputSize": 2979609,
-      "percent": 82
+      "duration": 279,
+      "inputSize": 3642351,
+      "outputSize": 3642351,
+      "percent": 100
     },
     {
       "name": "The New CSS Reset",
       "version": "v1.11.3",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 2844,
-      "outputSize": 2844,
-      "percent": 100
+      "duration": 2,
+      "inputSize": 2901,
+      "outputSize": 888,
+      "percent": 31
     },
     {
       "name": "Toast",
       "version": "v1.1.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 7268,
-      "outputSize": 7268,
-      "percent": 100
+      "duration": 14,
+      "inputSize": 7274,
+      "outputSize": 5091,
+      "percent": 70
     },
     {
       "name": "Tooltip Twispy",
@@ -1226,79 +1226,79 @@
       "name": "Tufte",
       "version": "v1.8.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 11176,
-      "outputSize": 11176,
-      "percent": 100
+      "duration": 8,
+      "inputSize": 11212,
+      "outputSize": 7874,
+      "percent": 70
     },
     {
       "name": "Tui",
       "version": "v2.1.2",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 46127,
-      "outputSize": 46127,
-      "percent": 100
+      "duration": 82,
+      "inputSize": 46295,
+      "outputSize": 31420,
+      "percent": 68
     },
     {
       "name": "tw-animate-css",
       "version": "v1.4.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 17405,
-      "outputSize": 17405,
-      "percent": 100
+      "duration": 5,
+      "inputSize": 17423,
+      "outputSize": 1231,
+      "percent": 7
     },
     {
       "name": "UIkit",
       "version": "v3.25.17",
       "license": "MIT",
-      "duration": 2,
-      "inputSize": 396229,
-      "outputSize": 396229,
-      "percent": 100
+      "duration": 455,
+      "inputSize": 400726,
+      "outputSize": 279199,
+      "percent": 70
     },
     {
       "name": "Universal.css",
       "version": "v0.0.0",
       "license": "WTFPL",
-      "duration": 28,
-      "inputSize": 5020668,
-      "outputSize": 5020668,
-      "percent": 100
+      "duration": 6207594,
+      "inputSize": 5020671,
+      "outputSize": 4458139,
+      "percent": 89
     },
     {
       "name": "USWDS",
       "version": "v3.13.0",
       "license": "CC0-1.0",
-      "duration": 3,
-      "inputSize": 652620,
-      "outputSize": 652620,
-      "percent": 100
+      "duration": 2363,
+      "inputSize": 652623,
+      "outputSize": 501673,
+      "percent": 77
     },
     {
       "name": "VitePress",
       "version": "v1.6.4",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 12135,
-      "outputSize": 12135,
-      "percent": 100
+      "duration": 15,
+      "inputSize": 12210,
+      "outputSize": 8541,
+      "percent": 70
     },
     {
       "name": "Vivify",
       "version": "v1.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 71698,
-      "outputSize": 71698,
-      "percent": 100
+      "duration": 43,
+      "inputSize": 71707,
+      "outputSize": 48063,
+      "percent": 67
     },
     {
       "name": "Voxels",
       "version": "v1.0.0",
       "license": "MIT",
-      "duration": 10,
+      "duration": 7,
       "inputSize": 4735,
       "outputSize": 3505,
       "percent": 74
@@ -1307,34 +1307,34 @@
       "name": "Water",
       "version": "v2.1.1",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 32359,
-      "outputSize": 32359,
-      "percent": 100
+      "duration": 34,
+      "inputSize": 32362,
+      "outputSize": 21905,
+      "percent": 68
     },
     {
       "name": "Weather Icons",
       "version": "v2.0.10",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 175925,
-      "outputSize": 175925,
-      "percent": 100
+      "duration": 683,
+      "inputSize": 175928,
+      "outputSize": 127795,
+      "percent": 73
     },
     {
       "name": "Webgradients",
       "version": "v0.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 22368,
-      "outputSize": 22368,
-      "percent": 100
+      "duration": 32,
+      "inputSize": 22908,
+      "outputSize": 15237,
+      "percent": 67
     },
     {
       "name": "Windows 98",
       "version": "v0.0.1",
       "license": "MIT",
-      "duration": 4,
+      "duration": 8,
       "inputSize": 4547,
       "outputSize": 2608,
       "percent": 57
@@ -1343,19 +1343,19 @@
       "name": "Wing",
       "version": "v1.0.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 8310,
-      "outputSize": 8310,
-      "percent": 100
+      "duration": 13,
+      "inputSize": 8355,
+      "outputSize": 5566,
+      "percent": 67
     },
     {
       "name": "WTF Forms",
       "version": "v2.2.0",
       "license": "MIT",
-      "duration": 0,
-      "inputSize": 10449,
-      "outputSize": 10449,
-      "percent": 100
+      "duration": 5,
+      "inputSize": 10548,
+      "outputSize": 7051,
+      "percent": 67
     }
   ]
 }
