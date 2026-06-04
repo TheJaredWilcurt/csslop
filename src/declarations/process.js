@@ -513,6 +513,7 @@ function processDeclarations (declarations, context) {
     if (!propertyName.startsWith('-')) {
       for (let i = result.length - 1; i >= 0; i--) {
         const isPrefixedMatch = (
+          result[i].property &&
           result[i].property.endsWith(propertyName) &&
           result[i].property.startsWith('-')
         );
