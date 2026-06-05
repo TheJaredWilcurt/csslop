@@ -47,6 +47,7 @@ for (let i = 0; i < libraries.length; i++) {
   library.inputSize = library.source.length;
   library.outputSize = output.length;
   library.percent = percent;
+  library.output = output;
   delete library.size;
   delete library.source;
 }
@@ -82,7 +83,14 @@ console.log('TOTAL DURATION: ' + timeFromMs(totalDuration));
 console.log('TOTAL INPUT: ' + (Math.round(totalInput / 1024 / 1024 * 100) / 100) + 'MB');
 console.log('TOTAL OUTPUT: ' + (Math.round(totalOutput / 1024 / 1024 * 100) / 100) + 'MB');
 
-const report = {
+for (const library of libraries) {
+  const fileName = library.name + '-' + library.version + '.css';
+  writeFileSync(join(__dirname, 'minified', fileName), library.output + '\n');
+  delete library.output;
+}
+
+const reportPath = join(__dirname, '..', '..', 'realWorldResults.json');
+const report = JSON.stringify({
   totals: {
     inputSize: totalInput,
     outputSize: totalOutput,
@@ -91,7 +99,5 @@ const report = {
     percent: Math.round((totalOutput / totalInput) * 100) + '%'
   },
   libraries
-};
-
-const reportPath = join(__dirname, '..', '..', 'realWorldResults.json');
-writeFileSync(reportPath, JSON.stringify(report, null, 2));
+}, null, 2);
+writeFileSync(reportPath, report);
