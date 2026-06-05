@@ -28,6 +28,51 @@ import {
 } from './shared.js';
 import { minifyTransformValue } from './transforms.js';
 
+const MAX_MINIFIED_VALUE_CACHE_SIZE = 5000;
+const UNDEFINED_CACHE_VALUE = Symbol('undefined-cache-value');
+const declarationValueCache = new WeakMap();
+const minifiedValueCache = new Map();
+
+/**
+ * Builds a cache key from a declaration's property and value, joined by a null character.
+ *
+ * @param  {object} declaration  The CSS declaration object with property and value fields.
+ * @return {string}              A string key uniquely identifying the declaration's property–value pair.
+ */
+function getDeclarationCacheKey (declaration) {
+  return String(declaration.property || '') + '\u0000' + String(declaration.value || '');
+}
+
+/**
+ * Stores a minified value in the per-declaration WeakMap cache, keyed by the declaration object itself.
+ *
+ * @param {object}           declaration  The CSS declaration object to cache against.
+ * @param {string}           key          The cache key derived from the declaration's property and value.
+ * @param {string|undefined} value        The minified value to cache, or undefined to cache an absent value.
+ */
+function setDeclarationCacheValue (declaration, key, value) {
+  declarationValueCache.set(declaration, {
+    key,
+    value: value === undefined ? UNDEFINED_CACHE_VALUE : value
+  });
+}
+
+/**
+ * Stores a value in a bounded Map cache, clearing the entire cache when it exceeds the size limit.
+ *
+ * @param  {Map}              cache  The Map cache to store the entry in.
+ * @param  {string}           key    The cache key.
+ * @param  {string|undefined} value  The value to cache, or undefined to cache an absent value.
+ * @return {string|undefined}        The stored value.
+ */
+function setBoundedCacheValue (cache, key, value) {
+  if (cache.size >= MAX_MINIFIED_VALUE_CACHE_SIZE) {
+    cache.clear();
+  }
+  cache.set(key, value === undefined ? UNDEFINED_CACHE_VALUE : value);
+  return value;
+}
+
 /**
  * Map of position-area two-keyword values to their single-keyword equivalents.
  * Per CSS spec, `center center` is redundant with `center`, etc.
@@ -170,30 +215,30 @@ function replaceOutsideStringsAndUrls (value, replacer) {
 /**
  * Normalizes whitespace, quotes, and unicode escapes in a CSS value string.
  *
- * @param  {string} val       The raw CSS value string to normalize.
+ * @param  {string} value     The raw CSS value string to normalize.
  * @param  {string} property  The CSS property name, used for context-aware quote handling.
  * @return {string}           The value with whitespace collapsed, quotes normalized, and unicode escapes resolved.
  */
-function normalizeWhitespaceAndQuotes (val, property) {
+function normalizeWhitespaceAndQuotes (value, property) {
   // Unescape unicode (skip control characters — they must stay escaped in CSS strings)
-  val = val.replace(/\\([0-9a-fA-F]{1,6})\s?/g, (match, hex) => {
+  value = value.replace(/\\([0-9a-fA-F]{1,6})\s?/g, (match, hex) => {
     return resolveUnicodeEscape(hex) ?? match;
   });
   // Normalize single-quoted strings to double-quoted
-  val = val.replace(/'((?:[^'\\]|\\.)*?)'/g, '"$1"');
+  value = value.replace(/'((?:[^'\\]|\\.)*?)'/g, '"$1"');
 
   // Remove space between string literals
-  val = val.replace(/("(?:[^"\\]|\\.)*")\s+(?=")/g, '$1');
+  value = value.replace(/("(?:[^"\\]|\\.)*")\s+(?=")/g, '$1');
 
   // Whitespace minification
-  val = val.replace(/\s*!\s*important/i, '!important');
-  // val = val.replace(/\s*([+*/=])\s*/g, '$1');
+  value = value.replace(/\s*!\s*important/i, '!important');
+  // value = value.replace(/\s*([+*/=])\s*/g, '$1');
   // Strip whitespace around commas
-  val = val.replace(/\s*([,])\s*/g, '$1');
+  value = value.replace(/\s*([,])\s*/g, '$1');
   // Match quoted strings (to skip them) or parentheses with surrounding whitespace (to strip whitespace)
-  val = val.replace(/("[^"]*"|'[^']*')|\s*([()])\s*/g, (match, str, paren) => {
-    if (str) {
-      return str;
+  value = value.replace(/("[^"]*"|'[^']*')|\s*([()])\s*/g, (match, quotedString, paren) => {
+    if (quotedString) {
+      return quotedString;
     }
     return paren;
   });
@@ -201,7 +246,7 @@ function normalizeWhitespaceAndQuotes (val, property) {
   // Strip quotes from simple strings (like "Custom", "image.png"), but not for content where quoted strings are semantically distinct
   if (property !== 'content' && property !== 'font-feature-settings' && property !== 'font-variation-settings') {
     // Match a boundary (start, whitespace, comma, open-paren), then a quoted simple value (alphanumeric, dots, slashes, hyphens), then a boundary lookahead
-    val = val.replace(/(^|\s|,|\()("|')([a-zA-Z0-9_./-]+)\2(?=\s|,|$|\)|!)/g, (match, before, quote, inner) => {
+    value = value.replace(/(^|\s|,|\()("|')([a-zA-Z0-9_./-]+)\2(?=\s|,|$|\)|!)/g, (match, before, quote, inner) => {
       // Keep quotes around CSS generic font-family keywords — unquoted they mean something different
       if (property === 'font-family' && /^(?:serif|sans-serif|monospace|cursive|fantasy|system-ui|math|emoji|fangsong|ui-serif|ui-sans-serif|ui-monospace|ui-rounded)$/i.test(inner)) {
         return before + '"' + inner + '"';
@@ -210,35 +255,35 @@ function normalizeWhitespaceAndQuotes (val, property) {
     });
   }
 
-  return val;
+  return value;
 }
 
 /**
  * Converts CSS color functions (rgb, hsl, hwb, oklab, color-mix, etc.) to their
  * shortest hex equivalents and applies hex shortening.
  *
- * @param  {string} val  The CSS value string with potential color functions.
- * @return {string}      The value with color functions converted to hex where shorter.
+ * @param  {string} value  The CSS value string with potential color functions.
+ * @return {string}        The value with color functions converted to hex where shorter.
  */
-function convertColorsToHex (val) {
+function convertColorsToHex (value) {
   // Evaluate color-mix() expressions (before space minification to avoid nested-paren issues)
-  if (/\bcolor-mix\(/i.test(val)) {
-    const result = evaluateColorMix(val);
+  if (/\bcolor-mix\(/i.test(value)) {
+    const result = evaluateColorMix(value);
     if (result) {
-      val = result;
+      value = result;
     }
   }
 
   // Handle color(from ...) relative color syntax (identity case)
-  if (/\bcolor\(\s*from\b/i.test(val)) {
-    const result = evaluateRelativeColor(val);
+  if (/\bcolor\(\s*from\b/i.test(value)) {
+    const result = evaluateRelativeColor(value);
     if (result) {
-      val = result;
+      value = result;
     }
   }
 
   // Minify whitespace and numeric precision inside wide-gamut and functional color notations
-  val = val.replace(/\b(oklab|oklch|lch|lab|color|hwb)\((.*?)\)/gi, (match, func, inner) => {
+  value = value.replace(/\b(oklab|oklch|lch|lab|color|hwb)\((.*?)\)/gi, (match, functionName, inner) => {
     // Collapse whitespace to single space
     let minified = inner.replace(/\s+/g, ' ');
     // Remove space after commas
@@ -250,13 +295,13 @@ function convertColorsToHex (val) {
     // Strip leading zeros from decimals preceded by a keyword (e.g. srgb 0.5 → srgb .5)
     minified = minified.replace(/([A-Za-z]) 0+(\.[\d]+)/g, '$1 $2');
     // Check if function uses a wide-gamut color space requiring higher numeric precision
-    const useWidePrecision = func.toLowerCase() === 'color' && /\b(srgb-linear|xyz-d65|xyz-d50|xyz)\b/i.test(inner);
+    const useWidePrecision = functionName.toLowerCase() === 'color' && /\b(srgb-linear|xyz-d65|xyz-d50|xyz)\b/i.test(inner);
     // Round numbers with 3+ decimal places, using context-aware precision
-    minified = minified.replace(/(^|[\s(,/-])(-?\d*\.\d{3,})/g, (match, before, num) => {
+    minified = minified.replace(/(^|[\s(,/-])(-?\d*\.\d{3,})/g, (match, before, number) => {
       const isAlpha = before === '/';
-      const absoluteValue = Math.abs(parseFloat(num));
+      const absoluteValue = Math.abs(parseFloat(number));
       // Check if function is a Lab/LCH color notation with a large channel value (less precision needed)
-      const isLargeLabValue = /^(?:lch|lab|oklch|oklab)$/i.test(func) && absoluteValue >= 10;
+      const isLargeLabValue = /^(?:lch|lab|oklch|oklab)$/i.test(functionName) && absoluteValue >= 10;
       let precision;
       if (isAlpha) {
         precision = 3;
@@ -268,9 +313,9 @@ function convertColorsToHex (val) {
         precision = 3;
       }
       const factor = Math.pow(10, precision);
-      const roundedNum = Math.round(parseFloat(num) * factor) / factor;
+      const roundedNumber = Math.round(parseFloat(number) * factor) / factor;
       // Strip trailing zeros and trailing decimal point from the rounded number
-      let rounded = roundedNum.toFixed(precision).replace(/0+$/, '').replace(/\.$/, '');
+      let rounded = roundedNumber.toFixed(precision).replace(/0+$/, '').replace(/\.$/, '');
       if (rounded.startsWith('0.')) {
         rounded = rounded.substring(1);
       }
@@ -279,11 +324,11 @@ function convertColorsToHex (val) {
       }
       return before + rounded;
     });
-    return func + '(' + minified.trim() + ')';
+    return functionName + '(' + minified.trim() + ')';
   });
 
   // Convert in-gamut oklab() to hex when it produces a shorter representation
-  val = val.replace(/\boklab\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, lStr, aStr, bStr, alphaStr) => {
+  value = value.replace(/\boklab\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, lStr, aStr, bStr, alphaStr) => {
     const alpha = parseAlphaString(alphaStr);
     const hex = convertOklabToHex(parseFloat(lStr), parseFloat(aStr), parseFloat(bStr), alpha);
     if (!hex) {
@@ -296,18 +341,18 @@ function convertColorsToHex (val) {
   });
 
   // Handle 'none' keyword in rgb/hsl functions (CSS Color Level 4: treated as 0)
-  val = val.replace(/\b(rgba?|hsla?)\([^)]*\)/gi, (match) => {
+  value = value.replace(/\b(rgba?|hsla?)\([^)]*\)/gi, (match) => {
     return match.replace(/\bnone\b/gi, '0');
   });
 
   // hwb() → hex
-  val = val.replace(/\bhwb\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, wStr, bStr, aStr) => {
+  value = value.replace(/\bhwb\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, wStr, bStr, aStr) => {
     const [r, g, b] = hwbToRgbChannels(parseFloat(hStr), parseFloat(wStr) / 100, parseFloat(bStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
   // rgb() space syntax → hex (handles decimals and any alpha)
-  val = val.replace(/\brgb\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
+  value = value.replace(/\brgb\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
     const r = Math.round(parseFloat(rStr));
     const g = Math.round(parseFloat(gStr));
     const b = Math.round(parseFloat(bStr));
@@ -315,13 +360,13 @@ function convertColorsToHex (val) {
   });
 
   // hsl() space syntax → hex (handles any alpha)
-  val = val.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
+  value = value.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
   // rgba() comma syntax → hex (handles any alpha)
-  val = val.replace(/\brgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
+  value = value.replace(/\brgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
     const r = parseInt(rStr, 10);
     const g = parseInt(gStr, 10);
     const b = parseInt(bStr, 10);
@@ -329,43 +374,43 @@ function convertColorsToHex (val) {
   });
 
   // hsla() comma syntax → hex (handles any alpha)
-  val = val.replace(/\bhsla\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
+  value = value.replace(/\bhsla\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
   // hsl() comma syntax → hex
-  val = val.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*\)/g, (match, hStr, sStr, lStr) => {
+  value = value.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*\)/g, (match, hStr, sStr, lStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, 1);
   });
 
   // rgb() comma syntax → hex
-  val = val.replace(/\brgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, (match, r, g, b) => {
+  value = value.replace(/\brgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, (match, r, g, b) => {
     return rgbaToHex(parseInt(r, 10), parseInt(g, 10), parseInt(b, 10), 1);
   });
-  return val;
+  return value;
 }
 
 /**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
- * @param  {string} val       The CSS value string after generic minification.
+ * @param  {string} value     The CSS value string after generic minification.
  * @param  {string} property  The CSS property name.
  * @return {string}           The value with property-specific optimizations applied.
  */
-function applyPropertyOptimizations (val, property) {
+function applyPropertyOptimizations (value, property) {
   if (property === 'font-weight') {
     // Replace font-weight keyword "bold" with its numeric equivalent
-    val = val.replace(/\bbold\b/gi, '700');
+    value = value.replace(/\bbold\b/gi, '700');
     // Replace font-weight keyword "normal" with its numeric equivalent
-    val = val.replace(/\bnormal\b/gi, '400');
+    value = value.replace(/\bnormal\b/gi, '400');
   }
 
   if (property === 'transition-duration') {
     // Convert millisecond duration to seconds when the result is shorter (e.g. 200ms → .2s)
-    val = val.replace(/^(-?(?:\d+|\d*\.\d+))ms$/i, (match, amount) => {
+    value = value.replace(/^(-?(?:\d+|\d*\.\d+))ms$/i, (match, amount) => {
       return roundCompactNumber(parseFloat(amount) / 1000) + 's';
     });
   }
@@ -373,105 +418,105 @@ function applyPropertyOptimizations (val, property) {
   // Transition: remove " 0s" duration (transition: all 0s -> transition: all)
   if (property === 'transition') {
     // Remove zero-second duration from transition shorthand
-    val = val.replace(/\s+0s/g, ' ');
+    value = value.replace(/\s+0s/g, ' ');
     // Remove leading zero-pixel value from transition shorthand
-    val = val.replace(/^0px\s*/, '');
+    value = value.replace(/^0px\s*/, '');
     // Replace cubic-bezier functions with their equivalent named timing-function keywords
-    val = val.replace(/cubic-bezier\(0,0,1,1\)/g, 'linear');
-    val = val.replace(/cubic-bezier\(\.25,\.1,\.25,1\)/g, 'ease');
-    val = val.replace(/cubic-bezier\(\.42,0,1,1\)/g, 'ease-in');
-    val = val.replace(/cubic-bezier\(0,0,\.58,1\)/g, 'ease-out');
-    val = val.trim();
+    value = value.replace(/cubic-bezier\(0,0,1,1\)/g, 'linear');
+    value = value.replace(/cubic-bezier\(\.25,\.1,\.25,1\)/g, 'ease');
+    value = value.replace(/cubic-bezier\(\.42,0,1,1\)/g, 'ease-in');
+    value = value.replace(/cubic-bezier\(0,0,\.58,1\)/g, 'ease-out');
+    value = value.trim();
   }
 
   if (property === 'animation') {
     // Replace steps() functions with their equivalent named timing-function keywords
-    val = val.replace(/steps\(1,start\)/g, 'step-start');
-    val = val.replace(/steps\(1,end\)/g, 'step-end');
+    value = value.replace(/steps\(1,start\)/g, 'step-start');
+    value = value.replace(/steps\(1,end\)/g, 'step-end');
   }
 
   // Flex: remove " 0px" from flex shorthand (flex: 0 0 0px -> flex: 0 0)
   if (property === 'flex') {
     // Remove trailing zero-pixel basis value
-    val = val.replace(/\s+0px/g, ' ');
+    value = value.replace(/\s+0px/g, ' ');
     // Remove leading zero-pixel value
-    val = val.replace(/^0px\s*/, '');
+    value = value.replace(/^0px\s*/, '');
     // Remove trailing zero
-    val = val.replace(/\s+0$/, '');
+    value = value.replace(/\s+0$/, '');
     // Remove standalone zero-pixel value
-    val = val.replace(/^0px$/, '');
-    val = val.trim();
+    value = value.replace(/^0px$/, '');
+    value = value.trim();
   }
 
   // Initial values
-  if (val === 'initial') {
+  if (value === 'initial') {
     if (['opacity', 'z-index', 'flex-grow', 'flex-shrink', 'order', 'line-height', 'zoom'].includes(property)) {
       // Just leaving them or mapping some: opacity: initial -> opacity: 1
       if (property === 'opacity') {
-        val = '1';
+        value = '1';
       }
       if (property === 'z-index') {
-        val = 'auto';
+        value = 'auto';
       }
     }
     if (['margin', 'padding'].includes(property)) {
-      val = '0';
+      value = '0';
     }
     if (['min-width', 'min-height'].includes(property)) {
-      val = 'auto';
+      value = 'auto';
     }
   }
 
-  if (property === 'background' && val === 'none') {
-    val = '0 0';
+  if (property === 'background' && value === 'none') {
+    value = '0 0';
   }
 
   if (property === 'display') {
-    if (val === 'block flow') {
-      val = 'block';
+    if (value === 'block flow') {
+      value = 'block';
     }
-    if (val === 'inline flow-root') {
-      val = 'inline-block';
+    if (value === 'inline flow-root') {
+      value = 'inline-block';
     }
   }
 
   if (property === 'background-repeat') {
-    if (val === 'no-repeat no-repeat') {
-      val = 'no-repeat';
+    if (value === 'no-repeat no-repeat') {
+      value = 'no-repeat';
     }
-    if (val === 'repeat no-repeat') {
-      val = 'repeat-x';
+    if (value === 'repeat no-repeat') {
+      value = 'repeat-x';
     }
-    if (val === 'no-repeat repeat') {
-      val = 'repeat-y';
+    if (value === 'no-repeat repeat') {
+      value = 'repeat-y';
     }
   }
 
   if (property === 'background-position') {
-    if (val === 'center center') {
-      val = '50%';
+    if (value === 'center center') {
+      value = '50%';
     }
-    if (val === 'left top') {
-      val = '0 0';
+    if (value === 'left top') {
+      value = '0 0';
     }
   }
 
   // Check if border value starts with a style keyword, and reorder to canonical width-style-color order
-  if (property === 'border' && /^(?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+/i.test(val)) {
+  if (property === 'border' && /^(?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+/i.test(value)) {
     // Reorder border shorthand from style-width-color to width-style-color
-    val = val.replace(/^((?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none))\s+([^\s]+)\s+(.+)$/i, '$2 $1 $3');
+    value = value.replace(/^((?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none))\s+([^\s]+)\s+(.+)$/i, '$2 $1 $3');
   }
 
   if (property === 'flex-flow') {
     // Reorder flex-flow from wrap-direction to direction-wrap (canonical order)
-    val = val.replace(/^(nowrap|wrap|wrap-reverse)\s+(row|row-reverse|column|column-reverse)$/i, '$2 $1');
+    value = value.replace(/^(nowrap|wrap|wrap-reverse)\s+(row|row-reverse|column|column-reverse)$/i, '$2 $1');
   }
 
   if (property === 'font-family') {
     // Strip quotes from simple multi-word font family names that don't require quoting
-    val = val.replace(/"([A-Za-z0-9-]+(?: [A-Za-z0-9-]+)+)"/g, '$1');
+    value = value.replace(/"([A-Za-z0-9-]+(?: [A-Za-z0-9-]+)+)"/g, '$1');
     const seenFamilies = new Set();
-    val = val.split(',').map((part) => {
+    value = value.split(',').map((part) => {
       return part.trim();
     }).filter(Boolean).filter((part) => {
       const lowercaseName = part.toLowerCase();
@@ -485,7 +530,7 @@ function applyPropertyOptimizations (val, property) {
 
   if (property === 'grid-template-areas') {
     // Normalize each quoted grid-template-areas row string
-    val = val.replace(/"([^"]*)"/g, (match, inner) => {
+    value = value.replace(/"([^"]*)"/g, (match, inner) => {
       // Collapse whitespace to single space within grid row
       let normalized = inner.replace(/\s+/g, ' ').trim();
       // Collapse consecutive dots (null cell tokens) to a single dot
@@ -496,49 +541,49 @@ function applyPropertyOptimizations (val, property) {
 
   if (property === 'font-size') {
     // Convert point (pt) font-size values to their pixel (px) equivalent
-    val = val.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
+    value = value.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
       return roundCompactNumber(parseFloat(amount) * (96 / 72)) + 'px';
     });
   }
 
   // Simplify clamp() where all three arguments are identical (e.g. clamp(1rem,1rem,1rem) → 1rem)
-  val = val.replace(/\bclamp\(([^,]+),\1,\1\)/gi, '$1');
+  value = value.replace(/\bclamp\(([^,]+),\1,\1\)/gi, '$1');
 
   // Convert display-p3 neutral grays to sRGB (equal channels are identical across gamuts)
-  val = val.replace(/\bcolor\(display-p3\s+([\d.]+)\s+\1\s+\1(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, channelStr, alphaStr) => {
+  value = value.replace(/\bcolor\(display-p3\s+([\d.]+)\s+\1\s+\1(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, channelStr, alphaStr) => {
     const channelValue = parseFloat(channelStr);
     const r = Math.round(channelValue * 255);
     return rgbaToHex(r, r, r, parseAlphaString(alphaStr));
   });
 
   // Shorten all color tokens (second pass after property-specific color evaluations)
-  val = replaceOutsideStringsAndUrls(val, shortenColorValues);
+  value = replaceOutsideStringsAndUrls(value, shortenColorValues);
 
   // Remove space before hex colors (second pass after color evaluations)
-  val = replaceOutsideStringsAndUrls(val, (segment) => {
+  value = replaceOutsideStringsAndUrls(value, (segment) => {
     return segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
   });
   if (property !== 'transform' && property !== 'background' && property !== 'src') {
     // Restore space after close-paren when followed by an alphanumeric, hash, or hyphen
-    val = val.replace(/\)(?=[0-9a-zA-Z#-])/g, ') ');
+    value = value.replace(/\)(?=[0-9a-zA-Z#-])/g, ') ');
   }
 
   if (property === 'font') {
     // Split font shorthand on whitespace
-    const parts = val.split(/\s+/);
+    const parts = value.split(/\s+/);
     // Find the font-size part: contains a digit and a recognized CSS length/percentage unit
     const sizeIndex = parts.findIndex((part) => {
       return /\d/.test(part) && /(?:px|em|rem|%|pt|pc|vw|vh|vmin|vmax|ch|ex|cm|mm|in|lh|rlh)/i.test(part);
     });
     if (sizeIndex > 0) {
-      val = [...parts.slice(0, sizeIndex).filter((part) => {
+      value = [...parts.slice(0, sizeIndex).filter((part) => {
         return part !== 'normal' && part !== '400';
       }), ...parts.slice(sizeIndex)].join(' ');
     }
   }
 
-  if (property === 'background' && val !== 'none') {
-    const normalized = val
+  if (property === 'background' && value !== 'none') {
+    const normalized = value
       // Remove default "0 0" background-position values
       .replace(/(?:^|\s)0(?:%|px)? 0(?:%|px)?(?=\s|$)/g, ' ')
       // Remove "0 0" background-position after a close-paren (e.g. after url())
@@ -553,62 +598,62 @@ function applyPropertyOptimizations (val, property) {
       .replace(/\s+/g, ' ')
       .trim();
     if (normalized) {
-      val = normalized;
+      value = normalized;
     }
   }
 
   if (property === 'border') {
     // Remove default "medium" border-width keyword
-    val = val.replace(/\bmedium\s+/g, '');
+    value = value.replace(/\bmedium\s+/g, '');
   }
 
   if (property === 'outline') {
     // Restore missing space between outline-style and a color keyword when they are adjacent
-    val = val.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)(red|green|olive|tan|transparent)\b/g, '$1 $2');
+    value = value.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)(red|green|olive|tan|transparent)\b/g, '$1 $2');
   }
 
   if (property === 'transform') {
-    val = minifyTransformValue(val);
+    value = minifyTransformValue(value);
     // Remove whitespace between consecutive transform functions
-    val = val.replace(/\)\s+(?=[a-z-]+\()/gi, ')');
+    value = value.replace(/\)\s+(?=[a-z-]+\()/gi, ')');
   }
 
   if (property === 'scale') {
     // Split scale value on whitespace into individual axis components
-    const parts = val.split(/\s+/).filter(Boolean).map(normalizeScaleComponent);
+    const parts = value.split(/\s+/).filter(Boolean).map(normalizeScaleComponent);
     if (parts.length === 2 && parts[0] === parts[1]) {
-      val = parts[0];
+      value = parts[0];
     } else if (parts.length === 3 && parts[2] === '1') {
       if (parts[0] === parts[1]) {
-        val = parts[0];
+        value = parts[0];
       } else {
-        val = parts[0] + ' ' + parts[1];
+        value = parts[0] + ' ' + parts[1];
       }
     } else {
-      val = parts.join(' ');
+      value = parts.join(' ');
     }
   }
 
   // Replace multiple spaces
-  val = val.replace(/\s+/g, ' ');
+  value = value.replace(/\s+/g, ' ');
 
   // Shorthands: margin, padding, border-width, border-style, border-color, inset
   // Check if property supports box-model shorthand collapsing (4 → 3 → 2 → 1 values)
   if (/^(margin|padding|inset|border-width|border-style|border-color|gap|overflow)$/.test(property)) {
-    val = collapseShorthandParts(val.split(' ')).join(' ');
+    value = collapseShorthandParts(value.split(' ')).join(' ');
   }
 
   if (property === 'border-radius') {
-    const segments = val.split('/').map((segment) => {
+    const segments = value.split('/').map((segment) => {
       return segment.trim();
     }).filter(Boolean).map((segment) => {
       // Split each segment on whitespace and collapse redundant parts
       return collapseShorthandParts(segment.split(/\s+/)).join(' ');
     });
-    val = segments.join('/');
+    value = segments.join('/');
   }
 
-  return val;
+  return value;
 }
 
 /**
@@ -618,27 +663,53 @@ function applyPropertyOptimizations (val, property) {
  * @return {string}              The minified value string.
  */
 function minifyValue (declaration) {
+  const declarationCacheKey = getDeclarationCacheKey(declaration);
+  if (declarationValueCache.has(declaration)) {
+    const cachedDeclarationValue = declarationValueCache.get(declaration);
+    if (cachedDeclarationValue.key === declarationCacheKey) {
+      if (cachedDeclarationValue.value === UNDEFINED_CACHE_VALUE) {
+        return undefined;
+      }
+      return cachedDeclarationValue.value;
+    }
+  }
+
+  if (minifiedValueCache.has(declarationCacheKey)) {
+    const cachedValue = minifiedValueCache.get(declarationCacheKey);
+    setDeclarationCacheValue(
+      declaration,
+      declarationCacheKey,
+      cachedValue === UNDEFINED_CACHE_VALUE ? undefined : cachedValue
+    );
+    if (cachedValue === UNDEFINED_CACHE_VALUE) {
+      return undefined;
+    }
+    return cachedValue;
+  }
+
   if (declaration.property === 'position-area') {
     const shorthand = POSITION_AREA_SHORTHANDS[declaration.value];
     if (shorthand) {
+      setDeclarationCacheValue(declaration, declarationCacheKey, shorthand);
+      setBoundedCacheValue(minifiedValueCache, declarationCacheKey, shorthand);
       return shorthand;
     }
   }
-  let val = declaration.value;
+  let value = declaration.value;
 
-  if (typeof val === 'string') {
-    val = val.trim();
-    val = normalizeWhitespaceAndQuotes(val, declaration.property);
+  if (typeof value === 'string') {
+    value = value.trim();
+    value = normalizeWhitespaceAndQuotes(value, declaration.property);
 
     // Instead of unconditionally removing spaces around + and - and *, handle math vs non-math
     // Collapse spaces around division operator
-    val = val.replace(/ \/ /g, '/');
+    value = value.replace(/ \/ /g, '/');
     // Remove whitespace around * and / operators (safe outside calc context)
-    val = val.replace(/\s*([*/])\s*/g, '$1');
-    val = normalizeMathFunctions(val, declaration.property, declaration.value || '');
-    val = simplifyStandaloneCalc(val);
+    value = value.replace(/\s*([*/])\s*/g, '$1');
+    value = normalizeMathFunctions(value, declaration.property, declaration.value || '');
+    value = simplifyStandaloneCalc(value);
     // Simplify calc() expressions containing zero-percent additive terms
-    val = val.replace(/calc\(([^()]+)\)/gi, (match, inner) => {
+    value = value.replace(/calc\(([^()]+)\)/gi, (match, inner) => {
       // Collapse whitespace inside calc expression
       const compactInner = inner.replace(/\s+/g, ' ').trim();
       // Extract all percentage terms from the expression
@@ -656,45 +727,45 @@ function minifyValue (declaration) {
     // Zeros and Decimals
     if (declaration.property !== 'initial-value') {
       // Strip units from zero values (0px → 0, 0em → 0, etc.) at a value boundary
-      val = val.replace(/(^|\s|,|\()0(?:px|em|rem|vw|vh|cm|mm|in|pt|pc|ex|ch|vmin|vmax)(?=\s|,|$|\)|!)/g, '$10');
+      value = value.replace(/(^|\s|,|\()0(?:px|em|rem|vw|vh|cm|mm|in|pt|pc|ex|ch|vmin|vmax)(?=\s|,|$|\)|!)/g, '$10');
     }
-    val = val.replace(/(^|\s|,|\()(-?)0+(\.\d+)/g, '$1$2$3'); // e.g. 0.5 -> .5, -0.5 -> -.5
+    value = value.replace(/(^|\s|,|\()(-?)0+(\.\d+)/g, '$1$2$3'); // e.g. 0.5 -> .5, -0.5 -> -.5
 
     // If value is a standalone number with optional unit, round it compactly
-    if (/^[+-]?(?:\d+|\d*\.\d+)([a-z%]+)?$/i.test(val)) {
-      const [, rawNumber, rawUnit = ''] = val.match(/^([+-]?(?:\d+|\d*\.\d+))([a-z%]+)?$/i);
-      val = roundCompactNumber(rawNumber, 4) + rawUnit;
+    if (/^[+-]?(?:\d+|\d*\.\d+)([a-z%]+)?$/i.test(value)) {
+      const [, rawNumber, rawUnit = ''] = value.match(/^([+-]?(?:\d+|\d*\.\d+))([a-z%]+)?$/i);
+      value = roundCompactNumber(rawNumber, 4) + rawUnit;
     }
 
     // Remove space before hex colors
-    val = replaceOutsideStringsAndUrls(val, (segment) => {
+    value = replaceOutsideStringsAndUrls(value, (segment) => {
       segment = segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
       // Lowercase hex color tokens for consistency and shorter output
-      segment = segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (m) => {
-        return m.toLowerCase();
+      segment = segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (hexMatch) => {
+        return hexMatch.toLowerCase();
       });
       return segment;
     });
 
     // Convert color functions to hex equivalents
-    val = convertColorsToHex(val);
+    value = convertColorsToHex(value);
 
     // Shorten all color tokens (hex and named) to their shortest representation
-    val = replaceOutsideStringsAndUrls(val, shortenColorValues);
+    value = replaceOutsideStringsAndUrls(value, shortenColorValues);
 
     // Property-specific optimizations
-    val = applyPropertyOptimizations(val, declaration.property);
+    value = applyPropertyOptimizations(value, declaration.property);
   }
 
   // Gradient optimizations
   // Check if value contains a gradient function
-  if (/gradient\(/.test(val)) {
-    val = minifyGradients(val);
+  if (/gradient\(/.test(value)) {
+    value = minifyGradients(value);
   }
 
   // Unicode range compaction: U+0000-00FF -> U+??
   if (declaration.property === 'unicode-range') {
-    val = val.replace(/U\+([0-9a-fA-F]+)-([0-9a-fA-F]+)/gi, (match, startHex, endHex) => {
+    value = value.replace(/U\+([0-9a-fA-F]+)-([0-9a-fA-F]+)/gi, (match, startHex, endHex) => {
       const len = Math.max(startHex.length, endHex.length);
       const s = startHex.padStart(len, '0').toUpperCase();
       const e = endHex.padStart(len, '0').toUpperCase();
@@ -715,7 +786,9 @@ function minifyValue (declaration) {
     });
   }
 
-  return val;
+  setDeclarationCacheValue(declaration, declarationCacheKey, value);
+  setBoundedCacheValue(minifiedValueCache, declarationCacheKey, value);
+  return value;
 }
 
 export { minifyValue };

@@ -8,7 +8,7 @@
  * @param  {string} argumentString  The raw gradient arguments string.
  * @return {Array}                  An array of trimmed argument strings.
  */
-function splitGradientArgs (argumentString) {
+function splitGradientArguments (argumentString) {
   const parts = [];
   let depth = 0;
   let current = '';
@@ -34,52 +34,52 @@ function splitGradientArgs (argumentString) {
 /**
  * Optimizes gradient arguments by removing default direction or shape keywords and trimming redundant 0% or 100% stop positions from the first and last stops.
  *
- * @param  {string} func     The gradient function name (e.g. "linear-gradient").
- * @param  {string} argsStr  The raw comma-separated gradient arguments string.
- * @return {string}          The optimized gradient arguments string.
+ * @param  {string} functionName    The gradient function name (e.g. "linear-gradient").
+ * @param  {string} argumentString  The raw comma-separated gradient arguments string.
+ * @return {string}                 The optimized gradient arguments string.
  */
-function processGradientArgs (func, argsStr) {
-  const args = splitGradientArgs(argsStr);
-  const functionLower = func.toLowerCase();
+function processGradientArguments (functionName, argumentString) {
+  const gradientArguments = splitGradientArguments(argumentString);
+  const functionLower = functionName.toLowerCase();
 
   if (functionLower.includes('linear')) {
-    if (args.length > 1) {
-      const firstDirection = args[0].toLowerCase().replace(/\s+/g, ' ').trim();
+    if (gradientArguments.length > 1) {
+      const firstDirection = gradientArguments[0].toLowerCase().replace(/\s+/g, ' ').trim();
       if (firstDirection === 'to bottom' || firstDirection === '180deg') {
-        args.shift();
+        gradientArguments.shift();
       } else if (firstDirection === 'to top') {
-        args[0] = '0deg';
+        gradientArguments[0] = '0deg';
       } else if (firstDirection === 'to right') {
-        args[0] = '90deg';
+        gradientArguments[0] = '90deg';
       } else if (firstDirection === 'to left') {
-        args[0] = '270deg';
+        gradientArguments[0] = '270deg';
       } else if (firstDirection === 'to top right' || firstDirection === 'to right top') {
-        args[0] = '45deg';
+        gradientArguments[0] = '45deg';
       } else if (firstDirection === 'to bottom right' || firstDirection === 'to right bottom') {
-        args[0] = '135deg';
+        gradientArguments[0] = '135deg';
       } else if (firstDirection === 'to bottom left' || firstDirection === 'to left bottom') {
-        args[0] = '225deg';
+        gradientArguments[0] = '225deg';
       } else if (firstDirection === 'to top left' || firstDirection === 'to left top') {
-        args[0] = '315deg';
+        gradientArguments[0] = '315deg';
       }
     }
   } else if (functionLower.includes('radial')) {
-    if (args.length > 1) {
-      const firstShape = args[0].toLowerCase().replace(/\s+/g, ' ').trim();
+    if (gradientArguments.length > 1) {
+      const firstShape = gradientArguments[0].toLowerCase().replace(/\s+/g, ' ').trim();
       if (firstShape === 'ellipse at center' || firstShape === 'circle at center') {
-        args.shift();
+        gradientArguments.shift();
       }
     }
   }
 
-  if (args.length > 0) {
+  if (gradientArguments.length > 0) {
     // Remove default 0% stop position from the first gradient stop
-    args[0] = args[0].replace(/^(.*\S)\s+0%$/, '$1');
+    gradientArguments[0] = gradientArguments[0].replace(/^(.*\S)\s+0%$/, '$1');
     // Remove default 100% stop position from the last gradient stop
-    args[args.length - 1] = args[args.length - 1].replace(/^(.*\S)\s+100%$/, '$1');
+    gradientArguments[gradientArguments.length - 1] = gradientArguments[gradientArguments.length - 1].replace(/^(.*\S)\s+100%$/, '$1');
   }
 
-  return args.join(',');
+  return gradientArguments.join(',');
 }
 
 /**
@@ -96,9 +96,9 @@ function minifyGradients (value) {
     // Match gradient function names: linear-gradient, radial-gradient, conic-gradient, and their repeating- variants
     const gradientMatch = rest.match(/^((?:repeating-)?(?:linear|radial|conic)-gradient)\(/i);
     if (gradientMatch) {
-      const func = gradientMatch[1];
+      const functionName = gradientMatch[1];
       let depth = 1;
-      let end = position + func.length + 1;
+      let end = position + functionName.length + 1;
       while (end < value.length && depth > 0) {
         if (value[end] === '(') {
           depth++;
@@ -107,8 +107,8 @@ function minifyGradients (value) {
         }
         end++;
       }
-      const argsStr = value.slice(position + func.length + 1, end - 1);
-      result += func + '(' + processGradientArgs(func, argsStr) + ')';
+      const argumentString = value.slice(position + functionName.length + 1, end - 1);
+      result += functionName + '(' + processGradientArguments(functionName, argumentString) + ')';
       position = end;
     } else {
       result += value[position];

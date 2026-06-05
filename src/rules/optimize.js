@@ -6,6 +6,41 @@ import { escapeRegexString } from '../utilities.js';
 
 import { normalizeMedia } from './normalize.js';
 
+const MAX_SELECTOR_KEY_CACHE_SIZE = 5000;
+const selectorKeyCache = new Map();
+
+/**
+ * Stores a selector key in a bounded Map cache, clearing the entire cache when it exceeds the size limit.
+ *
+ * @param  {string} key    The cache key.
+ * @param  {string} value  The normalized selector key to cache.
+ * @return {string}        The stored selector key.
+ */
+function setBoundedSelectorKeyCache (key, value) {
+  if (selectorKeyCache.size >= MAX_SELECTOR_KEY_CACHE_SIZE) {
+    selectorKeyCache.clear();
+  }
+  selectorKeyCache.set(key, value);
+  return value;
+}
+
+/**
+ * Computes a normalized, sorted, comma-joined key from an array of selectors for use in deduplication and merging.
+ *
+ * @param  {Array}  selectors  The array of raw CSS selector strings.
+ * @return {string}            A canonical string key representing the selector set.
+ */
+function getSelectorKey (selectors) {
+  const cacheKey = selectors.join('\u0000');
+  if (selectorKeyCache.has(cacheKey)) {
+    return selectorKeyCache.get(cacheKey);
+  }
+  const selectorKey = selectors.map((selector) => {
+    return selector.trim().replace(/\s+/g, ' ');
+  }).sort().join(',');
+  return setBoundedSelectorKeyCache(cacheKey, selectorKey);
+}
+
 /**
  * Expands rules that contain only nested sub-rules into flat rules with combined selectors, enabling further merging when the combined selectors already exist elsewhere.
  *
@@ -100,13 +135,13 @@ function expandPureNestedRules (rules) {
 /**
  * Attempts to express a child selector as a nested selector relative to a parent, returning the nested form or null if nesting is not possible.
  *
- * @param  {string}      parentSel  The parent selector string.
- * @param  {string}      childSel   The child selector string to try nesting.
- * @return {string|null}            The nested selector using & syntax, or null if the child cannot be nested under the parent.
+ * @param  {string}      parentSelector  The parent selector string.
+ * @param  {string}      childSelector   The child selector string to try nesting.
+ * @return {string|null}                 The nested selector using & syntax, or null if the child cannot be nested under the parent.
  */
-function tryNestSelector (parentSel, childSel) {
-  const parent = parentSel.trim();
-  const child = childSel.trim();
+function tryNestSelector (parentSelector, childSelector) {
+  const parent = parentSelector.trim();
+  const child = childSelector.trim();
   if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
     return '&' + child.slice(parent.length);
   }
@@ -289,26 +324,25 @@ function mergeByDeclarations (rules) {
  * @return {Array}        A new array of rules with same-selector rules combined.
  */
 function mergeSelectorRules (rules) {
-  let result = [];
-  let selectorMap = new Map();
+  const result = [];
+  const selectorMap = new Map();
+  const resultIndexes = new Map();
   for (const rule of rules) {
     if (rule.type === 'rule') {
-      const selectorKey = rule.selectors ?
-        rule.selectors.map((selector) => {
-          // Normalize selector whitespace for consistent comparison
-          return selector.trim().replace(/\s+/g, ' ');
-        }).sort().join(',') :
-        '';
+      const selectorKey = rule.selectors ? getSelectorKey(rule.selectors) : '';
       if (selectorKey && selectorMap.has(selectorKey)) {
         const existingRule = selectorMap.get(selectorKey);
         existingRule.declarations.push(...(rule.declarations || []));
-        result = result.filter((candidate) => {
-          return candidate !== existingRule;
-        });
+        const previousIndex = resultIndexes.get(existingRule);
+        if (previousIndex !== undefined) {
+          result[previousIndex] = null;
+        }
         result.push(existingRule);
+        resultIndexes.set(existingRule, result.length - 1);
       } else {
         selectorMap.set(selectorKey, rule);
         result.push(rule);
+        resultIndexes.set(rule, result.length - 1);
       }
     } else {
       if (rule.type === 'whitespace') {
@@ -316,9 +350,10 @@ function mergeSelectorRules (rules) {
       }
       result.push(rule);
       selectorMap.clear();
+      resultIndexes.clear();
     }
   }
-  return result;
+  return result.filter(Boolean);
 }
 
 /**

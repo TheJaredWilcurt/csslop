@@ -13,6 +13,115 @@ import {
   unescapeSelector
 } from './normalize.js';
 
+const MAX_SELECTOR_CACHE_SIZE = 5000;
+const HEADING_SELECTORS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+const selectorMinifyCache = new Map();
+const isSelectorCache = new Map();
+
+/**
+ * Stores a value in a bounded Map cache, clearing the entire cache when it exceeds the size limit.
+ *
+ * @param  {Map}    cache  The Map cache to store the entry in.
+ * @param  {string} key    The cache key.
+ * @param  {string} value  The value to cache.
+ * @return {string}        The stored value.
+ */
+function setBoundedStringCache (cache, key, value) {
+  if (cache.size >= MAX_SELECTOR_CACHE_SIZE) {
+    cache.clear();
+  }
+  cache.set(key, value);
+  return value;
+}
+
+/**
+ * Minifies a CSS selector by collapsing whitespace, simplifying pseudo-classes, shortening pseudo-elements, and optimizing attribute selectors.
+ *
+ * @param  {string} selector  The raw CSS selector string to minify.
+ * @return {string}           The minified selector string.
+ */
+function minifySelector (selector) {
+  if (selectorMinifyCache.has(selector)) {
+    return selectorMinifyCache.get(selector);
+  }
+
+  let minified = unescapeSelector(selector);
+  // Collapse whitespace to single spaces
+  minified = minified.replace(/\s+/g, ' ');
+  // Strip whitespace around selector combinators (comma, >, +, ~)
+  minified = minified.replace(/\s*([,>+~])\s*/g, '$1');
+  // Strip whitespace inside parentheses
+  minified = minified.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+  // Simplify :nth-child(2n+1) to :nth-child(odd)
+  minified = minified.replace(/:nth-child\(2n\s*\+\s*1\)/g, ':nth-child(odd)');
+  // Simplify :nth-child(2n+0) to :nth-child(2n)
+  minified = minified.replace(/:nth-child\(2n\s*\+\s*0\)/g, ':nth-child(2n)');
+  // Simplify :nth-child(1n) to :nth-child(n)
+  minified = minified.replace(/:nth-child\(1n\)/g, ':nth-child(n)');
+  // Strip redundant leading plus sign from :nth-child(+N)
+  minified = minified.replace(/:nth-child\(\+\s*(\d+)\)/g, ':nth-child($1)');
+  // Simplify :nth-child(0n+N) to :nth-child(N)
+  minified = minified.replace(/:nth-child\(0n\s*\+\s*(\d+)\)/g, ':nth-child($1)');
+  // Simplify :nth-child(1) to :first-child
+  minified = minified.replace(/:nth-child\(1\)/g, ':first-child');
+  // Simplify :nth-last-child(1) to :last-child
+  minified = minified.replace(/:nth-last-child\(1\)/g, ':last-child');
+  // Simplify :nth-of-type(1) to :first-of-type
+  minified = minified.replace(/:nth-of-type\(1\)/g, ':first-of-type');
+  // Simplify :nth-last-of-type(1) to :last-of-type
+  minified = minified.replace(/:nth-last-of-type\(1\)/g, ':last-of-type');
+  // Shorten double-colon pseudo-elements to single-colon form
+  minified = minified.replace(/::before/g, ':before');
+  minified = minified.replace(/::after/g, ':after');
+  // Remove redundant universal selector before id, class, or attribute selectors
+  minified = minified.replace(/\*([#.[])/g, '$1');
+  // Try removing quotes from double-quoted attribute values by escaping special chars
+  minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
+    // Escape special CSS characters that require quoting when unquoted
+    let escaped = value.replace(/([#.:/])/g, '\\$1');
+    if (escaped.length < value.length + 2) {
+      return '[' + attribute + '=' + escaped + ']';
+    }
+    return '[' + attribute + '="' + value + '"]';
+  });
+  // Try removing quotes from single-quoted attribute values by escaping special chars
+  minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
+    // Escape special CSS characters that require quoting when unquoted
+    let escaped = value.replace(/([#.:/])/g, '\\$1');
+    if (escaped.length < value.length + 2) {
+      return '[' + attribute + '=' + escaped + ']';
+    }
+    return '[' + attribute + '="' + value + '"]';
+  });
+  // Try adding quotes to unquoted attribute values when unescaping would be shorter
+  minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
+    // Unescape special CSS characters to check if quoted form is shorter
+    let unescaped = value.replace(/\\([#.:/])/g, '$1');
+    if (unescaped.length + 2 < value.length) {
+      return '[' + attribute + '="' + unescaped + '"]';
+    }
+    return '[' + attribute + '=' + value + ']';
+  });
+  // Simplify :not(:invalid) to :valid on form elements
+  minified = minified.replace(/(?<=\b(?:button|fieldset|form|input|select|textarea)):not\(:invalid\)/g, ':valid');
+  // Simplify :not(:dir(ltr)) to :dir(rtl)
+  minified = minified.replace(/:not\(:dir\(ltr\)\)/g, ':dir(rtl)');
+  // Cancel double :not() — :not(:not(X)) simplifies to X
+  minified = minified.replace(/:not\(:not\((.*?)\)\)/g, '$1');
+  // Simplify :not(:enabled) to :disabled
+  minified = minified.replace(/:not\(:enabled\)/g, ':disabled');
+  // Simplify :not(:required) to :optional
+  minified = minified.replace(/:not\(:required\)/g, ':optional');
+  // Replace :not(:link) with :visited on link elements (a, area, link)
+  minified = minified.replace(/(^|[\s,>+~])(a|area|link)(?:\[.*?\])*(?::where\()?:not\(:link\)\)?/g, (match) => {
+    return match.replace(':not(:link)', ':visited');
+  });
+  // Remove leading "& " nesting indicator at start of selector
+  minified = minified.replace(/^& /, '');
+
+  return setBoundedStringCache(selectorMinifyCache, selector, minified);
+}
+
 /**
  * Renders an array of CSS declaration objects as a minified semicolon-separated string, filtering out whitespace entries.
  *
@@ -20,14 +129,14 @@ import {
  * @return {string}               A semicolon-joined "property:value" string.
  */
 function stringifyDeclarations (declarations) {
-  return declarations
-    .filter((declaration) => {
-      return declaration.type !== 'whitespace';
-    })
-    .map((declaration) => {
-      return [declaration.property, ':', minifyValue(declaration)].join('');
-    })
-    .join(';');
+  const output = [];
+  for (const declaration of declarations) {
+    if (declaration.type === 'whitespace') {
+      continue;
+    }
+    output.push([declaration.property, ':', minifyValue(declaration)].join(''));
+  }
+  return output.join(';');
 }
 
 /**
@@ -38,9 +147,11 @@ function stringifyDeclarations (declarations) {
  * @return {string}          The concatenated minified CSS for all child rules.
  */
 function stringifyChildRules (rules, context) {
-  return (rules || []).map((childRule) => {
-    return stringifyRule(childRule, context);
-  }).join('');
+  const output = [];
+  for (const childRule of rules || []) {
+    output.push(stringifyRule(childRule, context));
+  }
+  return output.join('');
 }
 
 /**
@@ -52,12 +163,15 @@ function stringifyChildRules (rules, context) {
  * @return {Array}            An array of one or more processed selector strings.
  */
 function processIsSelector (selector) {
+  if (isSelectorCache.has(selector)) {
+    return isSelectorCache.get(selector);
+  }
   // Replace :is(:link,:visited) and :is(:visited,:link) with :any-link
   selector = selector.replace(/:is\(:link,:visited\)/g, ':any-link');
   selector = selector.replace(/:is\(:visited,:link\)/g, ':any-link');
   // Only process bare :is() selectors (where :is() is the entire selector)
   if (!selector.startsWith(':is(')) {
-    return [selector];
+    return setBoundedStringCache(isSelectorCache, selector, [selector]);
   }
   let depth = 0;
   let closingIndex = -1;
@@ -73,7 +187,7 @@ function processIsSelector (selector) {
     }
   }
   if (closingIndex !== selector.length - 1) {
-    return [selector];
+    return setBoundedStringCache(isSelectorCache, selector, [selector]);
   }
   const content = selector.slice(4, -1);
   let parts = [];
@@ -111,16 +225,16 @@ function processIsSelector (selector) {
   parts.sort();
   // Unwrap :is() with a single selector
   if (parts.length === 1) {
-    return parts;
+    return setBoundedStringCache(isSelectorCache, selector, parts);
   }
   // Expand if all parts are simple type/universal selectors and no dedup/replacement occurred
   const allSimple = parts.every((part) => {
     return /^[a-z*][a-z0-9-]*$/i.test(part);
   });
   if (allSimple && parts.length === originalCount) {
-    return parts;
+    return setBoundedStringCache(isSelectorCache, selector, parts);
   }
-  return [':is(' + parts.join(',') + ')'];
+  return setBoundedStringCache(isSelectorCache, selector, [':is(' + parts.join(',') + ')']);
 }
 
 /**
@@ -151,90 +265,26 @@ function stringifyRule (rule, context, nested = false) {
 
     let output = [];
     if (rule.selectors?.length) {
-      let uniqueSelectors = [...new Set(rule.selectors)];
-      // Minify spacing within selectors (e.g. inside :is(), :where(), etc)
-      uniqueSelectors = uniqueSelectors.map((selector) => {
-        let minified = unescapeSelector(selector);
-        // Collapse whitespace to single space
-        minified = minified.replace(/\s+/g, ' ');
-        // Strip whitespace around selector combinators and commas
-        minified = minified.replace(/\s*([,>+~])\s*/g, '$1');
-        // Strip whitespace inside parentheses for pseudo-class arguments
-        minified = minified.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
-        // Simplify :nth-child(2n+1) to :nth-child(odd)
-        minified = minified.replace(/:nth-child\(2n\s*\+\s*1\)/g, ':nth-child(odd)');
-        // Simplify :nth-child(2n+0) to :nth-child(2n)
-        minified = minified.replace(/:nth-child\(2n\s*\+\s*0\)/g, ':nth-child(2n)');
-        // Simplify :nth-child(1n) to :nth-child(n)
-        minified = minified.replace(/:nth-child\(1n\)/g, ':nth-child(n)');
-        // Remove unnecessary leading + sign from :nth-child()
-        minified = minified.replace(/:nth-child\(\+\s*(\d+)\)/g, ':nth-child($1)');
-        // Simplify :nth-child(0n+N) to :nth-child(N)
-        minified = minified.replace(/:nth-child\(0n\s*\+\s*(\d+)\)/g, ':nth-child($1)');
-        // Replace :nth-child(1) with :first-child
-        minified = minified.replace(/:nth-child\(1\)/g, ':first-child');
-        // Replace :nth-last-child(1) with :last-child
-        minified = minified.replace(/:nth-last-child\(1\)/g, ':last-child');
-        // Replace :nth-of-type(1) with :first-of-type
-        minified = minified.replace(/:nth-of-type\(1\)/g, ':first-of-type');
-        // Replace :nth-last-of-type(1) with :last-of-type
-        minified = minified.replace(/:nth-last-of-type\(1\)/g, ':last-of-type');
-        // Convert double-colon pseudo-elements to single-colon legacy form
-        minified = minified.replace(/::before/g, ':before');
-        minified = minified.replace(/::after/g, ':after');
-
-        // Strip redundant universal selector `*` when it precedes an ID, class, or attribute selector
-        minified = minified.replace(/\*([#.[])/g, '$1');
-
-        // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
-        minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting, and compare lengths
-          let escaped = value.replace(/([#.:/])/g, '\\$1');
-          if (escaped.length < value.length + 2) {
-            return '[' + attribute + '=' + escaped + ']';
+      const seenRawSelectors = new Set();
+      const seenSelectors = new Set();
+      let uniqueSelectors = [];
+      for (const selector of rule.selectors) {
+        if (seenRawSelectors.has(selector)) {
+          continue;
+        }
+        seenRawSelectors.add(selector);
+        for (const processedSelector of processIsSelector(minifySelector(selector))) {
+          if (!seenSelectors.has(processedSelector)) {
+            seenSelectors.add(processedSelector);
+            uniqueSelectors.push(processedSelector);
           }
-          return '[' + attribute + '="' + value + '"]';
-        });
-        // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
-        minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting, and compare lengths
-          let escaped = value.replace(/([#.:/])/g, '\\$1');
-          if (escaped.length < value.length + 2) {
-            return '[' + attribute + '=' + escaped + ']';
-          }
-          return '[' + attribute + '="' + value + '"]';
-        });
-        // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
-        minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
-          // Unescape special characters and compare with quoted form
-          let unescaped = value.replace(/\\([#.:/])/g, '$1');
-          if (unescaped.length + 2 < value.length) {
-            return '[' + attribute + '="' + unescaped + '"]';
-          }
-          return '[' + attribute + '=' + value + ']';
-        });
-
-        // Minify logical combinations
-        minified = minified.replace(/(?<=\b(?:button|fieldset|form|input|select|textarea)):not\(:invalid\)/g, ':valid');
-        minified = minified.replace(/:not\(:dir\(ltr\)\)/g, ':dir(rtl)');
-        minified = minified.replace(/:not\(:not\((.*?)\)\)/g, '$1');
-        minified = minified.replace(/:not\(:enabled\)/g, ':disabled');
-        minified = minified.replace(/:not\(:required\)/g, ':optional');
-        minified = minified.replace(/(^|[\s,>+~])(a|area|link)(?:\[.*?\])*(?::where\()?:not\(:link\)\)?/g, (match) => {
-          return match.replace(':not(:link)', ':visited');
-        });
-        // Remove redundant leading "& " nesting selector
-        minified = minified.replace(/^& /, '');
-        return minified;
-      });
-      uniqueSelectors = uniqueSelectors.flatMap(processIsSelector);
-      uniqueSelectors = [...new Set(uniqueSelectors)];
-      const headingSet = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+        }
+      }
       const isAllHeadings = (
         rule.selectors.length === 6 &&
         uniqueSelectors.length === 6 &&
         uniqueSelectors.every((selector) => {
-          return headingSet.has(selector);
+          return HEADING_SELECTORS.has(selector);
         })
       );
       if (isAllHeadings) {

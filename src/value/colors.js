@@ -41,34 +41,34 @@ function hslToRgbChannels (hue, saturation, lightness) {
     return [channel, channel, channel];
   }
 
-  const hue2rgb = (p, q, t) => {
-    if (t < 0) {
-      t += 1;
+  const hueToChannelValue = (lowBound, highBound, huePosition) => {
+    if (huePosition < 0) {
+      huePosition += 1;
     }
-    if (t > 1) {
-      t -= 1;
+    if (huePosition > 1) {
+      huePosition -= 1;
     }
-    if (t < 1 / 6) {
-      return p + (q - p) * 6 * t;
+    if (huePosition < 1 / 6) {
+      return lowBound + (highBound - lowBound) * 6 * huePosition;
     }
-    if (t < 1 / 2) {
-      return q;
+    if (huePosition < 1 / 2) {
+      return highBound;
     }
-    if (t < 2 / 3) {
-      return p + (q - p) * (2 / 3 - t) * 6;
+    if (huePosition < 2 / 3) {
+      return lowBound + (highBound - lowBound) * (2 / 3 - huePosition) * 6;
     }
-    return p;
+    return lowBound;
   };
 
-  const q = normalizedLightness < 0.5 ?
+  const highBound = normalizedLightness < 0.5 ?
     normalizedLightness * (1 + normalizedSaturation) :
     normalizedLightness + normalizedSaturation - normalizedLightness * normalizedSaturation;
-  const p = 2 * normalizedLightness - q;
+  const lowBound = 2 * normalizedLightness - highBound;
 
   return [
-    Math.round(hue2rgb(p, q, normalizedHue + 1 / 3) * 255),
-    Math.round(hue2rgb(p, q, normalizedHue) * 255),
-    Math.round(hue2rgb(p, q, normalizedHue - 1 / 3) * 255)
+    Math.round(hueToChannelValue(lowBound, highBound, normalizedHue + 1 / 3) * 255),
+    Math.round(hueToChannelValue(lowBound, highBound, normalizedHue) * 255),
+    Math.round(hueToChannelValue(lowBound, highBound, normalizedHue - 1 / 3) * 255)
   ];
 }
 
@@ -145,41 +145,41 @@ function shortestColor (r, g, b, alpha = 1) {
  * @return {Array}             An array of [r, g, b] channel values, each 0–255.
  */
 function hwbToRgbChannels (hue, whiteness, blackness) {
-  let w = Math.max(0, Math.min(1, whiteness));
-  let b = Math.max(0, Math.min(1, blackness));
+  const clampedWhiteness = Math.max(0, Math.min(1, whiteness));
+  const clampedBlackness = Math.max(0, Math.min(1, blackness));
 
-  if (w + b >= 1) {
-    const gray = Math.round((w / (w + b)) * 255);
+  if (clampedWhiteness + clampedBlackness >= 1) {
+    const gray = Math.round((clampedWhiteness / (clampedWhiteness + clampedBlackness)) * 255);
     return [gray, gray, gray];
   }
 
-  const [r, g, bl] = hslToRgbChannels(hue, 1, 0.5);
-  const ratio = 1 - w - b;
+  const [r, g, b] = hslToRgbChannels(hue, 1, 0.5);
+  const ratio = 1 - clampedWhiteness - clampedBlackness;
   return [
-    Math.round(r / 255 * ratio * 255 + w * 255),
-    Math.round(g / 255 * ratio * 255 + w * 255),
-    Math.round(bl / 255 * ratio * 255 + w * 255)
+    Math.round(r / 255 * ratio * 255 + clampedWhiteness * 255),
+    Math.round(g / 255 * ratio * 255 + clampedWhiteness * 255),
+    Math.round(b / 255 * ratio * 255 + clampedWhiteness * 255)
   ];
 }
 
 /**
  * Converts a gamma-encoded sRGB component to linear light using the sRGB transfer function.
  *
- * @param  {number} c  The gamma-encoded sRGB component, 0 to 1.
- * @return {number}    The linearized component value.
+ * @param  {number} component  The gamma-encoded sRGB component, 0 to 1.
+ * @return {number}            The linearized component value.
  */
-function linearize (c) {
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+function linearize (component) {
+  return component <= 0.04045 ? component / 12.92 : Math.pow((component + 0.055) / 1.055, 2.4);
 }
 
 /**
  * Applies sRGB gamma encoding to a linear-light component, the inverse of linearize.
  *
- * @param  {number} c  The linear-light component, 0 to 1.
- * @return {number}    The gamma-encoded sRGB component value.
+ * @param  {number} component  The linear-light component, 0 to 1.
+ * @return {number}            The gamma-encoded sRGB component value.
  */
-function delinearize (c) {
-  return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+function delinearize (component) {
+  return component <= 0.0031308 ? 12.92 * component : 1.055 * Math.pow(component, 1 / 2.4) - 0.055;
 }
 
 /**
@@ -191,18 +191,18 @@ function delinearize (c) {
  * @return {object}    An object with L, a, b OKLab components.
  */
 function srgbToOklab (r, g, b) {
-  const lr = linearize(r);
-  const lg = linearize(g);
-  const lb = linearize(b);
+  const linearRed = linearize(r);
+  const linearGreen = linearize(g);
+  const linearBlue = linearize(b);
 
-  const l_ = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
-  const m_ = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
-  const s_ = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  const cubeRootLong = Math.cbrt(0.4122214708 * linearRed + 0.5363325363 * linearGreen + 0.0514459929 * linearBlue);
+  const cubeRootMedium = Math.cbrt(0.2119034982 * linearRed + 0.6806995451 * linearGreen + 0.1073969566 * linearBlue);
+  const cubeRootShort = Math.cbrt(0.0883024619 * linearRed + 0.2817188376 * linearGreen + 0.6299787005 * linearBlue);
 
   return {
-    L: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-    a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-    b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+    L: 0.2104542553 * cubeRootLong + 0.7936177850 * cubeRootMedium - 0.0040720468 * cubeRootShort,
+    a: 1.9779984951 * cubeRootLong - 2.4285922050 * cubeRootMedium + 0.4505937099 * cubeRootShort,
+    b: 0.0259040371 * cubeRootLong + 0.7827717662 * cubeRootMedium - 0.8086757660 * cubeRootShort
   };
 }
 
@@ -215,18 +215,18 @@ function srgbToOklab (r, g, b) {
  * @return {object}    An object with r, g, b linear sRGB components (may exceed 0–1).
  */
 function oklabToLinearSrgb (L, a, b) {
-  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
-  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
-  const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
+  const cubeRootLong = L + 0.3963377774 * a + 0.2158037573 * b;
+  const cubeRootMedium = L - 0.1055613458 * a - 0.0638541728 * b;
+  const cubeRootShort = L - 0.0894841775 * a - 1.2914855480 * b;
 
-  const l = l_ * l_ * l_;
-  const m = m_ * m_ * m_;
-  const s = s_ * s_ * s_;
+  const longCubed = cubeRootLong * cubeRootLong * cubeRootLong;
+  const mediumCubed = cubeRootMedium * cubeRootMedium * cubeRootMedium;
+  const shortCubed = cubeRootShort * cubeRootShort * cubeRootShort;
 
   return {
-    r: +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    b: -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+    r: +4.0767416621 * longCubed - 3.3077115913 * mediumCubed + 0.2309699292 * shortCubed,
+    g: -1.2684380046 * longCubed + 2.6097574011 * mediumCubed - 0.3413193965 * shortCubed,
+    b: -0.0041960863 * longCubed - 0.7034186147 * mediumCubed + 1.7076147010 * shortCubed
   };
 }
 
@@ -273,11 +273,11 @@ function oklabToOklch (L, a, b) {
  * @return {object}    An object with L, a, b OKLab components.
  */
 function oklchToOklab (L, C, H) {
-  const hRad = H * Math.PI / 180;
+  const hueRadians = H * Math.PI / 180;
   return {
     L,
-    a: C * Math.cos(hRad),
-    b: C * Math.sin(hRad)
+    a: C * Math.cos(hueRadians),
+    b: C * Math.sin(hueRadians)
   };
 }
 
@@ -437,13 +437,13 @@ function oklabToRgb (L, a, b) {
  * @return {string}                  A minified oklch() function string.
  */
 function formatOklch (L, C, H, alpha) {
-  const fmtL = roundCompactNumber(L, 3);
-  const fmtC = roundCompactNumber(C, 3);
-  const fmtH = roundCompactNumber(H, 1);
+  const formattedLightness = roundCompactNumber(L, 3);
+  const formattedChroma = roundCompactNumber(C, 3);
+  const formattedHue = roundCompactNumber(H, 1);
   if (alpha !== undefined && alpha < 1) {
-    return 'oklch(' + fmtL + ' ' + fmtC + ' ' + fmtH + '/' + roundCompactNumber(alpha, 3) + ')';
+    return 'oklch(' + formattedLightness + ' ' + formattedChroma + ' ' + formattedHue + '/' + roundCompactNumber(alpha, 3) + ')';
   }
-  return 'oklch(' + fmtL + ' ' + fmtC + ' ' + fmtH + ')';
+  return 'oklch(' + formattedLightness + ' ' + formattedChroma + ' ' + formattedHue + ')';
 }
 
 /**
@@ -641,13 +641,13 @@ function mixNColorsOklab (colors, weights, alphaMultiplier) {
 /**
  * Evaluate a color-mix() expression. Returns a minified CSS color string or null.
  *
- * @param  {string}      expr  The full color-mix() expression string.
- * @return {string|null}       A minified CSS color string, or null if the expression cannot be evaluated.
+ * @param  {string}      expression  The full color-mix() expression string.
+ * @return {string|null}             A minified CSS color string, or null if the expression cannot be evaluated.
  */
-function evaluateColorMix (expr) {
+function evaluateColorMix (expression) {
   // Parse: color-mix(in <space> [<hue-method>], <color> [<p>%], <color> [<p>%])
   // We need to handle nested parentheses for inner color functions
-  const inner = extractBalancedArgs(expr, 'color-mix');
+  const inner = extractBalancedArgs(expression, 'color-mix');
   if (!inner) {
     return null;
   }
@@ -662,19 +662,19 @@ function evaluateColorMix (expr) {
   const rest = inner.slice(inMatch[0].length);
 
   // Split color arguments (handling nested parens)
-  const args = splitColorMixArgs(rest);
-  if (args.length < 2) {
+  const colorArguments = splitColorMixArgs(rest);
+  if (colorArguments.length < 2) {
     return null;
   }
 
   // N-color path (3+ colors)
-  if (args.length > 2) {
-    return evaluateNColorMix(colorSpace, args);
+  if (colorArguments.length > 2) {
+    return evaluateNColorMix(colorSpace, colorArguments);
   }
 
   // Parse each argument: "<color> [<percentage>]"
-  const parsed1 = parseColorMixArg(args[0].trim());
-  const parsed2 = parseColorMixArg(args[1].trim());
+  const parsed1 = parseColorMixArg(colorArguments[0].trim());
+  const parsed2 = parseColorMixArg(colorArguments[1].trim());
   if (!parsed1 || !parsed2) {
     return null;
   }
@@ -686,73 +686,73 @@ function evaluateColorMix (expr) {
   }
 
   // Normalize percentages per CSS spec
-  let p1 = parsed1.percentage;
-  let p2 = parsed2.percentage;
+  let percentage1 = parsed1.percentage;
+  let percentage2 = parsed2.percentage;
 
-  if (p1 === null && p2 === null) {
-    p1 = 50;
-    p2 = 50;
-  } else if (p1 === null) {
-    p1 = 100 - p2;
-  } else if (p2 === null) {
-    p2 = 100 - p1;
+  if (percentage1 === null && percentage2 === null) {
+    percentage1 = 50;
+    percentage2 = 50;
+  } else if (percentage1 === null) {
+    percentage1 = 100 - percentage2;
+  } else if (percentage2 === null) {
+    percentage2 = 100 - percentage1;
   }
 
   let alphaMultiplier = 1;
-  const pSum = p1 + p2;
-  if (pSum === 0) {
+  const percentageSum = percentage1 + percentage2;
+  if (percentageSum === 0) {
     return null;
   }
 
-  if (pSum < 100) {
-    alphaMultiplier = pSum / 100;
-  } else if (pSum > 100) {
-    p1 = p1 / pSum * 100;
-    p2 = p2 / pSum * 100;
+  if (percentageSum < 100) {
+    alphaMultiplier = percentageSum / 100;
+  } else if (percentageSum > 100) {
+    percentage1 = percentage1 / percentageSum * 100;
+    percentage2 = percentage2 / percentageSum * 100;
   }
 
   // Trivial cases
-  if (p1 === 0) {
+  if (percentage1 === 0) {
     return rgbaToHex(parsed2.color[0], parsed2.color[1], parsed2.color[2], parsed2.color[3]);
   }
-  if (p2 === 0) {
+  if (percentage2 === 0) {
     return rgbaToHex(parsed1.color[0], parsed1.color[1], parsed1.color[2], parsed1.color[3]);
   }
 
   // CSS spec: 'none' channels are missing — fill from the other color before mixing
-  const nones1 = findNoneChannels(parsed1.raw);
-  const nones2 = findNoneChannels(parsed2.raw);
-  for (const idx of nones1) {
-    if (idx < parsed1.color.length) {
-      parsed1.color[idx] = parsed2.color[idx];
+  const noneChannels1 = findNoneChannels(parsed1.raw);
+  const noneChannels2 = findNoneChannels(parsed2.raw);
+  for (const channelIndex of noneChannels1) {
+    if (channelIndex < parsed1.color.length) {
+      parsed1.color[channelIndex] = parsed2.color[channelIndex];
     }
   }
-  for (const idx of nones2) {
-    if (idx < parsed2.color.length) {
-      parsed2.color[idx] = parsed1.color[idx];
+  for (const channelIndex of noneChannels2) {
+    if (channelIndex < parsed2.color.length) {
+      parsed2.color[channelIndex] = parsed1.color[channelIndex];
     }
   }
 
-  const t1 = p1 / (p1 + p2);
-  const t2 = p2 / (p1 + p2);
+  const weight1 = percentage1 / (percentage1 + percentage2);
+  const weight2 = percentage2 / (percentage1 + percentage2);
   const [r1, g1, b1, a1] = parsed1.color;
   const [r2, g2, b2, a2] = parsed2.color;
 
   if (colorSpace === 'srgb') {
-    const r = Math.round(r1 * t1 + r2 * t2);
-    const g = Math.round(g1 * t1 + g2 * t2);
-    const b = Math.round(b1 * t1 + b2 * t2);
-    const a = (a1 * t1 + a2 * t2) * alphaMultiplier;
+    const r = Math.round(r1 * weight1 + r2 * weight2);
+    const g = Math.round(g1 * weight1 + g2 * weight2);
+    const b = Math.round(b1 * weight1 + b2 * weight2);
+    const a = (a1 * weight1 + a2 * weight2) * alphaMultiplier;
     return rgbaToHex(r, g, b, a);
   }
 
   if (colorSpace === 'oklab') {
     const lab1 = rgbToOklab(r1, g1, b1);
     const lab2 = rgbToOklab(r2, g2, b2);
-    const L = lab1.L * t1 + lab2.L * t2;
-    const a = lab1.a * t1 + lab2.a * t2;
-    const b = lab1.b * t1 + lab2.b * t2;
-    const alpha = (a1 * t1 + a2 * t2) * alphaMultiplier;
+    const L = lab1.L * weight1 + lab2.L * weight2;
+    const a = lab1.a * weight1 + lab2.a * weight2;
+    const b = lab1.b * weight1 + lab2.b * weight2;
+    const alpha = (a1 * weight1 + a2 * weight2) * alphaMultiplier;
     // Check if result fits in sRGB gamut
     const rgb = oklabToRgb(L, a, b);
     if (alpha >= 1) {
@@ -764,10 +764,10 @@ function evaluateColorMix (expr) {
   if (colorSpace === 'oklch') {
     const lch1 = rgbToOklch(r1, g1, b1);
     const lch2 = rgbToOklch(r2, g2, b2);
-    const L = lch1.L * t1 + lch2.L * t2;
-    const C = lch1.C * t1 + lch2.C * t2;
-    const H = interpolateHueShorter(lch1.H, lch2.H, t2);
-    const alpha = (a1 * t1 + a2 * t2) * alphaMultiplier;
+    const L = lch1.L * weight1 + lch2.L * weight2;
+    const C = lch1.C * weight1 + lch2.C * weight2;
+    const H = interpolateHueShorter(lch1.H, lch2.H, weight2);
+    const alpha = (a1 * weight1 + a2 * weight2) * alphaMultiplier;
     return formatOklch(L, C, H, alpha);
   }
 
@@ -777,51 +777,51 @@ function evaluateColorMix (expr) {
 /**
  * Extract the balanced content inside a function call.
  *
- * @param  {string}      expr      The expression string containing the function call.
- * @param  {string}      funcName  The function name to locate (e.g. "color-mix").
- * @return {string|null}           The content between the matching parentheses, or null if not found.
+ * @param  {string}      expression    The expression string containing the function call.
+ * @param  {string}      functionName  The function name to locate (e.g. "color-mix").
+ * @return {string|null}               The content between the matching parentheses, or null if not found.
  */
-function extractBalancedArgs (expr, funcName) {
-  const prefix = funcName + '(';
-  const start = expr.indexOf(prefix);
+function extractBalancedArgs (expression, functionName) {
+  const prefix = functionName + '(';
+  const start = expression.indexOf(prefix);
   if (start === -1) {
     return null;
   }
   let depth = 1;
   let position = start + prefix.length;
-  while (position < expr.length && depth > 0) {
-    if (expr[position] === '(') {
+  while (position < expression.length && depth > 0) {
+    if (expression[position] === '(') {
       depth++;
-    } else if (expr[position] === ')') {
+    } else if (expression[position] === ')') {
       depth--;
     }
     position++;
   }
-  return expr.slice(start + prefix.length, position - 1);
+  return expression.slice(start + prefix.length, position - 1);
 }
 
 /**
  * Split color-mix arguments at top-level commas (handling nested parens).
  *
- * @param  {string} str  The color arguments string, with arguments separated by commas.
- * @return {Array}       An array of argument strings split at each top-level comma.
+ * @param  {string} colorString  The color arguments string, with arguments separated by commas.
+ * @return {Array}               An array of argument strings split at each top-level comma.
  */
-function splitColorMixArgs (str) {
-  const args = [];
+function splitColorMixArgs (colorString) {
+  const colorArguments = [];
   let depth = 0;
   let start = 0;
-  for (let position = 0; position < str.length; position++) {
-    if (str[position] === '(') {
+  for (let position = 0; position < colorString.length; position++) {
+    if (colorString[position] === '(') {
       depth++;
-    } else if (str[position] === ')') {
+    } else if (colorString[position] === ')') {
       depth--;
-    } else if (str[position] === ',' && depth === 0) {
-      args.push(str.slice(start, position));
+    } else if (colorString[position] === ',' && depth === 0) {
+      colorArguments.push(colorString.slice(start, position));
       start = position + 1;
     }
   }
-  args.push(str.slice(start));
-  return args;
+  colorArguments.push(colorString.slice(start));
+  return colorArguments;
 }
 
 /**
@@ -836,21 +836,21 @@ function parseColorMixArg (arg) {
   // Try: percentage at end, e.g. "red 50%" or "rgb(0 0 0)50%"
   let match = arg.match(/^(.+?)\s*(\d+(?:\.\d+)?)%\s*$/);
   if (match) {
-    const colorStr = match[1].trim();
+    const rawColorString = match[1].trim();
     const percentage = parseFloat(match[2]);
-    const color = parseColor(colorStr);
+    const color = parseColor(rawColorString);
     // Check if color contains var() or currentcolor (cannot be evaluated statically)
-    return { color, percentage, raw: colorStr, hasVar: /var\(|currentcolor/i.test(colorStr) };
+    return { color, percentage, raw: rawColorString, hasVar: /var\(|currentcolor/i.test(rawColorString) };
   }
 
   // Try: percentage at start, e.g. "50% red"
   match = arg.match(/^(\d+(?:\.\d+)?)%\s+(.+)$/);
   if (match) {
-    const colorStr = match[2].trim();
+    const rawColorString = match[2].trim();
     const percentage = parseFloat(match[1]);
-    const color = parseColor(colorStr);
+    const color = parseColor(rawColorString);
     // Check if color contains var() or currentcolor (cannot be evaluated statically)
-    return { color, percentage, raw: colorStr, hasVar: /var\(|currentcolor/i.test(colorStr) };
+    return { color, percentage, raw: rawColorString, hasVar: /var\(|currentcolor/i.test(rawColorString) };
   }
 
   // No percentage
@@ -869,28 +869,28 @@ function parseColorMixArg (arg) {
  */
 function normalizeColorMix (colorSpace, parsed1, parsed2) {
   // Normalize percentages: strip explicit 50%/50% (the defaults)
-  let p1Str = '';
-  let p2Str = '';
+  let percentageString1 = '';
+  let percentageString2 = '';
   if (parsed1.percentage !== null && parsed1.percentage !== 50) {
-    p1Str = ' ' + parsed1.percentage + '%';
+    percentageString1 = ' ' + parsed1.percentage + '%';
   }
   if (parsed2.percentage !== null && parsed2.percentage !== 50) {
-    p2Str = ' ' + parsed2.percentage + '%';
+    percentageString2 = ' ' + parsed2.percentage + '%';
   }
 
   // Use the raw color strings (but try to minify known colors)
-  let c1 = parsed1.raw;
-  let c2 = parsed2.raw;
+  let colorString1 = parsed1.raw;
+  let colorString2 = parsed2.raw;
   if (parsed1.color) {
-    c1 = rgbaToHex(parsed1.color[0], parsed1.color[1], parsed1.color[2], parsed1.color[3]);
+    colorString1 = rgbaToHex(parsed1.color[0], parsed1.color[1], parsed1.color[2], parsed1.color[3]);
   }
   if (parsed2.color) {
-    c2 = rgbaToHex(parsed2.color[0], parsed2.color[1], parsed2.color[2], parsed2.color[3]);
+    colorString2 = rgbaToHex(parsed2.color[0], parsed2.color[1], parsed2.color[2], parsed2.color[3]);
   }
 
   // oklab is the default interpolation method per CSS Color 5 — elide it
   const spacePrefix = colorSpace === 'oklab' ? '' : 'in ' + colorSpace + ',';
-  return 'color-mix(' + spacePrefix + c1 + p1Str + ',' + c2 + p2Str + ')';
+  return 'color-mix(' + spacePrefix + colorString1 + percentageString1 + ',' + colorString2 + percentageString2 + ')';
 }
 
 /**
@@ -910,19 +910,19 @@ function convertOklabToHex (L, a, b, alpha) {
   }
   const r = Math.round(delinearize(Math.max(0, Math.min(1, linear.r))) * 255);
   const g = Math.round(delinearize(Math.max(0, Math.min(1, linear.g))) * 255);
-  const bl = Math.round(delinearize(Math.max(0, Math.min(1, linear.b))) * 255);
-  return rgbaToHex(r, g, bl, alpha !== undefined ? alpha : 1);
+  const blue = Math.round(delinearize(Math.max(0, Math.min(1, linear.b))) * 255);
+  return rgbaToHex(r, g, blue, alpha !== undefined ? alpha : 1);
 }
 
 /**
  * Handle color(from ...) relative color syntax for simple identity cases.
  *
- * @param  {string}      expr  The color(from ...) expression string.
- * @return {string|null}       A hex color string if the relative color is a simple identity transform, or null otherwise.
+ * @param  {string}      expression  The color(from ...) expression string.
+ * @return {string|null}             A hex color string if the relative color is a simple identity transform, or null otherwise.
  */
-function evaluateRelativeColor (expr) {
+function evaluateRelativeColor (expression) {
   // Match: color(from <base-color> srgb r g b [/ <alpha>]) identity transform pattern
-  const match = expr.match(/^color\(\s*from\s+(.+?)\s+srgb\s+r\s+g\s+b(?:\s*\/\s*([\d.]+%?))?\s*\)$/i);
+  const match = expression.match(/^color\(\s*from\s+(.+?)\s+srgb\s+r\s+g\s+b(?:\s*\/\s*([\d.]+%?))?\s*\)$/i);
   if (!match) {
     return null;
   }

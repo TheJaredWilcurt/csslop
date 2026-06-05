@@ -14,6 +14,7 @@ import {
  * @return {boolean}        True if the value is zero with any unit.
  */
 function isZeroTransformValue (value) {
+  // Match zero with optional sign and any CSS unit (e.g. 0px, 0deg, 0%)
   return /^[-+]?0(?:[a-z%]+)?$/i.test(value.trim());
 }
 
@@ -57,7 +58,7 @@ function splitTransformFunctions (value) {
   const parts = [];
   let position = 0;
   while (position < value.length) {
-    // Skip whitespace between transform functions
+    // Skip whitespace characters between transform functions
     while (position < value.length && /\s/.test(value[position])) {
       position++;
     }
@@ -65,7 +66,7 @@ function splitTransformFunctions (value) {
       break;
     }
     const nameStart = position;
-    // Consume alphanumeric and hyphen characters for the function name
+    // Consume valid CSS function-name characters (alphanumeric and hyphens)
     while (position < value.length && /[A-Za-z0-9-]/.test(value[position])) {
       position++;
     }
@@ -87,7 +88,7 @@ function splitTransformFunctions (value) {
     if (depth !== 0) {
       return null;
     }
-    parts.push({ name, args: value.slice(position + 1, end - 1) });
+    parts.push({ name, argumentString: value.slice(position + 1, end - 1) });
     position = end;
   }
   return parts;
@@ -96,17 +97,17 @@ function splitTransformFunctions (value) {
 /**
  * Minifies a single CSS transform function by simplifying 3D functions to 2D equivalents, collapsing redundant axes, and normalizing scale percentages.
  *
- * @param  {string} name  The transform function name (e.g. "translate3d", "scale").
- * @param  {string} args  The raw comma-separated arguments string.
- * @return {string}       The minified transform function call string.
+ * @param  {string} name            The transform function name (e.g. "translate3d", "scale").
+ * @param  {string} argumentString  The raw comma-separated arguments string.
+ * @return {string}                 The minified transform function call string.
  */
-function minifyTransformFunction (name, args) {
+function minifyTransformFunction (name, argumentString) {
   const lowerName = name.toLowerCase();
-  const parts = splitFunctionArguments(args);
+  const parts = splitFunctionArguments(argumentString);
 
   if (lowerName === 'rotate' && parts.length === 1) {
     // Convert turn units to degrees (e.g. 0.5turn → 180deg)
-    const angle = parts[0].replace(/^(-?(?:\d+|\d*\.\d+))turn$/i, (_, turns) => {
+    const angle = parts[0].replace(/^(-?(?:\d+|\d*\.\d+))turn$/i, (_match, turns) => {
       return roundCompactNumber(parseFloat(turns) * 360) + 'deg';
     });
     return 'rotate(' + angle + ')';
@@ -214,8 +215,8 @@ function minifyTransformValue (value) {
   if (!functions) {
     return value;
   }
-  return functions.map(({ name, args }) => {
-    return minifyTransformFunction(name, args);
+  return functions.map(({ name, argumentString }) => {
+    return minifyTransformFunction(name, argumentString);
   }).join(' ');
 }
 
