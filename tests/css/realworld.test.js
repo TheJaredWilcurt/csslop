@@ -84,9 +84,10 @@ console.log('TOTAL INPUT: ' + (Math.round(totalInput / 1024 / 1024 * 100) / 100)
 console.log('TOTAL OUTPUT: ' + (Math.round(totalOutput / 1024 / 1024 * 100) / 100) + 'MB');
 
 for (const library of libraries) {
-  const fileName = library.name + '-' + library.version + '.css';
-  writeFileSync(join(__dirname, 'minified', fileName), library.output + '\n');
+  writeFileSync(join(__dirname, 'minified', library.fileName), library.output + '\n');
+  delete library.fileName;
   delete library.output;
+  delete library.license;
 }
 
 const reportPath = join(__dirname, '..', '..', 'realWorldResults.json');
@@ -100,4 +101,4 @@ const report = JSON.stringify({
   },
   libraries
 }, null, 2);
-writeFileSync(reportPath, report);
+writeFileSync(reportPath, report + '\n');
