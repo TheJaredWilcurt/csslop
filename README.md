@@ -46,6 +46,7 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
 1. **AI Readability improvements:** I had Claude Opus try to make the code easier to read (JSDoc comments, no single character variable names, no abbreviations in variables, grouping logic into related functions, breaking up lines of code, explain complex regex, etc.).
 1. **AI color completeness:** Had Claude Opus handle all named colors, and always convert to the shorter character representation, removing a hard-coded solution.
 1. **Test improvements:** Throughout this process, as upstream tests were improved or created, they were pulled in, and the AI was instructed to pass those new tests with prompts like, "Run `npm t` and fix all failing tests by modifying files in `src`."
+1. **Performance improvements:** CSSLOP takes 3 hours to minify all the real-world tests. Which averages to 144 seconds per test. In reality, most tests take 0-50ms, but there are a handful of large (2-5MB) CSS files that can take over an hour. I asked Claude to improve performance, and it did so bad I had to reject all changes. Then I gave GPT a chance and it took a safer approach. Had Claude clean up the messy code after the fact.
 
 
 **Full Notes of AI Experiment:**
@@ -135,6 +136,11 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
     * This resulted in a 6-point plan that I approved.
   * **PROMPT:** At line 613 of `src/value/minify.css` we list a handful of specific colors to minify. This seems like a naive approach. Instead, all color values should be evaluated consistently and converted to all other compatible representations, including checking if their colors are an exact match for a named color (`red`, `tan`, etc.). Then compare all representations to find the version with the shortest length. Preferring hex where possible.
 * I guess this is done now. Only thing left to do is give it a name and release it into the world.
+* Performance: 
+  * I dumped all of those changes and wrote a more specific prompt for Chat GPT 5.4 High Thinking
+  * **PROMPT:** Improve the performance of the minification library without causing any of the existing tests (`npm t`) to fail. Use techniques like worker threads and promises to parallelize tasks. Do not use modes (fast vs thorough), or options to switch settings. Any CSS string passed in should be treated the same. Apply caching, memoization, and other optimization techniques as needed. Keep changes isolated to the `src` folder.
+  * This made some reasonable looking changes. Not sure how much improvement it will be on performance yet, (haven't tested, TODO: UPDATE THIS LATER!!!!!!!). But the code itself is kinda ugly, per usual. It introduced 96 linting errors around JSDocs that required descriptions/types. My favorite part is that it moved a large block of code from the bottom of a file to the top, and removed all the comments in the process. Dozens of comments that explained regex. So I had Claude Opus do a pass to clean up the messy code.
+  * **PROMPT**: Do a refactoring pass over the files in the `src` folder. Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB. Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc). Group related logic into well named functions. Ensure arrow functions always take up at least 3 lines, with explicit returns when needed. Always comment regex if used. Run `npm run lint` and ensure the linter passes when done.
 
 
 ## The name

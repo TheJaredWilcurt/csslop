@@ -18,12 +18,12 @@ import {
  */
 function orderDeclarations (declarations) {
   const ordered = [...declarations];
-  const moveBefore = (prop, beforeProp) => {
+  const moveBefore = (property, beforeProperty) => {
     const fromIndex = ordered.findIndex((declaration) => {
-      return declaration?.property === prop;
+      return declaration?.property === property;
     });
     const toIndex = ordered.findIndex((declaration) => {
-      return declaration?.property === beforeProp;
+      return declaration?.property === beforeProperty;
     });
     if (fromIndex === -1 || toIndex === -1 || fromIndex < toIndex) {
       return;
@@ -49,16 +49,14 @@ function orderDeclarations (declarations) {
 /**
  * Determines which longhand properties are present and eligible for merging into a given shorthand. Returns null when the required longhands for the shorthand are not all available.
  *
- * @param  {string}     shorthand     The CSS shorthand property name.
- * @param  {Array}      longhands     The expected longhand property names for this shorthand.
- * @param  {Array}      declarations  The current array of CSS declaration objects.
- * @return {Array|null}               The list of longhand names to merge, or null if merging is not possible.
+ * @param  {string}     shorthand              The CSS shorthand property name.
+ * @param  {Array}      longhands              The expected longhand property names for this shorthand.
+ * @param  {Set}        declarationProperties  The set of declaration property names currently present.
+ * @return {Array|null}                        The list of longhand names to merge, or null if merging is not possible.
  */
-function getMergeProps (shorthand, longhands, declarations) {
+function getMergeProps (shorthand, longhands, declarationProperties) {
   const presentLonghands = longhands.filter((longhand) => {
-    return declarations.some((declaration) => {
-      return declaration.property === longhand;
-    });
+    return declarationProperties.has(longhand);
   });
   if (presentLonghands.length === 0) {
     return null;
@@ -120,15 +118,15 @@ function getMergeProps (shorthand, longhands, declarations) {
 /**
  * Get all longhands that a shorthand would override.
  *
- * @param  {string} shorthandProp  The CSS shorthand property name.
- * @return {Array}                 A deduplicated array of all longhand property names that the shorthand overrides, including nested longhands.
+ * @param  {string} shorthandProperty  The CSS shorthand property name.
+ * @return {Array}                     A deduplicated array of all longhand property names that the shorthand overrides, including nested longhands.
  */
-function getOverriddenLonghands (shorthandProp) {
-  const direct = shorthandMap[shorthandProp] || [];
-  const overrides = shorthandOverrideMap[shorthandProp] || [];
+function getOverriddenLonghands (shorthandProperty) {
+  const direct = shorthandMap[shorthandProperty] || [];
+  const overrides = shorthandOverrideMap[shorthandProperty] || [];
   const all = [...direct, ...overrides];
-  for (const prop of direct) {
-    const nested = shorthandMap[prop] || [];
+  for (const property of direct) {
+    const nested = shorthandMap[property] || [];
     all.push(...nested);
   }
   return [...new Set(all)];
@@ -171,21 +169,19 @@ function canMergeVarValue (value, context) {
 /**
  * Try to merge longhand properties into a shorthand.
  *
- * @param  {Array}       properties     The longhand property names to merge.
- * @param  {Array}       declarations   The CSS declaration objects to draw values from.
- * @param  {string}      shorthandName  The target shorthand property name.
- * @param  {object}      context        The minification context with registered custom property data.
- * @return {string|null}                The merged shorthand value string, or null if merging is not possible.
+ * @param  {Array}       properties      The longhand property names to merge.
+ * @param  {Map}         declarationMap  The CSS declaration objects to draw values from, keyed by property.
+ * @param  {string}      shorthandName   The target shorthand property name.
+ * @param  {object}      context         The minification context with registered custom property data.
+ * @return {string|null}                 The merged shorthand value string, or null if merging is not possible.
  */
-function tryMergeToShorthand (properties, declarations, shorthandName = '', context) {
+function tryMergeToShorthand (properties, declarationMap, shorthandName = '', context) {
   if (properties.length < 2) {
     return null;
   }
 
   const values = properties.map((property) => {
-    const declaration = declarations.find((candidate) => {
-      return candidate.property === property;
-    });
+    const declaration = declarationMap.get(property);
     if (declaration) {
       return minifyValue(declaration);
     }
@@ -571,16 +567,21 @@ function processDeclarations (declarations, context) {
 
   // First, remove longhand properties that are overridden by existing shorthands
   const propertiesToRemove = new Set();
+  const firstIndexByProperty = new Map();
+  for (let i = 0; i < result.length; i++) {
+    const propertyName = result[i].property;
+    if (propertyName && !firstIndexByProperty.has(propertyName)) {
+      firstIndexByProperty.set(propertyName, i);
+    }
+  }
   for (let i = 0; i < result.length; i++) {
     const declaration = result[i];
     if (declaration.property && shorthandMap[declaration.property]) {
       // This is a shorthand, check if any longhands come before it
       const overridden = getOverriddenLonghands(declaration.property);
       for (const longhandProperty of overridden) {
-        const longhandIndex = result.findIndex((candidate, index) => {
-          return candidate.property === longhandProperty && index < i;
-        });
-        if (longhandIndex !== -1) {
+        const longhandIndex = firstIndexByProperty.get(longhandProperty);
+        if (longhandIndex !== undefined && longhandIndex < i) {
           propertiesToRemove.add(longhandProperty);
         }
       }
@@ -597,23 +598,32 @@ function processDeclarations (declarations, context) {
     changed = false;
     const mergedProperties = new Set();
     const newDeclarations = [];
+    const declarationProperties = new Set();
+
+    for (const declaration of result) {
+      if (declaration.property) {
+        declarationProperties.add(declaration.property);
+      }
+    }
 
     for (const [shorthand, longhands] of Object.entries(shorthandMap)) {
-      const shorthandAlreadyExists = result.some((declaration) => {
-        return declaration.property === shorthand;
-      });
+      const shorthandAlreadyExists = declarationProperties.has(shorthand);
       if (shorthandAlreadyExists) {
         continue;
       }
 
-      const mergeableProperties = getMergeProps(shorthand, longhands, result);
+      const mergeableProperties = getMergeProps(shorthand, longhands, declarationProperties);
       if (!mergeableProperties) {
         continue;
       }
+      const mergeablePropertySet = new Set(mergeableProperties);
       const relevantDeclarations = result.filter((declaration) => {
-        return mergeableProperties.includes(declaration.property);
+        return mergeablePropertySet.has(declaration.property);
       });
-      const mergedValue = tryMergeToShorthand(mergeableProperties, relevantDeclarations, shorthand, context);
+      const relevantDeclarationMap = new Map(relevantDeclarations.map((declaration) => {
+        return [declaration.property, declaration];
+      }));
+      const mergedValue = tryMergeToShorthand(mergeableProperties, relevantDeclarationMap, shorthand, context);
       if (!mergedValue) {
         continue;
       }
@@ -634,9 +644,7 @@ function processDeclarations (declarations, context) {
 
       if (isMarginPaddingInset && hasMixedImportant) {
         for (const property of mergeableProperties) {
-          const declaration = relevantDeclarations.find((candidate) => {
-            return candidate.property === property;
-          });
+          const declaration = relevantDeclarationMap.get(property);
           if (declaration && !minifyValue(declaration).includes('!important')) {
             mergedProperties.add(property);
           }

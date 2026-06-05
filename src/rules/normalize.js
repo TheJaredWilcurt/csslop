@@ -55,11 +55,26 @@ function unescapeSelector (selector) {
  * @return {string}        The normalized and minified media query.
  */
 function normalizeMedia (media) {
-  // Collapse whitespace, strip spaces around punctuation, and remove the redundant "all and" prefix
-  media = media.replace(/\s+/g, ' ').replace(/\s*([:,])\s*/g, '$1').replace(/\s*([=<>])\s*/g, '$1').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').replace(/\b(?:all and )/gi, '');
-  // Convert min-width/max-width to range syntax (e.g. min-width:768px → width>=768px)
-  media = media.replace(/min-width:(\d+[a-z%]*)/gi, 'width>=$1').replace(/max-width:(\d+[a-z%]*)/gi, 'width<=$1');
-  media = media.replace(/min-height:(\d+[a-z%]*)/gi, 'height>=$1').replace(/max-height:(\d+[a-z%]*)/gi, 'height<=$1');
+  // Collapse whitespace to single spaces
+  media = media.replace(/\s+/g, ' ');
+  // Strip spaces around colons and commas
+  media = media.replace(/\s*([:,])\s*/g, '$1');
+  // Strip spaces around comparison operators (=, <, >)
+  media = media.replace(/\s*([=<>])\s*/g, '$1');
+  // Strip space after opening parenthesis
+  media = media.replace(/\(\s+/g, '(');
+  // Strip space before closing parenthesis
+  media = media.replace(/\s+\)/g, ')');
+  // Remove redundant "all and" prefix from media queries
+  media = media.replace(/\b(?:all and )/gi, '');
+  // Convert min-width to range syntax (e.g. min-width:768px → width>=768px)
+  media = media.replace(/min-width:(\d+[a-z%]*)/gi, 'width>=$1');
+  // Convert max-width to range syntax (e.g. max-width:1024px → width<=1024px)
+  media = media.replace(/max-width:(\d+[a-z%]*)/gi, 'width<=$1');
+  // Convert min-height to range syntax
+  media = media.replace(/min-height:(\d+[a-z%]*)/gi, 'height>=$1');
+  // Convert max-height to range syntax
+  media = media.replace(/max-height:(\d+[a-z%]*)/gi, 'height<=$1');
   // Combine adjacent min+max range queries into a single range expression: (width>=X) and (width<=Y) → (X<=width<=Y)
   media = media.replace(
     /\((\w+)>=(\d+[a-z%]*)\)\s+and\s+\((\w+)<=(\d+[a-z%]*)\)/gi,
@@ -80,9 +95,21 @@ function normalizeMedia (media) {
  * @return {string}           The normalized `@supports` condition.
  */
 function normalizeSupports (supports) {
-  // Collapse whitespace and strip spaces around punctuation
-  supports = supports.replace(/\s+/g, ' ').replace(/\s*([:,])\s*/g, '$1').replace(/\s*([=<>])\s*/g, '$1').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
-  supports = supports.replace(/\s+and\s+/g, ' and ').replace(/\s+or\s+/g, ' or ').replace(/\s+not\s+/g, ' not ');
+  // Collapse whitespace to single spaces
+  supports = supports.replace(/\s+/g, ' ');
+  // Strip spaces around colons and commas
+  supports = supports.replace(/\s*([:,])\s*/g, '$1');
+  // Strip spaces around comparison operators (=, <, >)
+  supports = supports.replace(/\s*([=<>])\s*/g, '$1');
+  // Strip space after opening parenthesis
+  supports = supports.replace(/\(\s+/g, '(');
+  // Strip space before closing parenthesis
+  supports = supports.replace(/\s+\)/g, ')');
+  supports = supports.trim();
+  // Normalize spacing around logical operators to exactly one space
+  supports = supports.replace(/\s+and\s+/g, ' and ');
+  supports = supports.replace(/\s+or\s+/g, ' or ');
+  supports = supports.replace(/\s+not\s+/g, ' not ');
   // Compact logical operator spacing: ") and (" → ")and ("
   supports = supports.replace(/\)\s*and\s*\(/g, ')and (');
   supports = supports.replace(/\)\s*or\s*\(/g, ')or (');

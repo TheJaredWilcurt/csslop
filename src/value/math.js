@@ -17,47 +17,47 @@ import {
  * @return {string|null}             The simplified expression, or null if it cannot be folded.
  */
 function tryFoldCalcExpression (expression) {
-  let expr = expression.trim();
+  let foldedExpression = expression.trim();
   let previous;
 
   do {
-    previous = expr;
+    previous = foldedExpression;
     // Remove innermost non-nested parentheses (flatten simple grouping)
-    expr = expr.replace(/\(([^()]+)\)/g, '$1');
+    foldedExpression = foldedExpression.replace(/\(([^()]+)\)/g, '$1');
     // Fold: <number> * <number><unit> → computed result in same unit
-    expr = expr.replace(/(-?(?:\d*\.\d+|\d+))\s*\*\s*(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q|%)/gi, (match, a, b, unit) => {
-      return formatDimension(parseFloat(a) * parseFloat(b), unit);
+    foldedExpression = foldedExpression.replace(/(-?(?:\d*\.\d+|\d+))\s*\*\s*(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q|%)/gi, (match, leftOperand, rightOperand, unit) => {
+      return formatDimension(parseFloat(leftOperand) * parseFloat(rightOperand), unit);
     });
     // Fold: <number><unit> * <number> → computed result in same unit
-    expr = expr.replace(/(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q|%)\s*\*\s*(-?(?:\d*\.\d+|\d+))/gi, (match, a, unit, b) => {
-      return formatDimension(parseFloat(a) * parseFloat(b), unit);
+    foldedExpression = foldedExpression.replace(/(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q|%)\s*\*\s*(-?(?:\d*\.\d+|\d+))/gi, (match, leftOperand, unit, rightOperand) => {
+      return formatDimension(parseFloat(leftOperand) * parseFloat(rightOperand), unit);
     });
     // Fold: <number><unit> / <number> → computed result in same unit
-    expr = expr.replace(/(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q)\s*\/\s*(-?(?:\d*\.\d+|\d+))/gi, (match, value, unit, divisor) => {
+    foldedExpression = foldedExpression.replace(/(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q)\s*\/\s*(-?(?:\d*\.\d+|\d+))/gi, (match, value, unit, divisor) => {
       return formatDimension(parseFloat(value) / parseFloat(divisor), unit);
     });
     // Collapse zero-with-unit terms (e.g. 0px, 0%) to plain 0 or remove them
-    expr = expr.replace(/(^|[+-])\s*0(?:px|pt|pc|in|cm|mm|q|%)\b/g, (match, sign) => {
+    foldedExpression = foldedExpression.replace(/(^|[+-])\s*0(?:px|pt|pc|in|cm|mm|q|%)\b/g, (match, sign) => {
       if (sign && sign !== '+') {
         return sign + ' 0';
       }
       return '';
     });
     // Remove additive zero terms
-    expr = expr.replace(/\+\s*0\b/g, '');
+    foldedExpression = foldedExpression.replace(/\+\s*0\b/g, '');
     // Remove subtractive zero terms
-    expr = expr.replace(/-\s*0\b/g, '');
+    foldedExpression = foldedExpression.replace(/-\s*0\b/g, '');
     // Collapse whitespace
-    expr = expr.replace(/\s+/g, ' ').trim();
-  } while (expr !== previous);
+    foldedExpression = foldedExpression.replace(/\s+/g, ' ').trim();
+  } while (foldedExpression !== previous);
 
   // Simplify trivial identity division: 1 / 1 / <dimension> → <dimension>
-  if (/^1\s*\/\s*1\s*\/\s*(-?(?:\d*\.\d+|\d+)(?:px|pt|pc|in|cm|mm|q))$/i.test(expr)) {
-    return expr.replace(/^1\s*\/\s*1\s*\/\s*/i, '');
+  if (/^1\s*\/\s*1\s*\/\s*(-?(?:\d*\.\d+|\d+)(?:px|pt|pc|in|cm|mm|q))$/i.test(foldedExpression)) {
+    return foldedExpression.replace(/^1\s*\/\s*1\s*\/\s*/i, '');
   }
 
   // Remove all whitespace for validation
-  const normalized = expr.replace(/\s+/g, '');
+  const normalized = foldedExpression.replace(/\s+/g, '');
   // Validate that the expression is a simple sequence of signed terms with optional units
   if (!/^[+-]?(?:\d*\.\d+|\d+)(?:[a-z%]+)?(?:[+-](?:\d*\.\d+|\d+)(?:[a-z%]+)?)*$/i.test(normalized)) {
     return null;
