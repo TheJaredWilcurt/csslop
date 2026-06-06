@@ -1,3 +1,7 @@
+/**
+ * @file Runs all the real world CSS files through the minify as a test.
+ */
+
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -60,6 +64,12 @@ libraries.forEach((library) => {
   totalOutput = totalOutput + library.outputSize;
   totalDuration = totalDuration + library.duration;
 });
+/**
+ * Creates a human readable HH:MM:SS.sss time stamp from a ms number.
+ *
+ * @param  {number} ms  Time in milliseconds
+ * @return {string}     Human readable timestamp
+ */
 function timeFromMs (ms) {
   const hour = Math.floor(ms / 1000 / 60 / 60);
   const hourToSubtract = hour * 1000 * 60 * 60;
