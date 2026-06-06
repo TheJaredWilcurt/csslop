@@ -10,7 +10,9 @@ import { join } from 'node:path';
 
 import { minifyCSS } from '../../index.js';
 
-const failingFile = 'bojler-v3.2.1.css';
+
+const failingFile = 'google-type-v0.0.0.css';
+
 
 const __dirname = import.meta.dirname;
 const inputFile = join(__dirname, '..', '..', 'node_modules', 'real-world-css-libraries', 'libs', failingFile);
@@ -22,6 +24,6 @@ const output = minifyCSS(input);
 writeFileSync(copy, input);
 writeFileSync(minified, output);
 
-if (output.length > 10_000) {
+if (output.length >= input.length) {
   throw 'OUTPUT TOO LARGE';
 }
