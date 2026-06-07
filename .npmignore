@@ -8,3 +8,4 @@ tests/
 .gitignore
 .npmignore
 eslint.config.js
+realWorldResults.json
