@@ -1,4 +1,5 @@
-<p align="center"><img width="700" height="184" alt="CSSLOP-hand-drawn" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+<p align="center"><img width="700" alt="CSSLOP logo (hand drawn)" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+
 
 # CSSLOP
 
@@ -215,7 +216,7 @@ It then generated this image, and wow, I *reallllly* hate looking at it. Note th
 
 And that's what I want, I want people to NOT use this library. So it's perfect for that. And if you are wondering where the "slop" part is in this image, that's the part that makes it truly "ART", it is transgressive to the media and boundary breaking. Look down at your own feet, see that pool of vomit you threw up after looking at the image? That's the slop. AI art, really *is* art™. They say art makes you feel something (nausea counts)!
 
-<p align="center"><img width="700" height="184" alt="CSSLOP-hand-drawn" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+<p align="center"><img width="700" alt="CSSLOP logo (hand drawn)" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
 
 Because you can't legally own or license AI art, and I'm too embarrassed to put that image at the top of this README, I've also made a hand drawn logo for the library. In my version, there is a green checkmark to indicate a passing test, and the checkmark and text are melting into slop. It was made very quickly, at 7AM on a Sunday when I wasn't fully awake, with the intent to convey the idea of "low effort" to the viewer, with the hopes of disuading actual usage of the library. And with that said.... just like... ignore the next section...
 
