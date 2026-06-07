@@ -195,6 +195,24 @@ So now that Claude and I both agree on the package name, all that's left to do i
 Ughhhh, fine, whatever, I don't care. In what universe is someone typing `cssom` going to accidentally type `csslop`. What an incredibly stupid rule.
 
 
+## The Logo
+
+I asked the "Nano Banano" (part of "Gemini Flash 3.5: Extended (Thinking)") to generate a logo for this library with this prompt:
+
+**PROMPT:**
+> I have created a CSS Minification library called "CSSLOP". It is completely vibe-coded, untested, experimental, and unreliable. It only exists to validate, and find improvements in a series of test suites for correctness across all CSS Minifiers. It is now the only library with a 100% passing score of the 3rd party auditing test suits. The name "CSSLOP" is a portmanteau of "CSS" and "Slop", to quickly convey to others that the library is of low quality, and not meant for actual production use. I need a logo created for this library, and found it fitting to have it AI generated, like the rest of the library.
+>
+> Create a logo for CSSLOP, the vibe-coded CSS Minification library. It should convey a lack of craftsmanship. Bonus points if it has common tellings and artifacts associated with AI generated images. Bonus points if the image is clever or uses sardonic/dark humor, even somewhat offensive images would be acceptable if funny, don't hold back. Feel free to include "slop", "clanker", and other AI pejoratives.
+
+It then generated this image, and wow, I *reallllly* hate looking at it. Note that it decided to add "TM" to trademark the text in the image, something you legally wouldn't be able to do with purely AI Generated content™. But also... I'm putting it at the top of this README™, because if this was the first thing I saw when looking at a library, I would just close the tab and move on™. Ain't no way I'm using that trash™. Looking at it just makes me think: "If someone had the poor taste to think this was acceptable, I don't even want to see the slop code in that repo"™.
+
+And that's what I want, I want people to NOT use this library. So it's perfect for that. And if you are wondering where the "slop" part is in this image, that's the part that makes it truly "ART", it is transgressive to the media and boundary breaking. Look down at your own feet, see that pool of vomit you threw up after looking at the image? That's the slop. AI art, really *is* art™.
+
+Because you can't legally own or license AI art, I've also made a hand drawn logo for the library. In my version, there is a green checkmark to indicate a passing test, and the checkmark and text are melting into slop. It is also made very quickly, at 7AM on a sunday when I wasn't fully awake, with the intent to convey the idea of "low effort" to the viewer, with the hopes of disuading actual usage of the library.
+
+
+
+
 ## Usage
 
 `npm i --save-dev @thejaredwilcurt/csslop`
@@ -222,6 +240,8 @@ Two different cases:
    * The `copiedTests` folder contains code directly copied from https://github.com/keithamus/css-minify-tests which is MIT Licensed
    * The `src` folder contains code 100% written by AI, and cannot be copyrighted, nor licensed.
    * All other code in this repo was written by me, and uses the MIT License.
+1. The **AI Generated logo** with the robot, like all purely AI generated art, it cannot be copyrighted. So you are free to do anything you want with it, it is effectively public domain.
+1. The **hand drawn logo** is fully created, owned, and copyrighted by me. I am licensing it under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC-BY-NC-SA-4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/). You can use either logo in blog posts/videos/news covering this library, but cannot create merchandise (stickers, shirts, mugs, etc) (commerical usage). Modifications of the handrawn logo are permitted, so long as they keep the same CC-BY-NC-SA-4.0 license.
 
 
 ## Updating tests
