@@ -1,3 +1,5 @@
+<p align="center"><img width="700" height="184" alt="CSSLOP-hand-drawn" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+
 # CSSLOP
 
 
@@ -143,7 +145,8 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
   * This is a very tedious process because every single repo stores their built CSS file in a different place, sometimes not in the repo, only in the built package, and boy, most people are not great about properly licensing their code.
   * While going through hundreds of old repos from the 2010's and checking the license in each repo I found almost all of them use MIT. Occasionally I'd find something different, one specific repo left a comment for why they chose their less common license:
     * > This work is licensed under a [Creative Commons Attribution 3.0 Unported License](http://creativecommons.org/licenses/by/3.0/). (I love this license! The license summary doesn't have any paragraphs in all-caps that seems like the license is angry at you)
-* **Performance:** I ran CSSLOP against all 150 real-world CSS files, and it took 3 hours and 4 minutes. Ran it a second time and it took 3 hours and 3 minutes. Overall, pretty consistent, and VERY SLOW. The slowness is almost entirely from a handful of very large CSS files. I gave Claude Opus the following prompt.
+* I then spot checked a few of the 150 minified files to find bugs with the minifier and cases where it could have minified something better. I created issues upstream for all of these. If CSSLOP is passing 100% of the tests, but still outputting these bugs/missing optimizations, then the solution should be to add more tests around those edge cases. This is also beneficial to ALL CSS minifiers. The sloppy "do the minimum to pass the test" approach the AI took, is actually really great for finding missing tests. AI was not used in this evaluation or anything related to interacting with the upstream tests repo (issues or PRs).
+* **Performance Improvement Failures:** I ran CSSLOP against all 150 real-world CSS files, and it took 3 hours and 4 minutes. Ran it a second time and it took 3 hours and 3 minutes. Overall, pretty consistent, and VERY SLOW. The slowness is almost entirely from a handful of very large CSS files. I gave Claude Opus the following prompt.
   * **PROMPT:** This minification library takes 20-30 minutes to minify a single 4MB CSS file. Apply any performance improvements to the library. Do not sacrifice correctness for speed. The code must continue to be written in JavaScript, and execute in Node.js. Major refactoring is permitted.
   * It then wrote a one-time use Node script, that it never deleted, in the root of the repo, that took ~20 lines of generic CSS, and then looped over it appending it over and over to a local test.css file until the file was over 4MB. Pretty Naive, but whatever. It then made another file in the root to actually test and benchmark the library. That's right, it decided to waste 30 minutes of time doing an initial benchmark. Later it would create a 3rd file in the root to ALSO *run the same benchmark again* ...great.
   * The end result was that it changed every file in the `src` folder, and added in several new ones. It changed the entrypoint of the library to use a different code path skipping almost everything in the library, taking it from 410/410 passing tests down to 66/410 passing (16%). But then boasted that it made the library 36000% faster. *sigh*.... But don't worry! it didn't sacrifice correctness for speed, because I specifically told it not to do that. All you have to do is set some random environment variable and it will go back to the previous, extremely slow, speed, and run the old code that passes all the tests.
@@ -197,20 +200,24 @@ Ughhhh, fine, whatever, I don't care. In what universe is someone typing `cssom`
 
 ## The Logo
 
-I asked the "Nano Banano" (part of "Gemini Flash 3.5: Extended (Thinking)") to generate a logo for this library with this prompt:
+I asked "Nano Banano" (part of "Gemini Flash 3.5: Extended (Thinking)") to generate a logo for this library with this prompt:
 
 **PROMPT:**
 > I have created a CSS Minification library called "CSSLOP". It is completely vibe-coded, untested, experimental, and unreliable. It only exists to validate, and find improvements in a series of test suites for correctness across all CSS Minifiers. It is now the only library with a 100% passing score of the 3rd party auditing test suits. The name "CSSLOP" is a portmanteau of "CSS" and "Slop", to quickly convey to others that the library is of low quality, and not meant for actual production use. I need a logo created for this library, and found it fitting to have it AI generated, like the rest of the library.
 >
 > Create a logo for CSSLOP, the vibe-coded CSS Minification library. It should convey a lack of craftsmanship. Bonus points if it has common tellings and artifacts associated with AI generated images. Bonus points if the image is clever or uses sardonic/dark humor, even somewhat offensive images would be acceptable if funny, don't hold back. Feel free to include "slop", "clanker", and other AI pejoratives.
 
-It then generated this image, and wow, I *reallllly* hate looking at it. Note that it decided to add "TM" to trademark the text in the image, something you legally wouldn't be able to do with purely AI Generated content™. But also... I'm putting it at the top of this README™, because if this was the first thing I saw when looking at a library, I would just close the tab and move on™. Ain't no way I'm using that trash™. Looking at it just makes me think: "If someone had the poor taste to think this was acceptable, I don't even want to see the slop code in that repo"™.
+<p align="center"><img width="700" alt="CSSLOP Logo (Gemini Generated Image ru4l64ru4l64ru4l)" src="https://github.com/user-attachments/assets/907e89e1-46a7-4c07-8389-4a01ae58e6cf" /></p>
 
-And that's what I want, I want people to NOT use this library. So it's perfect for that. And if you are wondering where the "slop" part is in this image, that's the part that makes it truly "ART", it is transgressive to the media and boundary breaking. Look down at your own feet, see that pool of vomit you threw up after looking at the image? That's the slop. AI art, really *is* art™.
+<p align="right"><sub><sup>* That phrase is not actually trademark.</sup></sub></p>
 
-Because you can't legally own or license AI art, I've also made a hand drawn logo for the library. In my version, there is a green checkmark to indicate a passing test, and the checkmark and text are melting into slop. It is also made very quickly, at 7AM on a sunday when I wasn't fully awake, with the intent to convey the idea of "low effort" to the viewer, with the hopes of disuading actual usage of the library.
+It then generated this image, and wow, I *reallllly* hate looking at it. Note that it created it's own slogan, and decided to add "TM" to trademark it, something you legally wouldn't be able to do with purely AI Generated content™. One area in which this disaster succeeds is that it gives a first impression of "Ain't no way I'm using that trash™". Looking at it just makes me think: "If someone had the poor taste to think this was acceptable, I don't even want to see the slop code in that repo™".
 
+And that's what I want, I want people to NOT use this library. So it's perfect for that. And if you are wondering where the "slop" part is in this image, that's the part that makes it truly "ART", it is transgressive to the media and boundary breaking. Look down at your own feet, see that pool of vomit you threw up after looking at the image? That's the slop. AI art, really *is* art™. They say art makes you feel something (nausea counts)!
 
+<p align="center"><img width="700" height="184" alt="CSSLOP-hand-drawn" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+
+Because you can't legally own or license AI art, and I'm too embarrassed to put that image at the top of this README, I've also made a hand drawn logo for the library. In my version, there is a green checkmark to indicate a passing test, and the checkmark and text are melting into slop. It was made very quickly, at 7AM on a Sunday when I wasn't fully awake, with the intent to convey the idea of "low effort" to the viewer, with the hopes of disuading actual usage of the library. And with that said.... just like... ignore the next section...
 
 
 ## Usage
@@ -229,7 +236,7 @@ console.log(output); // 'body{color:red}'
 
 ## License
 
-This repo intentionally does not have a license. AI generated code is a huge legal gray area and will continue to be until actual lawsuits go before judges. All licenses require that the person offering the code under that license is the copyright owner, and therefore legally able to license the work however they chose. The US copyright office has stated that content generated by AI cannot be copyrighted. A final work must be a human creation to be copyrighted. There is a lot of nuance around how much creative work a human must contribute to the outcome before it can become worthy of copyright. However, regardless of that nuance, in the case of this repo (*and all vibe coded projects*), you cannot license this work, because it cannot be copyrighted. Simply giving a prompt, or series of prompts, and accepting the output without re-writing it in your own words, is absolutely not copyrightable. Anyone telling you otherwise is wrong (or purposefully lying to you to sell you something).
+This repo intentionally does not have a license. AI generated code is a huge legal gray area and will continue to be until actual lawsuits go before judges. All licenses require that the person offering the code under that license is the copyright owner, and therefore legally able to license the work however they chose. The US copyright office has stated that content generated by AI cannot be copyrighted. A final work must be a human creation to be copyrighted. There is a lot of nuance around how much creative work a human must contribute to the outcome before it can become worthy of copyright. However, regardless of that nuance, in the case of this repo (*and all vibe coded projects*), the code cannot be licensed, because it cannot be copyrighted. Simply giving a prompt, or series of prompts, and accepting the output without re-writing it in your own words, is absolutely not copyrightable. Anyone telling you otherwise is wrong (or purposefully lying to you to sell you something).
 
 > "Okay, but I just want to know if I'm allowed to use it or fork it?"
 
@@ -240,13 +247,16 @@ Two different cases:
    * The `copiedTests` folder contains code directly copied from https://github.com/keithamus/css-minify-tests which is MIT Licensed
    * The `src` folder contains code 100% written by AI, and cannot be copyrighted, nor licensed.
    * All other code in this repo was written by me, and uses the MIT License.
+
+> "What about the logos?"
+
 1. The **AI Generated logo** with the robot, like all purely AI generated art, it cannot be copyrighted. So you are free to do anything you want with it, it is effectively public domain.
-1. The **hand drawn logo** is fully created, owned, and copyrighted by me. I am licensing it under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC-BY-NC-SA-4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/). You can use either logo in blog posts/videos/news covering this library, but cannot create merchandise (stickers, shirts, mugs, etc) (commerical usage). Modifications of the handrawn logo are permitted, so long as they keep the same CC-BY-NC-SA-4.0 license.
+1. The **hand drawn logo** is fully created, owned, and copyrighted by me. I am licensing it under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC-BY-NC-SA-4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/). The usage of the logo is permitted for those creating content about this library (blog posts, videos, news coverage, etc.), but cannot be used for commerical acts, like merchandise (stickers, shirts, mugs, etc). Modifications of the handrawn logo are permitted, so long as they keep the same CC-BY-NC-SA-4.0 license.
 
 
 ## Updating tests
 
-1. All test changes must occur upstream, be written by a human, and be merged in to the `css-minify-tests` repo.
+1. All test changes must occur [upstream](https://github.com/keithamus/css-minify-tests), be written by a human, and be merged in to the `css-minify-tests` repo.
 1. After that, delete the `package-lock.json` and `node_modules` folder.
 1. Then run `npm i && npm run copy` to download the latest tests and copy them to this repo.
 1. `git add -A && git commit -m "Updated tests"`
