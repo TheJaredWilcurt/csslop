@@ -42,7 +42,7 @@ export const minifyCSS = function (input) {
   const output = [];
 
   try {
-    ast = parse(preprocessDeclarationBlocks(source), { preserveFormatting: true });
+    ast = parse(preprocessDeclarationBlocks(source), { preserveFormatting: true, silent: true });
   } catch {
     return source;
   }
