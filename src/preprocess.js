@@ -110,4 +110,131 @@ function preprocessDeclarationBlocks (css) {
   });
 }
 
-export { preprocessDeclarationBlocks };
+/**
+ * Unicode Private Use Area characters used as temporary placeholders
+ * for CSS escape sequences during preprocessing, preventing the parser
+ * from exceeding its internal escape-counting limit on large files.
+ */
+const ESCAPED_COLON_PLACEHOLDER = '\uE001';
+const ESCAPED_DOT_PLACEHOLDER = '\uE002';
+const ESCAPED_SLASH_PLACEHOLDER = '\uE003';
+
+/**
+ * Replaces common single-character CSS escape sequences with Unicode Private
+ * Use Area placeholder characters to prevent the parser from exceeding its
+ * internal escape-counting limit on files with many escaped selectors
+ * (e.g. Tailwind-style utility classes like `.sm\:p-0`).
+ *
+ * Only neutralizes escapes outside of attribute selector brackets `[...]`,
+ * quoted strings, and comments so the minifier's quote-vs-escape length
+ * comparisons in attribute selectors remain accurate.
+ *
+ * @param  {string} css  The raw CSS string to preprocess.
+ * @return {string}      The CSS with escape sequences replaced by placeholders.
+ */
+function neutralizeEscapeSequences (css) {
+  let result = '';
+  let insideBrackets = false;
+  let insideString = false;
+  let stringDelimiter = '';
+  let insideComment = false;
+
+  for (let i = 0; i < css.length; i++) {
+    const character = css[i];
+    const nextCharacter = i + 1 < css.length ? css[i + 1] : '';
+
+    // Track block comment state
+    if (!insideString && !insideComment && character === '/' && nextCharacter === '*') {
+      insideComment = true;
+      result += '/*';
+      i++;
+      continue;
+    }
+    if (insideComment) {
+      if (character === '*' && nextCharacter === '/') {
+        insideComment = false;
+        result += '*/';
+        i++;
+        continue;
+      }
+      result += character;
+      continue;
+    }
+
+    // Track string state (preserve escapes inside strings)
+    if (!insideString && (character === '"' || character === '\'')) {
+      insideString = true;
+      stringDelimiter = character;
+      result += character;
+      continue;
+    }
+    if (insideString) {
+      if (character === '\\' && nextCharacter) {
+        result += character + nextCharacter;
+        i++;
+        continue;
+      }
+      if (character === stringDelimiter) {
+        insideString = false;
+        stringDelimiter = '';
+      }
+      result += character;
+      continue;
+    }
+
+    // Track attribute selector bracket state
+    if (character === '[') {
+      insideBrackets = true;
+      result += character;
+      continue;
+    }
+    if (character === ']') {
+      insideBrackets = false;
+      result += character;
+      continue;
+    }
+
+    // Replace escape sequences only outside brackets, strings, and comments
+    if (!insideBrackets && character === '\\') {
+      if (nextCharacter === ':') {
+        result += ESCAPED_COLON_PLACEHOLDER;
+        i++;
+        continue;
+      }
+      if (nextCharacter === '.') {
+        result += ESCAPED_DOT_PLACEHOLDER;
+        i++;
+        continue;
+      }
+      if (nextCharacter === '/') {
+        result += ESCAPED_SLASH_PLACEHOLDER;
+        i++;
+        continue;
+      }
+    }
+
+    result += character;
+  }
+
+  return result;
+}
+
+/**
+ * Restores the original CSS escape sequences from their Unicode Private Use
+ * Area placeholder characters after minification is complete.
+ *
+ * @param  {string} css  The minified CSS string with placeholders.
+ * @return {string}      The CSS with original escape sequences restored.
+ */
+function restoreEscapeSequences (css) {
+  return css
+    .replaceAll(ESCAPED_COLON_PLACEHOLDER, '\\:')
+    .replaceAll(ESCAPED_DOT_PLACEHOLDER, '\\.')
+    .replaceAll(ESCAPED_SLASH_PLACEHOLDER, '\\/');
+}
+
+export {
+  neutralizeEscapeSequences,
+  preprocessDeclarationBlocks,
+  restoreEscapeSequences
+};

@@ -44,6 +44,101 @@ function stringifyChildRules (rules, context) {
 }
 
 /**
+ * Splits a parameter string by commas while respecting nested parentheses,
+ * so commas inside function calls within default values are not treated as separators.
+ *
+ * @param  {string} parameterString  The comma-separated parameter string to split.
+ * @return {Array}                   An array of individual parameter strings.
+ */
+function splitParametersByComma (parameterString) {
+  const parameters = [];
+  let currentParameter = '';
+  let parenthesisDepth = 0;
+  for (const character of parameterString) {
+    if (character === '(') {
+      parenthesisDepth++;
+    } else if (character === ')') {
+      parenthesisDepth--;
+    }
+    if (character === ',' && parenthesisDepth === 0) {
+      parameters.push(currentParameter);
+      currentParameter = '';
+    } else {
+      currentParameter += character;
+    }
+  }
+  parameters.push(currentParameter);
+  return parameters;
+}
+
+/**
+ * Minifies a `@function` prelude (signature) by collapsing whitespace around
+ * parameter separators (commas) and default value delimiters (colons).
+ *
+ * @param  {string} prelude  The raw `@function` prelude string (e.g. "--tint(--color, --amount: 10%)").
+ * @return {string}          The minified prelude (e.g. "--tint(--color,--amount:10%)").
+ */
+function minifyFunctionPrelude (prelude) {
+  const trimmedPrelude = prelude.trim();
+  const openParenIndex = trimmedPrelude.indexOf('(');
+  if (openParenIndex === -1) {
+    return trimmedPrelude;
+  }
+  const functionName = trimmedPrelude.slice(0, openParenIndex);
+  const closeParenIndex = trimmedPrelude.lastIndexOf(')');
+  const innerContent = trimmedPrelude.slice(openParenIndex + 1, closeParenIndex);
+  const parameters = splitParametersByComma(innerContent);
+  const minifiedParameters = parameters.map((parameter) => {
+    // Collapse whitespace around the colon separating parameter name from default value
+    return parameter.trim().replace(/\s*:\s*/, ':');
+  });
+  return functionName + '(' + minifiedParameters.join(',') + ')';
+}
+
+/**
+ * Stringifies a generic `at-rule` AST node into minified CSS, with specialized
+ * prelude minification for `@function` rules and generic whitespace handling
+ * for other unknown at-rules.
+ *
+ * @param  {object} rule     The AST at-rule node with name, prelude, and rules.
+ * @param  {object} context  The minification context.
+ * @return {string}          The minified at-rule CSS string, or empty string if body is empty.
+ */
+function stringifyAtRule (rule, context) {
+  let minifiedPrelude;
+  if (rule.name === 'function') {
+    minifiedPrelude = minifyFunctionPrelude(rule.prelude || '');
+  } else {
+    // Collapse runs of whitespace to a single space for generic at-rules
+    minifiedPrelude = (rule.prelude || '').trim().replace(/\s+/g, ' ');
+  }
+
+  const bodyItems = (rule.rules || []).filter((item) => {
+    return item.type !== 'whitespace';
+  });
+  if (bodyItems.length === 0) {
+    return '';
+  }
+
+  const declarations = bodyItems.filter((item) => {
+    return item.type === 'declaration' && item.property;
+  });
+  const nestedRules = bodyItems.filter((item) => {
+    return item.type !== 'declaration';
+  });
+
+  const renderedDeclarations = stringifyDeclarations(declarations);
+  const renderedNestedRules = stringifyChildRules(nestedRules, context);
+  const body = [renderedDeclarations, renderedNestedRules].filter(Boolean).join('');
+  if (!body) {
+    return '';
+  }
+
+  const separator = minifiedPrelude ? ' ' : '';
+  return '@' + rule.name + separator + minifiedPrelude + '{' + body + '}';
+}
+
+/**
  * Processes a bare `:is()` selector by merging `:link`+`:visited` into `:any-link`,
  * de-duplicating, sorting alphabetically, and conditionally expanding into individual
  * selectors when all parts are simple type/universal selectors with no modifications.
@@ -543,11 +638,28 @@ function stringifyRule (rule, context, nested = false) {
     return '@position-try ' + rule.name + '{' + renderedDeclarations + '}';
   }
 
+  if (rule.type === 'document') {
+    const children = stringifyChildRules(rule.rules, context);
+    if (!children) {
+      return '';
+    }
+    const vendor = rule.vendor || '';
+    const condition = (rule.document || '')
+      .trim()
+      // Remove spaces between document condition function calls (e.g. "), " → ",")
+      .replace(/\)\s*,\s*/g, '),');
+    return '@' + vendor + 'document ' + condition + '{' + children + '}';
+  }
+
   if (rule.type === 'comment') {
     if (rule.comment.startsWith('!')) {
       return '/*' + rule.comment + '*/';
     }
     return '';
+  }
+
+  if (rule.type === 'at-rule') {
+    return stringifyAtRule(rule, context);
   }
 
   return ''; // Ignore unknown for now
