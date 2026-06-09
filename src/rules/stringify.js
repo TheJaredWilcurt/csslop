@@ -324,17 +324,6 @@ function stringifyRule (rule, context, nested = false) {
       });
       uniqueSelectors = uniqueSelectors.flatMap(processIsSelector);
       uniqueSelectors = [...new Set(uniqueSelectors)];
-      const headingSet = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-      const isAllHeadings = (
-        rule.selectors.length === 6 &&
-        uniqueSelectors.length === 6 &&
-        uniqueSelectors.every((selector) => {
-          return headingSet.has(selector);
-        })
-      );
-      if (isAllHeadings) {
-        uniqueSelectors = [':heading'];
-      }
       output.push(uniqueSelectors.join(','));
     }
     output.push('{');
