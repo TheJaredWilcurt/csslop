@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Experimental CSS minification",
   "scripts": {
     "copy": "node ./scripts/copyTests.js",
@@ -25,7 +25,7 @@
     "eslint-config-tjw-import-x": "^1.0.1",
     "eslint-config-tjw-jsdoc": "^2.0.1",
     "eslint-plugin-import-x": "^4.16.2",
-    "eslint-plugin-jsdoc": "^63.0.0",
+    "eslint-plugin-jsdoc": "^63.0.2",
     "globals": "^17.6.0",
     "real-world-css-libraries": "^1.0.2"
   },

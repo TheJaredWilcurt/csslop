@@ -12,7 +12,11 @@ import {
   filterRedundantCharsets,
   filterUnusedPositionTry
 } from './position-try.js';
-import { preprocessDeclarationBlocks } from './preprocess.js';
+import {
+  neutralizeEscapeSequences,
+  preprocessDeclarationBlocks,
+  restoreEscapeSequences
+} from './preprocess.js';
 import {
   deduplicateKeyframes,
   expandPureNestedRules,
@@ -42,7 +46,10 @@ export const minifyCSS = function (input) {
   const output = [];
 
   try {
-    ast = parse(preprocessDeclarationBlocks(source), { preserveFormatting: true });
+    ast = parse(
+      preprocessDeclarationBlocks(neutralizeEscapeSequences(source)),
+      { preserveFormatting: true, silent: true }
+    );
   } catch {
     return source;
   }
@@ -83,7 +90,7 @@ export const minifyCSS = function (input) {
       output.push(stringifyRule(rule, context));
     }
 
-    return output.join('');
+    return restoreEscapeSequences(output.join(''));
   }
 
   return source;
