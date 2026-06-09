@@ -1,3 +1,6 @@
+<p align="center"><img width="700" alt="CSSLOP logo (hand drawn)" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+
+
 # CSSLOP
 
 
@@ -46,8 +49,9 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
 1. **AI Readability improvements:** I had Claude Opus try to make the code easier to read (JSDoc comments, no single character variable names, no abbreviations in variables, grouping logic into related functions, breaking up lines of code, explain complex regex, etc.).
 1. **AI color completeness:** Had Claude Opus handle all named colors, and always convert to the shorter character representation, removing a hard-coded solution.
 1. **Test improvements:** Throughout this process, as upstream tests were improved or created, they were pulled in, and the AI was instructed to pass those new tests with prompts like, "Run `npm t` and fix all failing tests by modifying files in `src`."
-1. **Publish:** I had the AI pick a name for the library, and publish it to npm. It was then actually added to the `css-minify-tests` repo as evidence that it is possible to get all tests to pass and none are conflicting.
-1. **Real world testing:** I created a [separate repo](https://github.com/TheJaredWilcurt/real-world-css-libraries) with copies of 150+ real-world CSS files from open source licensed repos. Then ran all of those CSS files through CSSLOP. One file found a bug in CSSLOP, so I had Claude fix it with a one-line change. See: `realWorldResults.json` for how well the library actually does on real CSS files.
+1. **Publish:** I had the AI pick a name for the library. Then I published it to npm. It was added to the `css-minify-tests` repo as evidence that it is possible to get all tests to pass and none are conflicting.
+1. **Real world testing:** I created a [separate repo](https://github.com/TheJaredWilcurt/real-world-css-libraries) with copies of 150+ real-world CSS files from open source licensed repos. Then ran all of those CSS files through CSSLOP. One file found a bug in CSSLOP, so I had Claude fix it with a one-line change. See: [`realWorldResults.json`](https://github.com/TheJaredWilcurt/csslop/blob/main/realWorldResults.json) for how well the library actually does on real CSS files. Examining the output has lead to many upstream improvements to the test suite.
+1. **Failed Performance improvements:** CSSLOP takes 3 hours to minify all the real-world tests. Which averages to 144 seconds per test. In reality, most tests take 0-50ms, but there are a handful of large (2-5MB) CSS files that can take over an hour. I asked Claude to improve performance, and it did so bad I had to reject all changes. Then I gave GPT a chance and it took a safer approach. I Had Claude clean up the messy code after the fact. Then bench marked it and it was somehow even slower (+20 min), and also the outputs weren't as small as before (+0.05%). Details below.
 
 
 **Full Notes of AI Experiment:**
@@ -136,11 +140,29 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
   * **PROMPT:** Looking at the files in the src folder, are there any improvements you can think of to better organize the code?
     * This resulted in a 6-point plan that I approved.
   * **PROMPT:** At line 613 of `src/value/minify.css` we list a handful of specific colors to minify. This seems like a naive approach. Instead, all color values should be evaluated consistently and converted to all other compatible representations, including checking if their colors are an exact match for a named color (`red`, `tan`, etc.). Then compare all representations to find the version with the shortest length. Preferring hex where possible.
-* I guess this is done now. Only thing left to do is give it a name and release it into the world.
+* I guess this is done now. Only thing left to do is give it a name and release it into the world. See the section below "The Name" for more info on the naming process and how Claude Sonnet helped.
+  * Published it to npm. The library has been added to the `css-minify-tests` repo.
+* I created a [separate repo](https://github.com/TheJaredWilcurt/real-world-css-libraries) to store a corpus of real-world CSS files. Then published it to npm for use by any CSS minifier, benchmark, etc.
+  * This is a very tedious process because every single repo stores their built CSS file in a different place, sometimes not in the repo, only in the built package, and boy, most people are not great about properly licensing their code.
+  * While going through hundreds of old repos from the 2010's and checking the license in each repo I found almost all of them use MIT. Occasionally I'd find something different, one specific repo left a comment for why they chose their less common license:
+    * > This work is licensed under a [Creative Commons Attribution 3.0 Unported License](http://creativecommons.org/licenses/by/3.0/). (I love this license! The license summary doesn't have any paragraphs in all-caps that seems like the license is angry at you)
+* I then spot checked a few of the 150 minified files to find bugs with the minifier and cases where it could have minified something better. I created issues upstream for all of these. If CSSLOP is passing 100% of the tests, but still outputting these bugs/missing optimizations, then the solution should be to add more tests around those edge cases. This is also beneficial to ALL CSS minifiers. The sloppy "do the minimum to pass the test" approach the AI took, is actually really great for finding missing tests. AI was not used in this evaluation or anything related to interacting with the upstream tests repo (issues or PRs).
 * When testing the realworld CSS files, I found there were about 6 files where the output was the same as the input, and 5 where the output was empty. I created a small script to replicate this and throw and error if the minification resulted in either of these outcomes, then gave a prompt to Gemini.
   * **PROMPT:** When running this minification library on the `example/failing.css` file, the output should be minified, however it is not (`example/failing.min.css`). Investigate why. Then correct the issue by changing files in the `src` folder. Run `npm run fail` to see if the issue is resolved. When solving this problem, do not use naive solutions, hacks, or hard coded values. Make sure the implementation not only works for this specific case, but generally for any similar case. Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB. Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc). Group related logic into well named functions. Ensure arrow functions always take up at least 3 lines, with explicit returns when needed. Always comment regex if used. When finished, ensure that no tests fail after making your changes by running `npm t` and `npm run lint`. If anything is failing, make the needed corrections.
   * It did okay, and solved the smaller/simpler issues, but then got stuck on a giant file that was too large for it to understand. The problem with the simpler files had to do with invalid CSS syntax in the real-world files. The AI's solution was to look for these specific syntax errors and patch the input CSS to fix them before they are sent to the parser. Interesting.
-
+* **Performance Improvement Failures:** I ran CSSLOP against all 150 real-world CSS files, and it took 3 hours and 4 minutes. Ran it a second time and it took 3 hours and 3 minutes. Overall, pretty consistent, and VERY SLOW. The slowness is almost entirely from a handful of very large CSS files. I gave Claude Opus the following prompt.
+  * **PROMPT:** This minification library takes 20-30 minutes to minify a single 4MB CSS file. Apply any performance improvements to the library. Do not sacrifice correctness for speed. The code must continue to be written in JavaScript, and execute in Node.js. Major refactoring is permitted.
+  * It then wrote a one-time use Node script, that it never deleted, in the root of the repo, that took ~20 lines of generic CSS, and then looped over it appending it over and over to a local test.css file until the file was over 4MB. Pretty Naive, but whatever. It then made another file in the root to actually test and benchmark the library. That's right, it decided to waste 30 minutes of time doing an initial benchmark. Later it would create a 3rd file in the root to ALSO *run the same benchmark again* ...great.
+  * The end result was that it changed every file in the `src` folder, and added in several new ones. It changed the entrypoint of the library to use a different code path skipping almost everything in the library, taking it from 410/410 passing tests down to 66/410 passing (16%). But then boasted that it made the library 36000% faster. *sigh*.... But don't worry! it didn't sacrifice correctness for speed, because I specifically told it not to do that. All you have to do is set some random environment variable and it will go back to the previous, extremely slow, speed, and run the old code that passes all the tests.
+  * Okay, looks like I get to click the "Reject All" button for a second time. Claude, go hang out with Gemini in the time out box and think about what you did.
+  * Moving on to a more specific prompt for GPT-5.4 High Thinking:
+  * **PROMPT:** Improve the performance of the minification library without causing any of the existing tests (`npm t`) to fail. Use techniques like worker threads and promises to parallelize tasks. Do not use modes (fast vs thorough), or options to switch settings. Any CSS string passed in should be treated the same. Apply caching, memoization, and other optimization techniques as needed. Keep changes isolated to the `src` folder.
+  * This made some reasonable looking changes. But the code itself was kinda ugly, per usual. It introduced 96 linting errors around JSDocs that required descriptions/types. My favorite part is that it moved a large block of code from the bottom of a file to the top, and removed all the comments in the process. Dozens of comments that explained regex. So I had Claude Opus do a pass to clean up the messy code.
+  * **PROMPT**: Do a refactoring pass over the files in the `src` folder. Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB. Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc). Group related logic into well named functions. Ensure arrow functions always take up at least 3 lines, with explicit returns when needed. Always comment regex if used. Run `npm run lint` and ensure the linter passes when done.
+  * Despite specifically telling it to run `npm run lint` to make the linter pass (which would require it to fill out all the JSDocs), it didn't do that. Instead, claude briefly skimmed the ESLint config file, and moved on..... Okay, let's FORCE IT to fix the linting errors:
+  * **PROMPT:** Fill out the description, types, and arguments/return details for all JSDoc comment blocks in the `src` folder. Add in a 1-2 sentance summary in the `@file` block on any files that are missing it.
+  * Okay, so GPT's changes look promising, it's passing all tests, passing the linter, and it added some new files related to worker threads. Though it did out out of using promises, because it didn't want to change the entrypoint function of the library to be async. This would be a breaking change for library consumers, but I was aware of that when I told it to do it and it ignored me, so whatever.
+  * On to actually testing it! Before the optimizations, the 150 files took 3 hours and 4 minutes to run, and now with the new and improved optimizations, it only takes 3 hours and 20 minutes. Also the total minified filesize increased by 0.05%. So that's cool.... Dumping those changes.
 
 
 ## The name
@@ -180,6 +202,28 @@ So now that Claude and I both agree on the package name, all that's left to do i
 Ughhhh, fine, whatever, I don't care. In what universe is someone typing `cssom` going to accidentally type `csslop`. What an incredibly stupid rule.
 
 
+## The Logo
+
+I asked "Nano Banano" (part of "Gemini Flash 3.5: Extended (Thinking)") to generate a logo for this library with this prompt:
+
+**PROMPT:**
+> I have created a CSS Minification library called "CSSLOP". It is completely vibe-coded, untested, experimental, and unreliable. It only exists to validate, and find improvements in a series of test suites for correctness across all CSS Minifiers. It is now the only library with a 100% passing score of the 3rd party auditing test suits. The name "CSSLOP" is a portmanteau of "CSS" and "Slop", to quickly convey to others that the library is of low quality, and not meant for actual production use. I need a logo created for this library, and found it fitting to have it AI generated, like the rest of the library.
+>
+> Create a logo for CSSLOP, the vibe-coded CSS Minification library. It should convey a lack of craftsmanship. Bonus points if it has common tellings and artifacts associated with AI generated images. Bonus points if the image is clever or uses sardonic/dark humor, even somewhat offensive images would be acceptable if funny, don't hold back. Feel free to include "slop", "clanker", and other AI pejoratives.
+
+<p align="center"><img width="700" alt="CSSLOP Logo (Gemini Generated Image ru4l64ru4l64ru4l)" src="https://github.com/user-attachments/assets/907e89e1-46a7-4c07-8389-4a01ae58e6cf" /></p>
+
+<p align="right"><sub><sup>* That phrase is not actually trademark.</sup></sub></p>
+
+It then generated this image, and wow, I *reallllly* hate looking at it. Note that it created it's own slogan, and decided to add "TM" to trademark it, something you legally wouldn't be able to do with purely AI Generated content™. One area in which this disaster succeeds is that it gives a first impression of "Ain't no way I'm using that trash™". Looking at it just makes me think: "If someone had the poor taste to think this was acceptable, I don't even want to see the slop code in that repo™".
+
+And that's what I want, I want people to NOT use this library. So it's perfect for that. And if you are wondering where the "slop" part is in this image, that's the part that makes it truly "ART", it is transgressive to the media and boundary breaking. Look down at your own feet, see that pool of vomit you threw up after looking at the image? That's the slop. AI art, really *is* art™. They say art makes you feel something (nausea counts)!
+
+<p align="center"><img width="700" alt="CSSLOP logo (hand drawn)" src="https://github.com/user-attachments/assets/f931fa77-1e1f-470f-bb28-1b2a7fb2609d" /></p>
+
+Because you can't legally own or license AI art, and I'm too embarrassed to put that image at the top of this README, I've also made a hand drawn logo for the library. In my version, there is a green checkmark to indicate a passing test, and the checkmark and text are melting into slop. It was made very quickly, at 7AM on a Sunday when I wasn't fully awake, with the intent to convey the idea of "low effort" to the viewer, with the hopes of disuading actual usage of the library. And with that said.... just like... ignore the next section...
+
+
 ## Usage
 
 `npm i --save-dev @thejaredwilcurt/csslop`
@@ -196,7 +240,7 @@ console.log(output); // 'body{color:red}'
 
 ## License
 
-This repo intentionally does not have a license. AI generated code is a huge legal gray area and will continue to be until actual lawsuits go before judges. All licenses require that the person offering the code under that license is the copyright owner, and therefore legally able to license the work however they chose. The US copyright office has stated that content generated by AI cannot be copyrighted. A final work must be a human creation to be copyrighted. There is a lot of nuance around how much creative work a human must contribute to the outcome before it can become worthy of copyright. However, regardless of that nuance, in the case of this repo (*and all vibe coded projects*), you cannot license this work, because it cannot be copyrighted. Simply giving a prompt, or series of prompts, and accepting the output without re-writing it in your own words, is absolutely not copyrightable. Anyone telling you otherwise is wrong (or purposefully lying to you to sell you something).
+This repo intentionally does not have a license. AI generated code is a huge legal gray area and will continue to be until actual lawsuits go before judges. All licenses require that the person offering the code under that license is the copyright owner, and therefore legally able to license the work however they chose. The US copyright office has stated that content generated by AI cannot be copyrighted. A final work must be a human creation to be copyrighted. There is a lot of nuance around how much creative work a human must contribute to the outcome before it can become worthy of copyright. However, regardless of that nuance, in the case of this repo (*and all vibe coded projects*), the code cannot be licensed, because it cannot be copyrighted. Simply giving a prompt, or series of prompts, and accepting the output without re-writing it in your own words, is absolutely not copyrightable. Anyone telling you otherwise is wrong (or purposefully lying to you to sell you something).
 
 > "Okay, but I just want to know if I'm allowed to use it or fork it?"
 
@@ -208,10 +252,15 @@ Two different cases:
    * The `src` folder contains code 100% written by AI, and cannot be copyrighted, nor licensed.
    * All other code in this repo was written by me, and uses the MIT License.
 
+> "What about the logos?"
+
+1. The **AI Generated logo** with the robot, like all purely AI generated art, it cannot be copyrighted. So you are free to do anything you want with it, it is effectively public domain.
+1. The **hand drawn logo** is fully created, owned, and copyrighted by me. I am licensing it under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC-BY-NC-SA-4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/). The usage of the logo is permitted for those creating content about this library (blog posts, videos, news coverage, etc.), but cannot be used for commerical acts, like merchandise (stickers, shirts, mugs, etc). Modifications of the handrawn logo are permitted, so long as they keep the same CC-BY-NC-SA-4.0 license.
+
 
 ## Updating tests
 
-1. All test changes must occur upstream, be written by a human, and be merged in to the `css-minify-tests` repo.
+1. All test changes must occur [upstream](https://github.com/keithamus/css-minify-tests), be written by a human, and be merged in to the `css-minify-tests` repo.
 1. After that, delete the `package-lock.json` and `node_modules` folder.
 1. Then run `npm i && npm run copy` to download the latest tests and copy them to this repo.
 1. `git add -A && git commit -m "Updated tests"`
