@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 import getRealWorldCSS from 'real-world-css-libraries';
 
-import { minifyCSS } from '../../index.js';
+import { minifyCSS } from '../index.js';
 
 const __dirname = import.meta.dirname;
 
@@ -100,7 +100,7 @@ for (const library of libraries) {
   delete library.license;
 }
 
-const reportPath = join(__dirname, '..', '..', 'realWorldResults.json');
+const reportPath = join(__dirname, '..', 'realWorldResults.json');
 const report = JSON.stringify({
   totals: {
     inputSize: totalInput,
