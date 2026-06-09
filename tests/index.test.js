@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { join } from 'path';
 
-import { minifyCSS } from '../../index.js';
+import { minifyCSS } from '../index.js';
 
 let pass = 0;
 let fail = 0;
@@ -21,7 +21,7 @@ const folders = {};
 function loadAllTests () {
   const allTests = [];
   const __dirname = import.meta.dirname;
-  const copiedTests = join(__dirname, '..', '..', 'copiedTests');
+  const copiedTests = join(__dirname, '..', 'copiedTests');
   const testFolders = readdirSync(copiedTests);
   for (const folder of testFolders) {
     folders[folder] = { fail: 0, total: 0 };

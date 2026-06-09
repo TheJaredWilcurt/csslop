@@ -6,8 +6,8 @@
   "description": "Experimental CSS minification",
   "scripts": {
     "copy": "node ./scripts/copyTests.js",
-    "test": "node ./tests/css/index.test.js",
-    "real": "node ./tests/css/realworld.test.js",
+    "test": "node ./tests/index.test.js",
+    "real": "node ./tests/realworld.test.js",
     "lint": "eslint *.js scripts src tests --fix",
     "bump": "npx --yes -- @jsdevtools/version-bump-prompt && npm i",
     "publish": "npm publish --access=public"
