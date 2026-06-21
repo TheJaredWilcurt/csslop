@@ -88,7 +88,8 @@ export const minifyCSS = function (input) {
     const declarationMergedRules = mergeByDeclarations(mergedRules);
     const nestedRules = nestFlatRules(declarationMergedRules);
     const nonEmptyRules = removeEmptyRules(nestedRules);
-    const finalRules = nestFlatRules(nonEmptyRules);
+    const factoredRules = factorCommonParents(nonEmptyRules);
+    const finalRules = nestFlatRules(factoredRules);
 
     for (const rule of finalRules) {
       output.push(stringifyRule(rule, context));
