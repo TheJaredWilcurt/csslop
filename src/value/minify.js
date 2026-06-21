@@ -27,6 +27,7 @@ import {
   roundCompactNumber
 } from './shared.js';
 import { minifyTransformValue } from './transforms.js';
+import { optimizeUnicodeRange } from './unicode-range.js';
 
 /**
  * Map of position-area two-keyword values to their single-keyword equivalents.
@@ -692,27 +693,9 @@ function minifyValue (declaration) {
     val = minifyGradients(val);
   }
 
-  // Unicode range compaction: U+0000-00FF -> U+??
+  // Unicode range optimization: dedup, merge overlapping/adjacent, wildcard compression
   if (declaration.property === 'unicode-range') {
-    val = val.replace(/U\+([0-9a-fA-F]+)-([0-9a-fA-F]+)/gi, (match, startHex, endHex) => {
-      const len = Math.max(startHex.length, endHex.length);
-      const s = startHex.padStart(len, '0').toUpperCase();
-      const e = endHex.padStart(len, '0').toUpperCase();
-      let prefixLen = 0;
-      while (prefixLen < len && s[prefixLen] === e[prefixLen]) {
-        prefixLen++;
-      }
-      const suffixS = s.slice(prefixLen);
-      const suffixE = e.slice(prefixLen);
-      // Check if the suffix range spans all values (all-zeros start, all-F end) for wildcard replacement
-      if (/^0*$/.test(suffixS) && /^F*$/i.test(suffixE)) {
-        const wildcardCount = len - prefixLen;
-        // Strip leading zeros from the common prefix
-        const prefix = s.slice(0, prefixLen).replace(/^0+/, '');
-        return 'U+' + prefix + '?'.repeat(wildcardCount);
-      }
-      return match;
-    });
+    val = optimizeUnicodeRange(val);
   }
 
   return val;
