@@ -20,6 +20,7 @@ import {
 import {
   deduplicateKeyframes,
   expandPureNestedRules,
+  factorCommonParents,
   mergeByDeclarations,
   mergeLayerRules,
   mergeMediaRules,
@@ -85,8 +86,10 @@ export const minifyCSS = function (input) {
 
     const mergedRules = mergeSelectorRules(ast.stylesheet.rules);
     const declarationMergedRules = mergeByDeclarations(mergedRules);
-    const nonEmptyRules = removeEmptyRules(declarationMergedRules);
-    const finalRules = nestFlatRules(nonEmptyRules);
+    const nestedRules = nestFlatRules(declarationMergedRules);
+    const nonEmptyRules = removeEmptyRules(nestedRules);
+    const factoredRules = factorCommonParents(nonEmptyRules);
+    const finalRules = nestFlatRules(factoredRules);
 
     for (const rule of finalRules) {
       output.push(stringifyRule(rule, context));

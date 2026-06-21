@@ -216,6 +216,102 @@ function nestFlatRules (rules) {
 }
 
 /**
+ * Extracts the leading compound selector of a complex selector: everything up to
+ * the first top-level combinator (descendant whitespace, `>`, `+`, or `~`).
+ * Combinator characters nested inside `()` or `[]` (such as `:nth-child(2n+1)` or
+ * `[a~=b]`) are ignored so only structural combinators split the selector.
+ *
+ * @param  {string}      selector  The selector string to inspect.
+ * @return {string|null}           The leading compound selector, or null when the selector has no descendant part to factor out.
+ */
+function extractLeadingCompound (selector) {
+  const trimmed = selector.trim();
+  let bracketDepth = 0;
+  for (let index = 0; index < trimmed.length; index++) {
+    const character = trimmed[index];
+    if (character === '(' || character === '[') {
+      bracketDepth++;
+    } else if (character === ')' || character === ']') {
+      bracketDepth--;
+    } else if (
+      bracketDepth === 0 &&
+      (character === ' ' || character === '>' || character === '+' || character === '~')
+    ) {
+      const compound = trimmed.slice(0, index).trim();
+      return compound.length ? compound : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Groups consecutive sibling rules that share a common leading compound selector
+ * (such as `.foo` in `.foo .a`, `.foo .b`) into a synthesized parent rule with the
+ * shared portion factored out, but only when nesting trims more characters from the
+ * child selectors than the wrapper itself costs.
+ *
+ * @param  {Array} rules  The flat AST rule nodes to factor.
+ * @return {Array}        A new array of rules with shared parent selectors factored into nesting wrappers.
+ */
+function factorCommonParents (rules) {
+  const result = [];
+  let index = 0;
+  while (index < rules.length) {
+    const rule = rules[index];
+    // Only single-selector style rules can act as a factoring candidate.
+    if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
+      result.push(rule);
+      index++;
+      continue;
+    }
+    const candidateParent = extractLeadingCompound(rule.selectors[0]);
+    if (candidateParent === null) {
+      result.push(rule);
+      index++;
+      continue;
+    }
+    // Collect the run of consecutive rules that can all nest under the candidate.
+    const run = [];
+    const nestedForms = [];
+    let lookahead = index;
+    while (lookahead < rules.length) {
+      const sibling = rules[lookahead];
+      if (sibling.type !== 'rule' || sibling.selectors?.length !== 1) {
+        break;
+      }
+      const nestedSelector = tryNestSelector(candidateParent, sibling.selectors[0]);
+      if (nestedSelector === null) {
+        break;
+      }
+      run.push(sibling);
+      nestedForms.push(nestedSelector);
+      lookahead++;
+    }
+    // The wrapper writes the shared selector once plus its surrounding braces.
+    const wrapperCost = candidateParent.length + 2;
+    const charactersSaved = run.reduce((total, sibling, position) => {
+      return total + sibling.selectors[0].trim().length - nestedForms[position].length;
+    }, 0);
+    if (run.length >= 2 && charactersSaved > wrapperCost) {
+      const children = run.map((sibling, position) => {
+        return { ...sibling, selectors: [nestedForms[position]] };
+      });
+      result.push({
+        type: 'rule',
+        selectors: [candidateParent],
+        // Recurse so deeper shared prefixes among the children also factor out.
+        declarations: factorCommonParents(children)
+      });
+      index = lookahead;
+    } else {
+      result.push(rule);
+      index++;
+    }
+  }
+  return result;
+}
+
+/**
  * Merges adjacent `@media` rules that share an identical normalized query string and deduplicates their child selector rules.
  *
  * @param  {Array}                  rules               The AST rule nodes to process.
@@ -411,6 +507,7 @@ function mergeLayerRules (rules, mergeSelectorRules) {
 export {
   deduplicateKeyframes,
   expandPureNestedRules,
+  factorCommonParents,
   mergeByDeclarations,
   mergeLayerRules,
   mergeMediaRules,
