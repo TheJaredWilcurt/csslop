@@ -1,3 +1,9 @@
+/* eslint-disable import-x/no-extraneous-dependencies */
+
+/**
+ * @file Vite config.
+ */
+
 import { resolve } from 'node:path';
 
 import { defineConfig } from 'vite';
