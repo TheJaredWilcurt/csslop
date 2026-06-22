@@ -5,6 +5,7 @@
   "version": "0.0.7",
   "description": "Experimental CSS minification",
   "scripts": {
+    "start": "vite",
     "copy": "node ./scripts/copyTests.js",
     "test": "node ./tests/index.test.js",
     "real": "node ./tests/realworld.test.js",
@@ -27,7 +28,8 @@
     "eslint-plugin-import-x": "^4.16.2",
     "eslint-plugin-jsdoc": "^63.0.2",
     "globals": "^17.6.0",
-    "real-world-css-libraries": "^1.0.2"
+    "real-world-css-libraries": "^1.0.2",
+    "vite": "^8.0.16"
   },
   "author": "The Jared Wilcurt",
   "homepage": "https://github.com/TheJaredWilcurt/csslop#readme",
