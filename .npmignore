@@ -2,10 +2,13 @@
 .github/
 copiedTests/
 node_modules/
+public/
 scripts/
 tests/
 .editorconfig
 .gitignore
 .npmignore
 eslint.config.js
+favicon.png
+index.html
 realWorldResults.json
