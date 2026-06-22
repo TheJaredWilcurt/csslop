@@ -7,11 +7,20 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"
     >
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/sunburst.min.css">
+    <link
+      id="theme"
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/water.css@2/out/dark.css"
+    >
+    <link
+      id="code-theme"
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/sunburst.min.css"
+    >
   </head>
   <body>
-    <div id="app">
-      <div class="title">
+    <div id="app" v-cloak>
+      <div class="title" :class="{ dark: theme === 'dark' }">
         <div class="left">
           <a href="https://github.com/TheJaredWilcurt/csslop">
             <img
@@ -25,17 +34,13 @@
           </h1>
         </div>
         <div class="right">
-          <button @click="theme = (theme === 'dark' ? 'light' : 'dark')">
+          <button @click="toggleTheme">
             <template v-if="theme === 'light'">Dark</template>
             <template v-else>Light</template>
             Mode
           </button>
         </div>
       </div>
-      <link
-        rel="stylesheet"
-        :href="'https://cdn.jsdelivr.net/npm/water.css@2/out/' + theme + '.css'"
-      >
       <div class="duration">{{ duration }}ms</div>
       <div class="container">
         <textarea v-model="input"></textarea>
@@ -45,7 +50,7 @@
     <style>
       @font-face {
         font-family: 'Melting Dessert';
-        src: url('melting-dessert.woff') format('woff');
+        src: url('/csslop/melting-dessert.woff') format('woff');
         font-weight: normal;
         font-style: normal
       }
@@ -62,9 +67,13 @@
         max-width: 100%;
         font-family: sans-serif;
       }
+      [v-cloak] {
+        display: none;
+      }
       h1 {
         margin: 0px;
         font-family: "Melting Dessert", sans-serif;
+        color: #C00000;
         span {
           font-size: 1rem;
         }
@@ -77,6 +86,9 @@
           width: 159px;
           height: 40px;
         }
+      }
+      .title.dark h1 {
+        color: #00C000;
       }
       .left,
       .right {
@@ -97,13 +109,16 @@
           width: 100%;
           height: 100% !important;
           background: var(--background);
-          border-radius: 0px;
+          border-radius: 10px;
           margin: 0px;
           padding: 1rem;
           font-family: monospace;
           resize: none;
           transition: 0s;
         }
+      }
+      textarea:focus {
+        box-shadow: none !important;
       }
       pre {
         white-space: pre-wrap;
@@ -138,6 +153,38 @@
           };
         },
         methods: {
+          loadTheme: function () {
+            let theme = localStorage.getItem('csslop-theme');
+            if (theme && ['light', 'dark'].includes(theme)) {
+              this.setTheme(theme);
+            } else if (!window.matchMedia('(prefers-color-scheme: dark)')) {
+              this.setTheme('light');
+            } else {
+              this.setTheme('dark');
+            }
+          },
+          setTheme: function (theme) {
+            this.theme = theme;
+            localStorage.setItem('csslop-theme', theme);
+            const linkTheme = document.getElementById('theme');
+            const codeTheme = document.getElementById('code-theme');
+            const themeUrl = linkTheme.getAttribute('href');
+            const codeUrl = codeTheme.getAttribute('href');
+            if (theme === 'light') {
+              linkTheme.setAttribute('href', themeUrl.replace('dark', 'light'));
+              codeTheme.setAttribute('href', codeUrl.replace('sunburst', 'atom-one-light'));
+            } else {
+              linkTheme.setAttribute('href', themeUrl.replace('light', 'dark'));
+              codeTheme.setAttribute('href', codeUrl.replace('atom-one-light', 'sunburst'));
+            }
+          },
+          toggleTheme: function () {
+            if (this.theme === 'dark') {
+              this.setTheme('light');
+            } else {
+              this.setTheme('dark');
+            }
+          },
           minfiy: function () {
             const start = Date.now();
             const css = minifyCSS(this.input);
@@ -232,6 +279,7 @@
           }
         },
         created: function () {
+          this.loadTheme();
           this.loadUrlParams();
         }
       }).mount('#app');

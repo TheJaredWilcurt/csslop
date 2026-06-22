@@ -6,6 +6,7 @@
   "description": "Experimental CSS minification",
   "scripts": {
     "start": "vite",
+    "build": "vite build",
     "copy": "node ./scripts/copyTests.js",
     "test": "node ./tests/index.test.js",
     "real": "node ./tests/realworld.test.js",
