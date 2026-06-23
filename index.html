@@ -212,6 +212,7 @@
           border-radius: 10px;
         }
         .cm-focused { outline: none; }
+        .cm-cursor { border-color: #000; }
         .cm-gutters { background: var(--background); }
         .cm-activeLineGutter { background: var(--border); }
         .cm-activeLine { background-color: #CCEEFF87; }
@@ -219,9 +220,17 @@
         .hljs { background: var(--background); }
       }
       #codemirror.dark {
+        ::selection,
+        ::-moz-selection {
+            background: var(--border) !important;
+            color: #FFF;
+            text-shadow: none;
+        }
+        .cm-cursor { border-color: #FFF; }
         .cm-gutters { background: var(--button-base); }
         .cm-content { background: var(--background); }
         .cm-gutters { border-color: var(--background-body); }
+        .cm-tooltip,
         .cm-activeLineGutter { background: var(--background-alt); }
         .cm-activeLine { background-color: var(--background-body); }
         .cm-specialChar { color: #65B042; }
@@ -250,7 +259,9 @@
       src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"
     ></script>
     <script type="module">
+      import { acceptCompletion } from '@codemirror/autocomplete';
       import { css as codeMirrorCss } from '@codemirror/lang-css';
+      import { keymap } from '@codemirror/view';
       import {
         basicSetup,
         EditorView
@@ -278,6 +289,12 @@
               extensions: [
                 basicSetup,
                 codeMirrorCss(),
+                keymap.of([
+                  {
+                    key: 'Tab',
+                    run: acceptCompletion
+                  }
+                ]),
                 EditorView.updateListener.of((update) => {
                   if (update.docChanged) {
                     this.input = this.mirror.state.doc.toString();
