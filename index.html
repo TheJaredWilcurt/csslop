@@ -34,6 +34,20 @@
           </h1>
         </div>
         <div class="right">
+          <select
+            v-model="realSelected"
+            title="Try a real world CSS file"
+            @change="loadRealSelection"
+          >
+            <option
+              v-for="library in realFilesMap"
+              :value="library.fileName"
+            >
+              {{ library.name }}
+              ({{ (Math.round(library.size / 1024)).toLocaleString() }}KB)
+            </option>
+          </select>
+
           <button @click="toggleTheme">
             <template v-if="theme === 'light'">Dark</template>
             <template v-else>Light</template>
@@ -41,9 +55,14 @@
           </button>
         </div>
       </div>
-      <div class="duration">{{ duration }}ms</div>
-      <div class="container">
-        <textarea v-model="input"></textarea>
+      <div class="duration" title="Time to minify">
+        {{ duration.toLocaleString() }}ms
+      </div>
+      <div
+        id="codemirror"
+        class="container"
+        :class="{ dark: theme === 'dark' }"
+      >
         <pre v-html="output" class="hljs"></pre>
       </div>
     </div>
@@ -97,6 +116,9 @@
         justify-content: center;
         gap: 1rem;
       }
+      select {
+        font-size: 0.75rem;
+      }
       .container {
         display: flex;
         width: 100%;
@@ -106,30 +128,52 @@
         padding: 0rem 1rem;
         gap: 1rem;
         > * {
-          width: 100%;
-          height: 100% !important;
-          background: var(--background);
-          border-radius: 10px;
-          margin: 0px;
-          padding: 1rem;
-          font-family: monospace;
-          resize: none;
-          transition: 0s;
         }
       }
-      textarea:focus {
-        box-shadow: none !important;
+      pre,
+      .cm-editor {
+        width: 600px;
+        max-width: 50%;
+        height: 100% !important;
       }
       pre {
+        background: var(--background);
+        border-radius: 10px;
+        margin: 0px;
+        padding: 1rem;
+        font-family: monospace;
         white-space: pre-wrap;
         word-break: break-all;
+        overflow: auto;
+        resize: none;
+        transition: 0s;
       }
       .duration {
         position: absolute;
-        right: 1.5rem;
+        right: 3.5rem;
         margin-top: 3px;
         font-size: 0.75rem;
         opacity: 0.7;
+      }
+      #codemirror.dark {
+        .cm-gutters,
+        .cm-content {
+          background: var(--background);
+        }
+        .cm-specialChar { color: #65B042; }
+        .\00037Cb { color: #3387CC; }
+        .\00037Cc { color: inherit; }
+        .\00037Cd { color: #3387CC; }
+        .\00037Ce { color: #65B042; }
+        .\00037Cf { color: inherit; }
+        .\00037Cg { color: inherit; }
+        .\00037Ch { color: inherit; }
+        .\00037Ci { color: #E28964; }
+        .\00037Cj { color: #E28964; }
+        .\00037Ck { color: inherit; }
+        .\00037Cl { color: inherit; }
+        .\00037Cm { color: #AEAEAE; }
+        .\00037Cn { color: inherit; }
       }
     </style>
     <script
@@ -142,17 +186,70 @@
       src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"
     ></script>
     <script type="module">
+      import { css as codeMirrorCss } from '@codemirror/lang-css';
+      import {
+        basicSetup,
+        EditorView
+      } from 'codemirror';
+
       import { minifyCSS } from './index.js';
+
       Vue.createApp({
         name: 'CSSLOPLAYGROUND',
         data: function () {
           return {
             input: 'body {\n  color: #FF0000;\n}',
             duration: 0,
-            theme: 'dark'
+            theme: 'dark',
+            realSelected: '',
+            realFilesMap: [],
+            mirror: undefined
           };
         },
         methods: {
+          initializeCodeMirror: function () {
+            this.mirror = new EditorView({
+              doc: this.input,
+              extensions: [
+                basicSetup,
+                codeMirrorCss(),
+                EditorView.updateListener.of((update) => {
+                  if (update.docChanged) {
+                    this.input = this.mirror.state.doc.toString();
+                  }
+                })
+              ]
+            });
+            const parent = document.getElementById('codemirror');
+            parent.insertBefore(this.mirror.dom, parent.firstChild);
+          },
+          loadRealFileNames: function () {
+            fetch('/csslop/real.json')
+              .then((response) => {
+                return response.json();
+              })
+              .then((libraries) => {
+                this.realFilesMap = libraries.filter((library) => {
+                  return library.size < 500_000;
+                });
+              })
+          },
+          loadRealSelection: function () {
+            fetch('/csslop/real/' + this.realSelected)
+              .then((response) => {
+                return response.text();
+              })
+              .then((contents) => {
+                this.input = contents.trim();
+                this.mirror.dispatch({
+                  changes: {
+                    from: 0,
+                    to: this.mirror.state.doc.length,
+                    insert: this.input
+                  }
+                });
+              });
+          },
           loadTheme: function () {
             let theme = localStorage.getItem('csslop-theme');
             if (theme && ['light', 'dark'].includes(theme)) {
@@ -267,6 +364,9 @@
           }
         },
         computed: {
+          codeMirrorExtensions: function () {
+            return [codeMirrorCss()];
+          },
           output: function () {
             const css = this.minfiy();
             const options = { language: 'css' };
@@ -281,6 +381,10 @@
         created: function () {
           this.loadTheme();
           this.loadUrlParams();
+          this.loadRealFileNames();
+        },
+        mounted: function () {
+          this.initializeCodeMirror();
         }
       }).mount('#app');
     </script>

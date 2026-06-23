@@ -8,6 +8,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
+import { refreshRealWorldSite } from './refreshRealWorldSite.js';
+
 const __dirname = import.meta.dirname;
 
 /**
@@ -30,6 +32,7 @@ function patchVersionIntoWebsite () {
  */
 function postBuild () {
   patchVersionIntoWebsite();
+  refreshRealWorldSite();
   console.log('Post-Build complete');
 }
 

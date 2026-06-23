@@ -14,7 +14,39 @@ const config = defineConfig({
   base: '/csslop',
   build: {
     outDir: resolve(__dirname, 'site'),
-    sourcemap: true
+    sourcemap: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              test: /node_modules\/codemirror/,
+              name: 'codemirror'
+            },
+            {
+              test: /node_modules\/@codemirror\/lang-css/,
+              name: 'codemirror-lang-css'
+            },
+            {
+              test: /node_modules\/@csstools\/css-calc/,
+              name: 'css-calc'
+            },
+            {
+              test: /node_modules\/@node-projects\/css-parser/,
+              name: 'css-parser'
+            },
+            {
+              test: /node_modules/,
+              name: 'lib'
+            },
+            {
+              test: /index\.js/,
+              name: 'CSSLOP'
+            }
+          ]
+        }
+      }
+    }
   }
 });
 
