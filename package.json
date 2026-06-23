@@ -7,8 +7,9 @@
   "scripts": {
     "prestart": "node ./scripts/prestart.js",
     "start": "vite",
+    "prebuild": "node ./scripts/prebuild.js",
     "build": "vite build",
-    "prebuild": "node ./scripts/postbuild.js",
+    "postbuild": "node ./scripts/postbuild.js",
     "copy": "node ./scripts/copyTests.js",
     "test": "node ./tests/index.test.js",
     "real": "node ./tests/realworld.test.js",
