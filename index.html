@@ -17,6 +17,7 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/sunburst.min.css"
     >
+    <style>[v-cloak]{display:none}</style>
   </head>
   <body>
     <div id="app" v-cloak>
@@ -69,28 +70,75 @@
       >
         <div class="half">
           <div class="stats">
-            <div title="Amount of characters in the input to minify">
+            <button
+              title="Amount of characters in the input to minify"
+              @click="toggleShowGzip"
+            >
               <strong>Input:</strong>
+              <template v-if="showGzip">&nbsp;(gzip):</template>
               <div>
-                {{ (input.length).toLocaleString() }}&nbsp;bytes
+                <template v-if="showGzip">
+                  {{ zipped.input.toLocaleString() }}&nbsp;bytes
+                </template>
+                <template v-else>
+                  {{ (input.length).toLocaleString() }}&nbsp;bytes
+                </template>
               </div>
-            </div>
-            <div title="Amount of characters in the output (lower is better, to an extent)">
-              <strong>Output:</strong><br>
-              {{ (output.length).toLocaleString() }}&nbsp;bytes
-            </div>
-            <div title="How many bytes saved during minfication (higher is better)">
-              <strong>Savings:</strong><br>
-              {{ (input.length - output.length).toLocaleString() }}&nbsp;bytes
-            </div>
-            <div title="Percent of original size (lower is better)">
-              <strong>Reduction:</strong><br>
-              {{ Math.round((output.length / input.length) * 10000) / 100 }}%
-            </div>
-            <div title="Time to minify (lower is better)">
-              <strong>Duration:</strong><br>
-              {{ duration.toLocaleString() }}ms
-            </div>
+            </button>
+            <button
+              title="Amount of characters in the output (lower is better, to an extent)"
+              @click="toggleShowGzip"
+            >
+              <strong>Output:</strong>
+              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <div>
+                <template v-if="showGzip">
+                  {{ zipped.output.toLocaleString() }}&nbsp;bytes
+                </template>
+                <template v-else>
+                  {{ (output.length).toLocaleString() }}&nbsp;bytes
+                </template>
+              </div>
+            </button>
+            <button
+              title="How many bytes saved during minfication (higher is better)"
+              @click="toggleShowGzip"
+            >
+              <strong>Savings</strong>
+              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <div>
+                <template v-if="showGzip">
+                  {{ (zipped.input - zipped.output).toLocaleString() }}&nbsp;bytes
+                </template>
+                <template v-else>
+                  {{ (input.length - output.length).toLocaleString() }}&nbsp;bytes
+                </template>
+              </div>
+            </button>
+            <button
+              title="Percent of original size (lower is better)"
+              @click="toggleShowGzip"
+            >
+              <strong>Reduction:</strong>
+              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <div>
+                <template v-if="showGzip">
+                  {{ Math.round((zipped.output / zipped.input) * 10000) / 100 }}%
+                </template>
+                <template v-else>
+                  {{ Math.round((output.length / input.length) * 10000) / 100 }}%
+                </template>
+              </div>
+            </button>
+            <button
+              title="Time to minify (lower is better)"
+              @click="toggleShowGzip"
+            >
+              <strong>Duration:</strong>
+              <div>
+                {{ duration.toLocaleString() }}ms
+              </div>
+            </button>
           </div>
           <pre
             v-html="outputStyled"
@@ -119,9 +167,6 @@
       body {
         max-width: 100%;
         font-family: sans-serif;
-      }
-      [v-cloak] {
-        display: none;
       }
       .loading {
         opacity: 0.5;
@@ -199,10 +244,10 @@
         margin-bottom: 0.5rem;
         font-size: 0.7rem;
         > * {
-          width: 100%;
+          flex-grow: 1;
           background: var(--background);
           border-radius: 10px;
-          padding: 0.55rem 1rem;
+          padding: 0.55rem 0rem;
           text-align: center;
         }
       }
@@ -266,6 +311,12 @@
         basicSetup,
         EditorView
       } from 'codemirror';
+      import {
+        strFromU8,
+        strToU8,
+        unzlibSync,
+        zlibSync
+      } from 'fflate';
 
       import { minifyCSS } from './index.js';
 
@@ -279,7 +330,12 @@
             loading: false,
             realSelected: '',
             realFilesMap: [],
-            mirror: undefined
+            mirror: undefined,
+            showGzip: false,
+            zipped: {
+              input: 0,
+              output: 0
+            }
           };
         },
         methods: {
@@ -372,68 +428,60 @@
             this.loading = false;
             return css;
           },
-          lzwEncode: function (input) {
-            let dictionary = {};
-            let data = (input + '').trim().split('');
-            let out = [];
-            let currentCharacter;
-            let phrase = data[0];
-            let code = 256;
-            for (let i = 1; i < data.length; i++) {
-              currentCharacter = data[i];
-              if (dictionary[phrase + currentCharacter] != null) {
-                phrase += currentCharacter;
-              } else {
-                if (phrase.length > 1) {
-                  out.push(dictionary[phrase]);
-                } else {
-                  out.push(phrase.charCodeAt(0));
-                }
-                dictionary[phrase + currentCharacter] = code;
-                code++;
-                phrase = currentCharacter;
-              }
-            }
-            if (phrase.length > 1) {
-              out.push(dictionary[phrase]);
-            } else {
-              out.push(phrase.charCodeAt(0));
-            }
-            for (let i = 0; i < out.length; i++) {
-              out[i] = String.fromCharCode(out[i]);
-            }
-            return out.join('');
+          urlEncode: function (data) {
+            const buffer = strToU8(data);
+            const zipped = zlibSync(buffer, { level: 9 });
+            const binary = strFromU8(zipped, true);
+            return btoa(binary);
           },
-          lzwDecode: function (input) {
-            let dictionary = {};
-            let data = (input + '').split('');
-            let currentCharacter = data[0];
-            let oldPhrase = currentCharacter;
-            let out = [currentCharacter];
-            let code = 256;
-            let phrase;
-            for (let i = 1; i < data.length; i++) {
-              let currCode = data[i].charCodeAt(0);
-              if (currCode < 256) {
-                phrase = data[i];
-              } else {
-                phrase = (
-                  dictionary[currCode] ||
-                  oldPhrase + currentCharacter
-                );
-              }
-              out.push(phrase);
-              currentCharacter = phrase.charAt(0);
-              dictionary[code] = oldPhrase + currentCharacter;
-              code++;
-              oldPhrase = phrase;
+          urlDecode: function (base64) {
+            const binary = atob(base64);
+            if (binary.startsWith('\x78\xDA')) {
+              const buffer = strToU8(binary, true);
+              const unzipped = unzlibSync(buffer);
+              return strFromU8(unzipped);
             }
-            return out.join('');
+            return decodeURIComponent(escape(binary));
+          },
+          getGzippedSize: async function (input) {
+            /**
+             * Combine multiple Uint8Arrays into one.
+             *
+             * @param  {ReadonlyArray<Uint8Array>} uint8arrays  Arrays to concat
+             * @return {Promise<Uint8Array>}
+             */
+            const concatUint8Arrays = async function (uint8arrays) {
+              const blob = new Blob(uint8arrays);
+              const buffer = await blob.arrayBuffer();
+              return new Uint8Array(buffer);
+            };
+
+            /**
+             * Convert a string to its UTF-8 bytes and compress it.
+             *
+             * @param  {string}              str  String to compress
+             * @return {Promise<Uint8Array>}
+             */
+            const compress = async function (str) {
+              const stream = new Blob([str]).stream();
+              const compressedStream = stream.pipeThrough(
+                new CompressionStream('gzip')
+              );
+              const chunks = [];
+              for await (const chunk of compressedStream) {
+                chunks.push(chunk);
+              }
+              return await concatUint8Arrays(chunks);
+            };
+
+            const zipped = await compress(input);
+            const string = new TextDecoder().decode(zipped);
+            return string.length;
           },
           setUrlParams: function () {
             let value = '';
             if (this.input) {
-              value = this.lzwEncode(this.input);
+              value = this.urlEncode(this.input);
             }
             const url = new URL(window.location);
             url.searchParams.set('v', value);
@@ -443,8 +491,12 @@
             const url = new URL(window.location);
             const value = url.searchParams.get('v')
             if (value) {
-              this.input = this.lzwDecode(value);
+              this.input = this.urlDecode(value);
             }
+          },
+          toggleShowGzip: function () {
+            this.showGzip = !this.showGzip;
+            localStorage.setItem('csslop-show-gzip', this.showGzip);
           }
         },
         computed: {
@@ -460,8 +512,14 @@
           }
         },
         watch: {
-          input: function () {
+          input: async function () {
             this.setUrlParams();
+            this.zipped.input = 0;
+            this.zipped.input = await this.getGzippedSize(this.input);
+          },
+          output: async function () {
+            this.zipped.output = 0;
+            this.zipped.output = await this.getGzippedSize(this.output);
           }
         },
         created: function () {
@@ -469,8 +527,14 @@
           this.loadUrlParams();
           this.loadRealFileNames();
         },
-        mounted: function () {
+        mounted: async function () {
           this.initializeCodeMirror();
+          const showGzip = localStorage.getItem('csslop-show-gzip');
+          if (showGzip) {
+            this.showGzip = showGzip;
+          }
+          this.zipped.input = await this.getGzippedSize(this.input);
+          this.zipped.output = await this.getGzippedSize(this.output);
         }
       }).mount('#app');
     </script>

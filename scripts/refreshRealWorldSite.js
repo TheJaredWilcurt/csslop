@@ -20,7 +20,21 @@ const copyFiles = function (libraries) {
   const realPath = join(publicPath, 'real');
   for (const library of libraries) {
     mkdirSync(realPath, { recursive: true });
-    writeFileSync(join(realPath, library.fileName), library.source + '\n');
+/**
+ * 960.gs - v0.0.0 - GPL-3.0 or MIT
+ * https://github.com/nathansmith/960-Grid-System/blob/master/code/css/960.css
+ */
+    const comment = (
+      '/* ' +
+      library.name +
+      ' - ' +
+      library.version +
+      ' - ' +
+      library.license +
+      ' */'
+    );
+    const contents = comment + '\n' + library.source + '\n';
+    writeFileSync(join(realPath, library.fileName), contents);
   }
 };
 
@@ -40,7 +54,7 @@ const createJsonFile = function (libraries) {
  * Runs all commands in order.
  */
 export const refreshRealWorldSite = function () {
-  const libraries = getRealWorldCSS();
+  const libraries = getRealWorldCSS(true);
   copyFiles(libraries);
   createJsonFile(libraries);
 };
