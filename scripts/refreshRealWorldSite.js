@@ -20,10 +20,10 @@ const copyFiles = function (libraries) {
   const realPath = join(publicPath, 'real');
   for (const library of libraries) {
     mkdirSync(realPath, { recursive: true });
-/**
- * 960.gs - v0.0.0 - GPL-3.0 or MIT
- * https://github.com/nathansmith/960-Grid-System/blob/master/code/css/960.css
- */
+    /**
+     * 960.gs - v0.0.0 - GPL-3.0 or MIT
+     * https://github.com/nathansmith/960-Grid-System/blob/master/code/css/960.css
+     */
     const comment = (
       '/* ' +
       library.name +
