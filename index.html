@@ -324,7 +324,16 @@
         name: 'CSSLOPLAYGROUND',
         data: function () {
           return {
-            input: 'body {\n  color: #FF0000;\n}',
+            input: [
+              ':is(div, span),',
+              ':where(td):where(.error) {',
+              '  color: #FF0000FF;',
+              '}',
+              '',
+              ':is(div, span) {',
+              '  color: #FF0000FF;',
+              '}'
+            ].join('\n'),
             duration: 0,
             theme: 'dark',
             loading: false,
