@@ -22,6 +22,12 @@ const configuration = [
     },
     rules: {
     }
+  },
+  {
+    files: ['./vite.config.js'],
+    rules: {
+      'import-x/no-cycle': 'off'
+    }
   }
 ];
 
