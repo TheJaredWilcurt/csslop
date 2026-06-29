@@ -8,6 +8,7 @@
 
 import {
   existsSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   unlinkSync,
@@ -39,9 +40,12 @@ function runAndReportRealWorldTests () {
   }
 
   function loadRealWorldTests () {
-    const existingReport = JSON.parse(readFileSync(reportPath));
-    const librariesReport = existingReport.libraries;
-    const totalsReport = existingReport.totals;
+    let existingReport = {};
+    if (existsSync(reportPath)) {
+      existingReport = JSON.parse(readFileSync(reportPath));
+    }
+    const librariesReport = existingReport.libraries || [];
+    const totalsReport = existingReport.totals || {};
 
     const includeFileName = true;
     let libraries = getRealWorldCSS(includeFileName);
@@ -191,6 +195,7 @@ function runAndReportRealWorldTests () {
     console.log('REAL TIME: ' + prettyMilliseconds(Date.now() - realTimeStart));
   }
 
+  mkdirSync(minifiedPath, { recursive: true });
   const libraries = loadRealWorldTests();
   const mutatedLibraries = runRealWorldTests(libraries);
   reportRealWorldTests(mutatedLibraries);
