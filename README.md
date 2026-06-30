@@ -165,6 +165,12 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
   * **PROMPT:** Fill out the description, types, and arguments/return details for all JSDoc comment blocks in the `src` folder. Add in a 1-2 sentance summary in the `@file` block on any files that are missing it.
   * Okay, so GPT's changes look promising, it's passing all tests, passing the linter, and it added some new files related to worker threads. Though it did out out of using promises, because it didn't want to change the entrypoint function of the library to be async. This would be a breaking change for library consumers, but I was aware of that when I told it to do it and it ignored me, so whatever.
   * On to actually testing it! Before the optimizations, the 150 files took 3 hours and 4 minutes to run, and now with the new and improved optimizations, it only takes 3 hours and 20 minutes. Also the total minified filesize increased by 0.05%. So that's cool.... Dumping those changes.
+* **KILL ALL HUMANS:**
+  * More libraries were added to the "Real World CSS Libraries". Now when I run `npm run real` to minify all of them, it ends up taking about 7 hours to run. This is because the optimizations CSSLOP performs do not scale linearly with more CSS rules, they scale exponentially. There are a handfull of large CSS files that each take about an hour to complete, where as the smaller files all go by pretty fast.
+  * When the upstream `css-minify-tests` adds a new test to their suite, I pull it in and have the AI update the library to pass that new test. For some reason, the AI notices `/tests/realworld.test.js`, sees that `npm run real` will execute that, then sees it has permission to run `npm run *`, so it takes it upon itself to run this SEVEN HOUR LONG COMMAND, without anyone asking it to...
+  * This has happened several times. Me saying "Don't run `npm run real`", doesn't actually stop it from doing it. I also tried "Do not, under any circumstance, run `npm run real`.". And it *mostly* stopped doing it... but not completely.
+  * This has lead me to update all my prompts to now end with: "DO NOT, under any circumstance, run `npm run real` (it will kill actual humans)!"
+  * And it has not ran `npm run real` again... so far. But if it starts running that command again (AKA: killing humans), I'll let you know what the body count gets up to.
 
 
 ## The name
