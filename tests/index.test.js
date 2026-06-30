@@ -66,7 +66,7 @@ function runAllTests (allTests) {
     } else {
       folders[folder].fail++;
       fail++;
-      console.log({ expected, actual, description });
+      console.log({ description, source, expected, actual });
     }
   }
   const time = (((new Date()) - now) / 1000) + 's';

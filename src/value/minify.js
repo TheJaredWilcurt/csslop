@@ -302,48 +302,48 @@ function convertColorsToHex (val) {
     return match.replace(/\bnone\b/gi, '0');
   });
 
-  // hwb() → hex
-  val = val.replace(/\bhwb\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, wStr, bStr, aStr) => {
+  // hwb() → hex (percent signs optional for whiteness/blackness, values always treated as percentages)
+  val = val.replace(/\bhwb\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%?\s+((?:\d+|\d*\.\d+))%?(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, wStr, bStr, aStr) => {
     const [r, g, b] = hwbToRgbChannels(parseFloat(hStr), parseFloat(wStr) / 100, parseFloat(bStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // rgb() space syntax → hex (handles decimals and any alpha)
-  val = val.replace(/\brgb\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
+  // rgb()/rgba() space syntax → hex, case-insensitive (handles decimals and any alpha)
+  val = val.replace(/\brgba?\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, rStr, gStr, bStr, aStr) => {
     const r = Math.round(parseFloat(rStr));
     const g = Math.round(parseFloat(gStr));
     const b = Math.round(parseFloat(bStr));
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // hsl() space syntax → hex (handles any alpha)
-  val = val.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
+  // hsl()/hsla() space syntax → hex, case-insensitive (percent signs optional, values always treated as percentages)
+  val = val.replace(/\bhsla?\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%?\s+((?:\d+|\d*\.\d+))%?(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, sStr, lStr, aStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // rgba() comma syntax → hex (handles any alpha)
-  val = val.replace(/\brgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
+  // rgba() comma syntax → hex, case-insensitive (handles any alpha)
+  val = val.replace(/\brgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/gi, (match, rStr, gStr, bStr, aStr) => {
     const r = parseInt(rStr, 10);
     const g = parseInt(gStr, 10);
     const b = parseInt(bStr, 10);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // hsla() comma syntax → hex (handles any alpha)
-  val = val.replace(/\bhsla\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
+  // hsla() comma syntax → hex, case-insensitive (percent signs optional, values always treated as percentages)
+  val = val.replace(/\bhsla\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%?\s*,\s*((?:\d+|\d*\.\d+))%?\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/gi, (match, hStr, sStr, lStr, aStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // hsl() comma syntax → hex
-  val = val.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*\)/g, (match, hStr, sStr, lStr) => {
+  // hsl()/hsla() comma syntax without alpha → hex, case-insensitive (percent signs optional, values always treated as percentages)
+  val = val.replace(/\bhsla?\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%?\s*,\s*((?:\d+|\d*\.\d+))%?\s*\)/gi, (match, hStr, sStr, lStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, 1);
   });
 
-  // rgb() comma syntax → hex
-  val = val.replace(/\brgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, (match, r, g, b) => {
+  // rgb() comma syntax → hex, case-insensitive
+  val = val.replace(/\brgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi, (match, r, g, b) => {
     return rgbaToHex(parseInt(r, 10), parseInt(g, 10), parseInt(b, 10), 1);
   });
   return val;

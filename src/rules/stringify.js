@@ -362,18 +362,64 @@ function processIsSelector (selector) {
 }
 
 /**
+ * Removes spaces after commas only inside parenthesized groups (function
+ * calls like `var()`, `calc()`), leaving top-level comma spacing intact.
+ *
+ * @param  {string} value  The whitespace-collapsed custom property value.
+ * @return {string}        The value with post-comma spaces removed inside function calls only.
+ */
+function removeSpacesAfterCommasInsideFunctions (value) {
+  let result = '';
+  let parenthesisDepth = 0;
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    if (character === '(') {
+      parenthesisDepth++;
+    }
+    if (character === ')') {
+      parenthesisDepth--;
+    }
+    if (character === ',' && parenthesisDepth > 0) {
+      result += ',';
+      // Skip whitespace after the comma inside function calls
+      while (index + 1 < value.length && value[index + 1] === ' ') {
+        index++;
+      }
+    } else {
+      result += character;
+    }
+  }
+  return result;
+}
+
+/**
+ * Strips leading zeros from decimal numbers in a custom property value
+ * (e.g. `0.5` becomes `.5`, `-0.02em` becomes `-.02em`).
+ *
+ * @param  {string} value  The custom property value string.
+ * @return {string}        The value with leading zeros removed from decimals.
+ */
+function stripLeadingZerosFromDecimals (value) {
+  // Match a boundary (start, whitespace, comma, open-paren), optional sign, then leading zeros before a decimal
+  return value.replace(/(^|\s|,|\()(-?)0+(\.\d+)/g, '$1$2$3');
+}
+
+/**
  * Collapses whitespace in a custom property value while preserving
  * token boundaries. Each whitespace sequence is reduced to a single
- * space, and spaces after commas (e.g. inside var() fallbacks) are removed.
+ * space, spaces after commas inside function calls are removed, and
+ * leading zeros on decimal numbers are stripped.
  *
  * @param  {string} value  The raw custom property value string.
- * @return {string}        The value with whitespace collapsed and post-comma spaces removed.
+ * @return {string}        The minified custom property value.
  */
 function collapseCustomPropertyWhitespace (value) {
   // Collapse all whitespace sequences (newlines, tabs, multiple spaces) to a single space
   let collapsed = value.replace(/\s+/g, ' ');
-  // Remove space after commas (e.g. var(--bar, 1.5) → var(--bar,1.5))
-  collapsed = collapsed.replace(/,\s+/g, ',');
+  // Remove spaces after commas only inside function calls (e.g. var(--bar, 1.5) → var(--bar,1.5))
+  collapsed = removeSpacesAfterCommasInsideFunctions(collapsed);
+  // Strip leading zeros from decimals (e.g. 0.5 → .5, -0.02em → -.02em)
+  collapsed = stripLeadingZerosFromDecimals(collapsed);
   return collapsed;
 }
 
@@ -534,6 +580,10 @@ function stringifyRule (rule, context, nested = false) {
               value = ' ' + trimmedRawValue;
             } else {
               value = collapseCustomPropertyWhitespace(trimmedRawValue);
+              // Prepend a space when value starts with a bare decimal point to avoid ambiguity after the colon
+              if (value.startsWith('.')) {
+                value = ' ' + value;
+              }
             }
           }
         } else {
