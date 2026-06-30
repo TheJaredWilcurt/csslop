@@ -362,6 +362,22 @@ function processIsSelector (selector) {
 }
 
 /**
+ * Collapses whitespace in a custom property value while preserving
+ * token boundaries. Each whitespace sequence is reduced to a single
+ * space, and spaces after commas (e.g. inside var() fallbacks) are removed.
+ *
+ * @param  {string} value  The raw custom property value string.
+ * @return {string}        The value with whitespace collapsed and post-comma spaces removed.
+ */
+function collapseCustomPropertyWhitespace (value) {
+  // Collapse all whitespace sequences (newlines, tabs, multiple spaces) to a single space
+  let collapsed = value.replace(/\s+/g, ' ');
+  // Remove space after commas (e.g. var(--bar, 1.5) → var(--bar,1.5))
+  collapsed = collapsed.replace(/,\s+/g, ',');
+  return collapsed;
+}
+
+/**
  * Converts a parsed CSS AST rule node into a minified CSS string, dispatching to specialized handlers for each rule type including selectors, `@media`, `@keyframes`, `@layer`, and other at-rules.
  *
  * @param  {object}  rule     The AST rule node to stringify.
@@ -517,7 +533,7 @@ function stringifyRule (rule, context, nested = false) {
             } else if (/^rgb\(\s*\d+\s+\d+\s+\d+\s*\)$/i.test(trimmedRawValue)) {
               value = ' ' + trimmedRawValue;
             } else {
-              value = trimmedRawValue;
+              value = collapseCustomPropertyWhitespace(trimmedRawValue);
             }
           }
         } else {

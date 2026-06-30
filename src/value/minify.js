@@ -350,6 +350,92 @@ function convertColorsToHex (val) {
 }
 
 /**
+ * Map from background-position keyword names to their equivalent percent values.
+ *
+ * @type {{[key: string]: string}}
+ */
+const POSITION_KEYWORD_TO_PERCENT = {
+  left: '0',
+  center: '50%',
+  right: '100%',
+  top: '0',
+  bottom: '100%'
+};
+
+/**
+ * Converts background-position keyword values to their shorter percent
+ * equivalents when possible. Single Y-axis keywords (top, bottom) and
+ * multi-value offset syntax (3 or 4 values) are left unchanged.
+ *
+ * @param  {string} value  The background-position value string.
+ * @return {string}        The value with keywords converted to percents where shorter.
+ */
+function convertBackgroundPositionKeywords (value) {
+  // Split on whitespace to determine the number of position parts
+  const parts = value.split(/\s+/);
+
+  // 3 or 4 value syntax uses keyword offsets, retain keywords
+  if (parts.length >= 3) {
+    return value;
+  }
+
+  if (parts.length === 1) {
+    const keyword = parts[0].toLowerCase();
+    // Y-axis-only keywords (top, bottom) can't be expressed as a single X-axis percent
+    const isYAxisOnly = keyword === 'top' || keyword === 'bottom';
+    if (isYAxisOnly) {
+      return value;
+    }
+    if (POSITION_KEYWORD_TO_PERCENT[keyword] !== undefined) {
+      return POSITION_KEYWORD_TO_PERCENT[keyword];
+    }
+    return value;
+  }
+
+  if (parts.length === 2) {
+    const firstKeyword = parts[0].toLowerCase();
+    const secondKeyword = parts[1].toLowerCase();
+    const firstIsPositionKeyword = POSITION_KEYWORD_TO_PERCENT[firstKeyword] !== undefined;
+    const secondIsPositionKeyword = POSITION_KEYWORD_TO_PERCENT[secondKeyword] !== undefined;
+
+    if (firstIsPositionKeyword && secondIsPositionKeyword) {
+      const firstPercent = POSITION_KEYWORD_TO_PERCENT[firstKeyword];
+      const secondPercent = POSITION_KEYWORD_TO_PERCENT[secondKeyword];
+      // Collapse to single value when Y is center (50%), since a single value defaults Y to 50%
+      if (secondPercent === '50%') {
+        return firstPercent;
+      }
+      return firstPercent + ' ' + secondPercent;
+    }
+  }
+
+  return value;
+}
+
+/**
+ * Converts millisecond time values to seconds when the result is a
+ * shorter string. Values of 0ms become 0s (time must keep a unit),
+ * and values at or below 99ms stay in milliseconds (shorter representation).
+ *
+ * @param  {string} value  The CSS value string potentially containing ms time values.
+ * @return {string}        The value with eligible ms times converted to seconds.
+ */
+function convertMillisecondsToSeconds (value) {
+  // Match numeric values followed by the "ms" unit at word boundaries
+  return value.replace(/\b(\d+(?:\.\d+)?)ms\b/gi, (match, amount) => {
+    const milliseconds = parseFloat(amount);
+    if (milliseconds === 0) {
+      return '0s';
+    }
+    // Keep ms for values at or below 99ms (ms representation is shorter)
+    if (milliseconds <= 99) {
+      return match;
+    }
+    return roundCompactNumber(milliseconds / 1000) + 's';
+  });
+}
+
+/**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
@@ -365,11 +451,17 @@ function applyPropertyOptimizations (val, property) {
     val = val.replace(/\bnormal\b/gi, '400');
   }
 
-  if (property === 'transition-duration') {
-    // Convert millisecond duration to seconds when the result is shorter (e.g. 200ms → .2s)
-    val = val.replace(/^(-?(?:\d+|\d*\.\d+))ms$/i, (match, amount) => {
-      return roundCompactNumber(parseFloat(amount) / 1000) + 's';
-    });
+  // Convert ms to s for time-related properties when the seconds form is shorter
+  const isTimeProperty = (
+    property === 'transition' ||
+    property === 'transition-duration' ||
+    property === 'transition-delay' ||
+    property === 'animation' ||
+    property === 'animation-duration' ||
+    property === 'animation-delay'
+  );
+  if (isTimeProperty) {
+    val = convertMillisecondsToSeconds(val);
   }
 
   // Transition: remove " 0s" duration (transition: all 0s -> transition: all)
@@ -450,12 +542,7 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'background-position') {
-    if (val === 'center center') {
-      val = '50%';
-    }
-    if (val === 'left top') {
-      val = '0 0';
-    }
+    val = convertBackgroundPositionKeywords(val);
   }
 
   // Check if border value starts with a style keyword, and reorder to canonical width-style-color order
