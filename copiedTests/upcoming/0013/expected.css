@@ -1,0 +1,1 @@
+div,span,:where(td.error){color:red;border:1px dashed red}

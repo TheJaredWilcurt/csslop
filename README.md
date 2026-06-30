@@ -245,6 +245,10 @@ const output = minifyCSS(input);
 console.log(output); // 'body{color:red}'
 ```
 
+Or you can just try it out in the browser:
+
+* [TheJaredWilcurt.com/CSSLOP](https://thejaredwilcurt.com/csslop)
+
 
 ## License
 
