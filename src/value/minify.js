@@ -20,6 +20,7 @@ import {
   simplifyStandaloneCalc
 } from './math.js';
 import { namedColors } from './named-colors.js';
+import { isQuotesNoneEquivalent } from './quotes.js';
 import {
   collapseShorthandParts,
   normalizeScaleComponent,
@@ -624,6 +625,9 @@ function minifyValue (declaration) {
     if (shorthand) {
       return shorthand;
     }
+  }
+  if (declaration.property === 'quotes' && isQuotesNoneEquivalent(declaration.value)) {
+    return 'none';
   }
   let val = declaration.value;
 
