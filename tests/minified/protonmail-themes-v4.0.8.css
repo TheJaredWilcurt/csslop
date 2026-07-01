@@ -1,0 +1,129 @@
+/*! =========================================== *
+ * OCHIN
+ * Version: v4.0.8
+ * Author: Cristiano Almeida
+ * Website: https://www.csalmeida.com
+ * Twitter: @_csalmeida
+ * =========================================== */.ui-prominent,.ui-standard,:root{--selection-background-color:var(
+    --optional-selection-background-color,
+    var(--primary)
+  );--selection-text-color:var(
+    --optional-selection-text-color,
+    var(--primary-contrast)
+  );--header-background-color:#333e4c !important;--sidebar-background-color:var(
+    --optional-sidebar-background-color,
+    var(--background-norm)
+  );--navigation-current-item-marker-color:var(
+    --optional-navigation-current-item-marker-color,
+    var(--interaction-norm)
+  );--navigation-current-item-background-color:var(
+    --optional-navigation-current-item-background-color,
+    var(--interaction-default-hover)
+  );--navigation-current-item-text-color:var(
+    --optional-navigation-current-item-text-color,
+    var(--text-norm)
+  );--main-box-shadow:var(--optional-main-box-shadow, none);--main-border-color:var(--optional-main-border-color, var(--border-norm));--navigation-item-count-background-color:var(
+    --optional-navigation-item-count-background-color,
+    var(--primary)
+  );--navigation-item-count-text-color:var(
+    --optional-navigation-item-count-text-color,
+    var(--primary-contrast)
+  );--toolbar-background-color:var(
+    --optional-toolbar-background-color,
+    var(--background-weak)
+  );--toolbar-border-bottom-color:var(
+    --optional-toolbar-border-bottom-color,
+    var(--border-norm)
+  );--toolbar-text-color:var(--optional-toolbar-text-color, var(--text-norm));--toolbar-separator-color:var(
+    --optional-toolbar-separator-color,
+    var(--border-norm)
+  );--scrollbar-thumb-color:var(
+    --optional-scrollbar-thumb-color,
+    hsla(0, 0%, 50%, 0.25)
+  );--scrollbar-thumb-hover-color:var(
+    --optional-scrollbar-thumb-hover-color,
+    hsla(0, 0%, 50%, 0.5)
+  );--tooltip-background-color:var(--optional-tooltip-background-color, #000);--tooltip-text-color:var(--optional-tooltip-text-color, #fff);--email-item-unread-background-color:var(
+    --optional-email-item-unread-background-color,
+    var(--background-norm)
+  );--email-item-unread-text-color:var(
+    --optional-email-item-unread-text-color,
+    var(--text-norm)
+  );--email-item-unread-icon-background-color:var(
+    --optional-email-item-unread-icon-background-color,
+    var(--background-strong)
+  );--email-item-unread-icon-text-color:var(
+    --optional-email-item-unread-icon-text-color,
+    inherit
+  );--email-item-read-background-color:#3d4a5b;--email-item-read-text-color:#e6eaf0;--email-item-read-icon-background-color:var(
+    --optional-email-item-read-icon-background-color,
+    var(--background-strong)
+  );--email-item-read-icon-text-color:var(
+    --optional-email-item-read-icon-text-color,
+    inherit
+  );--email-item-selected-background-color:var(
+    --optional-email-item-selected-background-color,
+    var(--interaction-norm)
+  );--email-item-selected-text-color:var(
+    --optional-email-item-selected-text-color,
+    var(--interaction-norm-contrast)
+  );--email-item-selected-icon-background-color:var(
+    --optional-email-item-selected-icon-background-color,
+    var(--interaction-norm-hover)
+  );--email-item-selected-icon-text-color:var(
+    --optional-email-item-selected-icon-text-color,
+    inherit
+  );--email-item-focus-marker-color:var(
+    --optional-email-item-focus-marker-color,
+    var(--interaction-norm)
+  );--email-item-selected-focus-marker-color:var(
+    --optional-email-item-selected-focus-marker-color,
+    var(--interaction-norm-hover)
+  );--email-message-view-background-color:var(
+    --optional-email-message-view-background-color,
+    var(--background-norm)
+  );--field-background-color:var(
+    --optional-field-background-color,
+    var(--background-norm)
+  );--field-text-color:var(--optional-field-text-color, var(--text-norm));--field-placeholder-color:var(
+    --optional-field-placeholder-color,
+    var(--text-hint)
+  );--field-hover-background-color:var(
+    --optional-field-hover-background-color,
+    var(--background-norm)
+  );--field-hover-text-color:var(
+    --optional-field-hover-text-color,
+    var(--text-norm)
+  );--field-focus-background-color:var(
+    --optional-field-focus-background-color,
+    var(--background-norm)
+  );--field-focus-text-color:var(
+    --optional-field-focus-text-color,
+    var(--text-norm)
+  );--field-disabled-background-color:var(
+    --optional-field-disabled-background-color,
+    var(--background-norm)
+  );--field-disabled-text-color:var(
+    --optional-field-disabled-text-color,
+    var(--text-disabled)
+  );--select-background-color:var(
+    --optional-select-background-color,
+    var(--field-background-color)
+  );--favorite-icon-color:var(--optional-favorite-icon-color, orange);--mark-background-color:var(--optional-mark-background-color, #ff0);--mark-text-color:var(--optional-mark-text-color, #000);--mark-font-weight:var(--optional-mark-font-weight, normal);--modal-background-color:var(--optional-modal-background-color);--modal-text-color:var(--optional-modal-text-color);--file-preview-text-color:var(
+    --optional-file-preview-text-color,
+    var(--text-norm)
+  );--file-preview-background-color:var(
+    --optional-file-preview-background-color,
+    var(--background-norm)
+  );--border-radius:var(--optional-border-radius, 3);--font-family:var(
+    --optional-font-family,
+    -apple-system,
+    BlinkMacSystemFont,
+    Segoe UI,
+    Roboto,
+    Oxygen-Sans,
+    Ubuntu,
+    Cantarell,
+    Helvetica Neue,
+    sans-serif
+  )}:root{--searchbox-background-color:#1a2533;--searchbox-text-color:#e6eaf0 !important;--optional-sidebar-background-color:#333e4c;--optional-email-item-unread-icon-background-color:#232a34;--optional-email-item-unread-icon-text-color:#e6eaf0}.meter-bar-thumb,.used-space{--signal-success:#a8e576}:root,.ui-standard{--primary:#a8e576;--signal-danger:#ed4c51;--signal-danger-hover:#f7595e;--signal-danger-active:#ff666b;--signal-danger-contrast:white;--signal-warning:#f5930a;--signal-warning-hover:#f5a716;--signal-warning-active:#f5b922;--signal-warning-contrast:black;--signal-success:#349172;--signal-success-hover:#339c79;--signal-success-active:#31a67f;--signal-success-contrast:white;--signal-info:#2c89db;--signal-info-hover:#3491e3;--signal-info-active:#3d99eb;--signal-info-contrast:white;--text-norm:white;--text-weak:#a4a9b5;--text-hint:#696f7d;--text-disabled:#575d6b;--text-invert:#262a33;--field-norm:#e6eaf0;--field-hover:#9ae161;--field-disabled:#464b58;--border-norm:#232a34;--border-weak:#29323d;--background-norm:#333e4c !important;--background-weak:#3d4a5b;--background-strong:#1f252d;--interaction-norm:#a8e576;--interaction-norm-hover:#ace67d;--interaction-norm-active:#b1e884;--interaction-norm-contrast:white;--interaction-weak:#2d3743 !important;--interaction-weak-hover:#29323d;--interaction-weak-active:#696f7d;--interaction-default:transparent;--interaction-default-hover:rgba(87, 93, 107, 0.2);--interaction-default-active:rgba(87, 93, 107, 0.3);--shadow-norm-opacity:0.32;--shadow-lifted-opacity:0.4;--backdrop-norm:rgba(0, 0, 0, 0.32);--optional-scrollbar-thumb-color:#464b58;--optional-scrollbar-thumb-hover-color:#575d6b;--optional-email-item-read-background-color:#1a1d24;--optional-email-item-read-text-color:var(--text-weak);--optional-email-item-selected-background-color:#93b776;--primary-contrast:#1a2533;--email-item-selected-text-color:#1a2533;--email-item-selected-icon-text-color:#1a2533}.button-solid-norm{--button-default-background-color:#a8e576;--button-hover-background-color:#b1e884;--button-active-background-color:#b1e884;--button-default-text-color:#1a2533;--button-hover-text-color:#1a2533;--button-active-text-color:#1a2533}
