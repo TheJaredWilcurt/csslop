@@ -51,6 +51,9 @@
     "type": "git",
     "url": "git+https://github.com/TheJaredWilcurt/csslop.git"
   },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
+  },
   "devEngines": {
     "runtime": {
       "name": "node",
