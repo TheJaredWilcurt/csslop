@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Experimental CSS minification",
   "scripts": {
     "prestart": "node ./scripts/prestart.js",
@@ -52,9 +52,7 @@
     "type": "git",
     "url": "git+https://github.com/TheJaredWilcurt/csslop.git"
   },
-  "allowScripts": {
-    "unrs-resolver@1.12.2": true
-  },
+  "allowScripts": {},
   "devEngines": {
     "runtime": {
       "name": "node",
