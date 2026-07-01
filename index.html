@@ -325,14 +325,20 @@
         data: function () {
           return {
             input: [
-              ':is(div, span),',
+              'div,',
+              'span,',
               ':where(td):where(.error) {',
-              '  color: #FF0000FF;',
+              '  border: 1px dashed hsl(0, 100, 50);',
+              '  color: #FF0000;',
               '}',
               '',
               ':is(div, span) {',
-              '  color: #FF0000FF;',
-              '}'
+              '  border-color: #F00;',
+              '  border-style: dashed;',
+              '  border-width: 1px;',
+              '  color: rgba(255 0 0 / 1.0);',
+              '}',
+              ''
             ].join('\n'),
             duration: 0,
             theme: 'dark',

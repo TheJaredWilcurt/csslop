@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Experimental CSS minification",
   "scripts": {
     "prestart": "node ./scripts/prestart.js",
@@ -15,6 +15,7 @@
     "test": "node ./tests/index.test.js",
     "real": "node ./tests/realworld.test.js",
     "lint": "eslint *.js scripts src tests --fix",
+    "fix": "npm run lint",
     "bump": "npx --yes -- @jsdevtools/version-bump-prompt && npm i",
     "publish": "npm publish --access=public"
   },
@@ -40,7 +41,7 @@
     "globals": "^17.7.0",
     "pretty-ms": "^9.3.0",
     "real-world-css-libraries": "^1.0.5",
-    "vite": "^8.1.0"
+    "vite": "^8.1.2"
   },
   "author": "The Jared Wilcurt",
   "homepage": "https://github.com/TheJaredWilcurt/csslop#readme",
@@ -51,14 +52,17 @@
     "type": "git",
     "url": "git+https://github.com/TheJaredWilcurt/csslop.git"
   },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
+  },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "26.1.0"
+      "version": "26.4.0"
     },
     "packageManager": {
       "name": "npm",
-      "version": "11.13.0"
+      "version": "11.17.0"
     }
   }
 }

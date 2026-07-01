@@ -20,6 +20,7 @@ import {
   simplifyStandaloneCalc
 } from './math.js';
 import { namedColors } from './named-colors.js';
+import { isQuotesNoneEquivalent } from './quotes.js';
 import {
   collapseShorthandParts,
   normalizeScaleComponent,
@@ -301,51 +302,137 @@ function convertColorsToHex (val) {
     return match.replace(/\bnone\b/gi, '0');
   });
 
-  // hwb() → hex
-  val = val.replace(/\bhwb\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, wStr, bStr, aStr) => {
+  // hwb() → hex (percent signs optional for whiteness/blackness, values always treated as percentages)
+  val = val.replace(/\bhwb\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%?\s+((?:\d+|\d*\.\d+))%?(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, wStr, bStr, aStr) => {
     const [r, g, b] = hwbToRgbChannels(parseFloat(hStr), parseFloat(wStr) / 100, parseFloat(bStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // rgb() space syntax → hex (handles decimals and any alpha)
-  val = val.replace(/\brgb\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
+  // rgb()/rgba() space syntax → hex, case-insensitive (handles decimals and any alpha)
+  val = val.replace(/\brgba?\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, rStr, gStr, bStr, aStr) => {
     const r = Math.round(parseFloat(rStr));
     const g = Math.round(parseFloat(gStr));
     const b = Math.round(parseFloat(bStr));
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // hsl() space syntax → hex (handles any alpha)
-  val = val.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%\s+((?:\d+|\d*\.\d+))%(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
+  // hsl()/hsla() space syntax → hex, case-insensitive (percent signs optional, values always treated as percentages)
+  val = val.replace(/\bhsla?\(\s*(-?(?:\d+|\d*\.\d+))\s+((?:\d+|\d*\.\d+))%?\s+((?:\d+|\d*\.\d+))%?(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, hStr, sStr, lStr, aStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // rgba() comma syntax → hex (handles any alpha)
-  val = val.replace(/\brgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, rStr, gStr, bStr, aStr) => {
+  // rgba() comma syntax → hex, case-insensitive (handles any alpha)
+  val = val.replace(/\brgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/gi, (match, rStr, gStr, bStr, aStr) => {
     const r = parseInt(rStr, 10);
     const g = parseInt(gStr, 10);
     const b = parseInt(bStr, 10);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // hsla() comma syntax → hex (handles any alpha)
-  val = val.replace(/\bhsla\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/g, (match, hStr, sStr, lStr, aStr) => {
+  // hsla() comma syntax → hex, case-insensitive (percent signs optional, values always treated as percentages)
+  val = val.replace(/\bhsla\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%?\s*,\s*((?:\d+|\d*\.\d+))%?\s*,\s*(-?(?:\d+|\d*\.\d+)%?)\s*\)/gi, (match, hStr, sStr, lStr, aStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, parseAlphaString(aStr));
   });
 
-  // hsl() comma syntax → hex
-  val = val.replace(/\bhsl\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%\s*,\s*((?:\d+|\d*\.\d+))%\s*\)/g, (match, hStr, sStr, lStr) => {
+  // hsl()/hsla() comma syntax without alpha → hex, case-insensitive (percent signs optional, values always treated as percentages)
+  val = val.replace(/\bhsla?\(\s*(-?(?:\d+|\d*\.\d+))\s*,\s*((?:\d+|\d*\.\d+))%?\s*,\s*((?:\d+|\d*\.\d+))%?\s*\)/gi, (match, hStr, sStr, lStr) => {
     const [r, g, b] = hslToRgbChannels(parseFloat(hStr), parseFloat(sStr) / 100, parseFloat(lStr) / 100);
     return rgbaToHex(r, g, b, 1);
   });
 
-  // rgb() comma syntax → hex
-  val = val.replace(/\brgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g, (match, r, g, b) => {
+  // rgb() comma syntax → hex, case-insensitive
+  val = val.replace(/\brgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi, (match, r, g, b) => {
     return rgbaToHex(parseInt(r, 10), parseInt(g, 10), parseInt(b, 10), 1);
   });
   return val;
+}
+
+/**
+ * Map from background-position keyword names to their equivalent percent values.
+ *
+ * @type {{[key: string]: string}}
+ */
+const POSITION_KEYWORD_TO_PERCENT = {
+  left: '0',
+  center: '50%',
+  right: '100%',
+  top: '0',
+  bottom: '100%'
+};
+
+/**
+ * Converts background-position keyword values to their shorter percent
+ * equivalents when possible. Single Y-axis keywords (top, bottom) and
+ * multi-value offset syntax (3 or 4 values) are left unchanged.
+ *
+ * @param  {string} value  The background-position value string.
+ * @return {string}        The value with keywords converted to percents where shorter.
+ */
+function convertBackgroundPositionKeywords (value) {
+  // Split on whitespace to determine the number of position parts
+  const parts = value.split(/\s+/);
+
+  // 3 or 4 value syntax uses keyword offsets, retain keywords
+  if (parts.length >= 3) {
+    return value;
+  }
+
+  if (parts.length === 1) {
+    const keyword = parts[0].toLowerCase();
+    // Y-axis-only keywords (top, bottom) can't be expressed as a single X-axis percent
+    const isYAxisOnly = keyword === 'top' || keyword === 'bottom';
+    if (isYAxisOnly) {
+      return value;
+    }
+    if (POSITION_KEYWORD_TO_PERCENT[keyword] !== undefined) {
+      return POSITION_KEYWORD_TO_PERCENT[keyword];
+    }
+    return value;
+  }
+
+  if (parts.length === 2) {
+    const firstKeyword = parts[0].toLowerCase();
+    const secondKeyword = parts[1].toLowerCase();
+    const firstIsPositionKeyword = POSITION_KEYWORD_TO_PERCENT[firstKeyword] !== undefined;
+    const secondIsPositionKeyword = POSITION_KEYWORD_TO_PERCENT[secondKeyword] !== undefined;
+
+    if (firstIsPositionKeyword && secondIsPositionKeyword) {
+      const firstPercent = POSITION_KEYWORD_TO_PERCENT[firstKeyword];
+      const secondPercent = POSITION_KEYWORD_TO_PERCENT[secondKeyword];
+      // Collapse to single value when Y is center (50%), since a single value defaults Y to 50%
+      if (secondPercent === '50%') {
+        return firstPercent;
+      }
+      return firstPercent + ' ' + secondPercent;
+    }
+  }
+
+  return value;
+}
+
+/**
+ * Converts millisecond time values to seconds when the result is a
+ * shorter string. Values of 0ms become 0s (time must keep a unit),
+ * and values at or below 99ms stay in milliseconds (shorter representation).
+ *
+ * @param  {string} value  The CSS value string potentially containing ms time values.
+ * @return {string}        The value with eligible ms times converted to seconds.
+ */
+function convertMillisecondsToSeconds (value) {
+  // Match numeric values followed by the "ms" unit at word boundaries
+  return value.replace(/\b(\d+(?:\.\d+)?)ms\b/gi, (match, amount) => {
+    const milliseconds = parseFloat(amount);
+    if (milliseconds === 0) {
+      return '0s';
+    }
+    // Keep ms for values at or below 99ms (ms representation is shorter)
+    if (milliseconds <= 99) {
+      return match;
+    }
+    return roundCompactNumber(milliseconds / 1000) + 's';
+  });
 }
 
 /**
@@ -364,11 +451,17 @@ function applyPropertyOptimizations (val, property) {
     val = val.replace(/\bnormal\b/gi, '400');
   }
 
-  if (property === 'transition-duration') {
-    // Convert millisecond duration to seconds when the result is shorter (e.g. 200ms → .2s)
-    val = val.replace(/^(-?(?:\d+|\d*\.\d+))ms$/i, (match, amount) => {
-      return roundCompactNumber(parseFloat(amount) / 1000) + 's';
-    });
+  // Convert ms to s for time-related properties when the seconds form is shorter
+  const isTimeProperty = (
+    property === 'transition' ||
+    property === 'transition-duration' ||
+    property === 'transition-delay' ||
+    property === 'animation' ||
+    property === 'animation-duration' ||
+    property === 'animation-delay'
+  );
+  if (isTimeProperty) {
+    val = convertMillisecondsToSeconds(val);
   }
 
   // Transition: remove " 0s" duration (transition: all 0s -> transition: all)
@@ -449,12 +542,7 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'background-position') {
-    if (val === 'center center') {
-      val = '50%';
-    }
-    if (val === 'left top') {
-      val = '0 0';
-    }
+    val = convertBackgroundPositionKeywords(val);
   }
 
   // Check if border value starts with a style keyword, and reorder to canonical width-style-color order
@@ -624,6 +712,9 @@ function minifyValue (declaration) {
     if (shorthand) {
       return shorthand;
     }
+  }
+  if (declaration.property === 'quotes' && isQuotesNoneEquivalent(declaration.value)) {
+    return 'none';
   }
   let val = declaration.value;
 
