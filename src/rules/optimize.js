@@ -367,6 +367,26 @@ function deduplicateKeyframes (rules) {
 }
 
 /**
+ * Removes duplicate selectors from a combined selector list by normalizing
+ * whitespace and preserving the first occurrence of each unique selector.
+ *
+ * @param  {Array} selectors  The selector strings to deduplicate.
+ * @return {Array}            A new array with duplicate selectors removed.
+ */
+function deduplicateSelectors (selectors) {
+  const seen = new Set();
+  return selectors.filter((selector) => {
+    // Normalize whitespace to single spaces for consistent comparison
+    const normalized = selector.trim().replace(/\s+/g, ' ');
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
+}
+
+/**
  * Merges consecutive rules whose declarations are a subset of the following rule, combining their selectors and splitting out any extra declarations.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
@@ -409,7 +429,8 @@ function mergeByDeclarations (rules) {
             return !commonProperties.has(declaration.property);
           });
           result.pop();
-          result.push({ ...previousRule, selectors: [...previousRule.selectors, ...rule.selectors] });
+          const combinedSelectors = deduplicateSelectors([...previousRule.selectors, ...rule.selectors]);
+          result.push({ ...previousRule, selectors: combinedSelectors });
           if (currentOnlyDeclarations.length > 0) {
             result.push({ ...rule, declarations: currentOnlyDeclarations });
           }
