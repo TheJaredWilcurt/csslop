@@ -580,10 +580,6 @@ function stringifyRule (rule, context, nested = false) {
               value = ' ' + trimmedRawValue;
             } else {
               value = collapseCustomPropertyWhitespace(trimmedRawValue);
-              // Prepend a space when value starts with a bare decimal point to avoid ambiguity after the colon
-              if (value.startsWith('.')) {
-                value = ' ' + value;
-              }
             }
           }
         } else {
