@@ -26,6 +26,9 @@ const __dirname = import.meta.dirname;
 const minifiedPath = join(__dirname, 'minified');
 const reportPath = join(__dirname, '..', 'realWorldResults.json');
 
+/**
+ * Runs all real world tests, reports outcome to console and saves to JSON.
+ */
 function runAndReportRealWorldTests () {
   function deleteOldMinifiedFiles (libraries) {
     const libraryNames = libraries.map((library) => {
@@ -45,7 +48,6 @@ function runAndReportRealWorldTests () {
       existingReport = JSON.parse(readFileSync(reportPath));
     }
     const librariesReport = existingReport.libraries || [];
-    const totalsReport = existingReport.totals || {};
 
     const includeFileName = true;
     let libraries = getRealWorldCSS(includeFileName);
