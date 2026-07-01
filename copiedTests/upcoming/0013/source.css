@@ -1,11 +1,13 @@
-div, span, :where(td):where(.error) {
+div,
+span,
+:where(td):where(.error) {
+  border: 1px dashed hsl(0 100 50);
   color: #FF0000;
-  border: 1px dashed red;
 }
 
 :is(div, span) {
-  color: rgba(255 0 0 / 1.0);
   border-color: #F00;
   border-style: dashed;
   border-width: 1px;
+  color: rgba(255 0 0 / 1.0);
 }
