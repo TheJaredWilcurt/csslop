@@ -21,7 +21,13 @@
   </head>
   <body>
     <div id="app" v-cloak>
-      <div class="title" :class="{ dark: theme === 'dark' }">
+      <div
+        class="title"
+        :class="{
+          dark: theme === 'dark',
+          stupid: stupidMode
+        }"
+      >
         <div class="left">
           <a href="https://github.com/TheJaredWilcurt/csslop">
             <img
@@ -65,7 +71,8 @@
         class="container"
         :class="{
           dark: theme === 'dark',
-          loading
+          loading,
+          stupid: stupidMode
         }"
       >
         <div class="half">
@@ -145,6 +152,32 @@
             class="hljs"
             title="Minified Output"
           ></pre>
+          <div class="controls">
+            <button
+              :style="{ 'font-weight': prettyPrint ? 'bold' : 'normal' }"
+              @click="togglePrettyPrint"
+            >
+              Pretty Print
+            </button>
+            <button
+              :style="{ 'font-weight': showGzip ? 'bold' : 'normal' }"
+              @click="toggleShowGzip"
+            >
+              GZIP Sizes
+            </button>
+            <button
+              :style="{ 'font-weight': syntaxHighlighting ? 'bold' : 'normal' }"
+              @click="toggleSyntaxHighlighting"
+            >
+              Syntax Highlighting
+            </button>
+            <button
+              :style="{ 'font-weight': stupidMode ? 'bold' : 'normal' }"
+              @click="toggleStupidMode"
+            >
+              Stupid Mode
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -226,7 +259,7 @@
       pre {
         height: 100%;
         background: var(--background);
-        border-radius: 10px;
+        border-radius: 10px 10px 0px 0px;
         margin: 0px;
         padding: 1rem;
         font-family: monospace;
@@ -249,6 +282,33 @@
           border-radius: 10px;
           padding: 0.55rem 0rem;
           text-align: center;
+        }
+      }
+      .controls {
+        display: flex;
+        justify-content: space-around;
+        background: var(--background);
+        border-radius: 0px 0px 10px 10px;
+        > button {
+          flex-grow: 1;
+          border-right: 1px solid var(--background);
+          border-radius: 0px;
+          padding: 0.4rem;
+          font-size: 0.65rem;
+          &:first-of-type {
+            border-radius: 0px 0px 0px 10px;
+          }
+          &:last-of-type {
+            border: 0px;
+            border-radius: 0px 0px 10px 0px;
+          }
+        }
+      }
+      .stupid,
+      .stupid * {
+        font-family: 'Melting Dessert', sans-serif !important;
+        button {
+          font-size: 1rem !important;
         }
       }
       #codemirror {
@@ -308,6 +368,10 @@
       import { css as codeMirrorCss } from '@codemirror/lang-css';
       import { keymap } from '@codemirror/view';
       import {
+        parse as cssParse,
+        stringify as cssStringify
+      } from '@node-projects/css-parser'
+      import {
         basicSetup,
         EditorView
       } from 'codemirror';
@@ -346,6 +410,9 @@
             realSelected: '',
             realFilesMap: [],
             mirror: undefined,
+            prettyPrint: false,
+            stupidMode: false,
+            syntaxHighlighting: true,
             showGzip: false,
             zipped: {
               input: 0,
@@ -413,6 +480,21 @@
             } else {
               this.setTheme('dark');
             }
+          },
+          loadLocalStorageGeneric: function (key, dataName) {
+            const value = localStorage.getItem(key);
+            if (value === 'true') {
+              this[dataName] = true;
+            }
+            if (value === 'false') {
+              this[dataName] = false;
+            }
+          },
+          loadLocalStorage: function () {
+            this.loadLocalStorageGeneric('csslop-pretty-print', 'prettyPrint');
+            this.loadLocalStorageGeneric('csslop-show-gzip', 'showGzip');
+            this.loadLocalStorageGeneric('csslop-syntax-highlighting', 'syntaxHighlighting');
+            this.loadLocalStorageGeneric('csslop-stupid-mode', 'stupidMode');
           },
           setTheme: function (theme) {
             this.theme = theme;
@@ -509,9 +591,21 @@
               this.input = this.urlDecode(value);
             }
           },
+          togglePrettyPrint: function () {
+            this.prettyPrint = !this.prettyPrint;
+            localStorage.setItem('csslop-pretty-print', this.prettyPrint);
+          },
+          toggleStupidMode: function () {
+            this.stupidMode = !this.stupidMode;
+            localStorage.setItem('csslop-stupid-mode', this.stupidMode);
+          },
           toggleShowGzip: function () {
             this.showGzip = !this.showGzip;
             localStorage.setItem('csslop-show-gzip', this.showGzip);
+          },
+          toggleSyntaxHighlighting: function () {
+            this.syntaxHighlighting = !this.syntaxHighlighting;
+            localStorage.setItem('csslop-syntax-highlighting', this.syntaxHighlighting);
           }
         },
         computed: {
@@ -522,8 +616,16 @@
             return this.minfiy(this.input);
           },
           outputStyled: function () {
-            const options = { language: 'css' };
-            return window.hljs.highlight(this.output, options).value;
+            let output = this.output;
+            if (this.prettyPrint) {
+              const ast = cssParse(output);
+              output = cssStringify(ast, { indent: '  ' });
+            }
+            if (this.syntaxHighlighting) {
+              const options = { language: 'css' };
+              output = window.hljs.highlight(output, options).value;
+            }
+            return output;
           }
         },
         watch: {
@@ -544,10 +646,7 @@
         },
         mounted: async function () {
           this.initializeCodeMirror();
-          const showGzip = localStorage.getItem('csslop-show-gzip');
-          if (showGzip) {
-            this.showGzip = showGzip;
-          }
+          this.loadLocalStorage();
           this.zipped.input = await this.getGzippedSize(this.input);
           this.zipped.output = await this.getGzippedSize(this.output);
         }
