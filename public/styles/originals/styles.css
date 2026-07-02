@@ -10,7 +10,10 @@ html, body {
 }
 body {
   max-width: 100%;
-  font-family: Lato, sans-serif;
+}
+body,
+button {
+  font-family: "Lato", sans-serif;
 }
 .loading {
   opacity: 0.5;
