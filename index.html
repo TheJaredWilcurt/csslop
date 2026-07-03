@@ -444,8 +444,10 @@
               } catch (error) {
                 output = [
                   '/**',
-                  ' * Due to a syntax error in the original CSS,',
-                  ' * this could not be pretty-printed.',
+                  ' * PRETTY PRINT FAILED:',
+                  ' * Due to a syntax error, either in the original CSS,',
+                  ' * or, more likely, CSSLOP\'s AI generated code is',
+                  ' * just outputting garbage. Sorry about that 🤷‍♀️.',
                   ' *',
                   ' * ' + error.message,
                   ' */',
