@@ -438,8 +438,20 @@
           outputStyled: function () {
             let output = this.output;
             if (this.prettyPrint) {
-              const ast = cssParse(output);
-              output = cssStringify(ast, { indent: '  ' });
+              try {
+                const ast = cssParse(output);
+                output = cssStringify(ast, { indent: '  ' });
+              } catch (error) {
+                output = [
+                  '/**',
+                  ' * Due to a syntax error in the original CSS,',
+                  ' * this could not be pretty-printed.',
+                  ' *',
+                  ' * ' + error.message,
+                  ' */',
+                  output
+                ].join('\n');
+              }
             }
             if (this.syntaxHighlighting) {
               const options = { language: 'css' };
