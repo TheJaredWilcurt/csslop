@@ -508,8 +508,8 @@ function stringifyRule (rule, context, nested = false) {
 
         // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting (spaces, #, ., :, /), and compare lengths
-          let escaped = value.replace(/([ #.:/])/g, '\\$1');
+          // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
+          let escaped = value.replace(/([ #.:/;])/g, '\\$1');
           if (escaped.length < value.length + 2) {
             return '[' + attribute + '=' + escaped + ']';
           }
@@ -517,8 +517,8 @@ function stringifyRule (rule, context, nested = false) {
         });
         // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting (spaces, #, ., :, /), and compare lengths
-          let escaped = value.replace(/([ #.:/])/g, '\\$1');
+          // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
+          let escaped = value.replace(/([ #.:/;])/g, '\\$1');
           if (escaped.length < value.length + 2) {
             return '[' + attribute + '=' + escaped + ']';
           }
@@ -526,8 +526,8 @@ function stringifyRule (rule, context, nested = false) {
         });
         // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
-          // Unescape special characters (spaces, #, ., :, /) and compare with quoted form
-          let unescaped = value.replace(/\\([ #.:/])/g, '$1');
+          // Unescape special characters (spaces, #, ., :, /, ;) and compare with quoted form
+          let unescaped = value.replace(/\\([ #.:/;])/g, '$1');
           if (unescaped.length + 2 < value.length) {
             return '[' + attribute + '="' + unescaped + '"]';
           }
