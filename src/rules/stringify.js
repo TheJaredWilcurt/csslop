@@ -408,8 +408,8 @@ function stripLeadingZerosFromDecimals (value) {
  * Processes CSS comments within a custom property value. If the value
  * consists entirely of a comment, the comment is removed (producing an
  * empty value). If comments appear between other tokens, their content
- * is stripped but the empty comment markers `/**​/` are kept as
- * zero-width token separators to preserve the token sequence.
+ * is stripped but empty comment delimiters are kept as zero-width
+ * token separators to preserve the token sequence.
  *
  * @param  {string} value  The raw custom property value string.
  * @return {string}        The value with comments processed.
@@ -595,7 +595,20 @@ function stringifyRule (rule, context, nested = false) {
             const commentProcessedValue = processCustomPropertyComments(rawValue);
             const trimmedRawValue = commentProcessedValue.trim();
             if (trimmedRawValue === '') {
-              value = '';
+              const hasExplicitValueContent = commentProcessedValue.length > 0;
+              // When the parser absorbs a whitespace-only value into
+              // rawBetween, trailing whitespace after the colon signals an
+              // intentionally empty custom property (e.g. `--foo: ;` sets
+              // the value to a space token, which differs from an absent
+              // value). Only apply this check when the original rawValue
+              // was already empty — not when it became empty after
+              // stripping a comment.
+              const originalValueWasEmpty = rawValue.trim() === '';
+              const colonBetween = declaration.rawBetween || '';
+              // Match whitespace after the colon character
+              const hasSpaceAfterColon = /:\s/.test(colonBetween);
+              const isExplicitlyEmptyValue = hasExplicitValueContent || (originalValueWasEmpty && hasSpaceAfterColon);
+              value = isExplicitlyEmptyValue ? ' ' : '';
             // Preserve leading space for rgb() space-syntax values in custom properties
             } else if (/^rgb\(\s*\d+\s+\d+\s+\d+\s*\)$/i.test(trimmedRawValue)) {
               value = ' ' + trimmedRawValue;
