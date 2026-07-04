@@ -2,6 +2,7 @@
  * @file Minifies CSS declaration values by applying color conversion, math simplification, shorthand compression, and other property-specific optimizations.
  */
 
+import { isUnicodeCharset } from '../context.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import {
@@ -177,10 +178,13 @@ function replaceOutsideStringsAndUrls (value, replacer) {
  * @return {string}           The value with whitespace collapsed, quotes normalized, and unicode escapes resolved.
  */
 function normalizeWhitespaceAndQuotes (val, property) {
-  // Unescape unicode (skip control characters — they must stay escaped in CSS strings)
-  val = val.replace(/\\([0-9a-fA-F]{1,6})\s?/g, (match, hex) => {
-    return resolveUnicodeEscape(hex) ?? match;
-  });
+  // Unescape unicode (skip control characters — they must stay escaped in CSS strings).
+  // Only resolve escapes when the charset is unicode-compatible (UTF-8/UTF-16 or default).
+  if (isUnicodeCharset()) {
+    val = val.replace(/\\([0-9a-fA-F]{1,6})\s?/g, (match, hex) => {
+      return resolveUnicodeEscape(hex) ?? match;
+    });
+  }
   // Normalize single-quoted strings to double-quoted
   val = val.replace(/'((?:[^'\\]|\\.)*?)'/g, '"$1"');
 
@@ -444,7 +448,7 @@ function convertMillisecondsToSeconds (value) {
  * @return {string}           The value with property-specific optimizations applied.
  */
 function applyPropertyOptimizations (val, property) {
-  if (property === 'font-weight') {
+  if (property === 'font-weight' && isUnicodeCharset()) {
     // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
     // Replace font-weight keyword "normal" with its numeric equivalent
@@ -482,6 +486,9 @@ function applyPropertyOptimizations (val, property) {
     // Replace steps() functions with their equivalent named timing-function keywords
     val = val.replace(/steps\(1,start\)/g, 'step-start');
     val = val.replace(/steps\(1,end\)/g, 'step-end');
+    // Restore space between step-start/step-end keyword and following token
+    // (the parenthesis whitespace stripping removes the space before replacement)
+    val = val.replace(/(step-start|step-end)(?=[a-zA-Z0-9#-])/g, '$1 ');
   }
 
   // Flex: remove " 0px" from flex shorthand (flex: 0 0 0px -> flex: 0 0)

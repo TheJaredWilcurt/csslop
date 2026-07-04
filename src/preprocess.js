@@ -2,6 +2,7 @@
  * @file Preprocesses CSS declaration blocks by converting Unicode escape sequences to their literal characters before parsing.
  */
 
+import { isUnicodeCharset } from './context.js';
 import { resolveUnicodeEscape } from './utilities.js';
 
 /**
@@ -91,20 +92,23 @@ function preprocessDeclarationBlocks (css) {
 
   // Match top-level declaration blocks (non-nested { ... })
   return processed.replace(/\{([^{}]*)\}/g, (match, content) => {
-    // First, remove semicolons after comments which cause parser errors
-    // Pattern: comment followed by optional whitespace and semicolon
-    let processed = content.replace(/\/\*.*?\*\/\s*;/g, (commentMatch) => {
+    // Remove semicolons after standalone comments (between declarations) which cause parser errors.
+    // Only match when preceded by a semicolon, so property values like --foo: /*...*/; keep their terminator.
+    let processed = content.replace(/(?<=;)\s*\/\*.*?\*\/\s*;/g, (commentMatch) => {
       // Remove the trailing semicolon from comment+semicolon combinations
       return commentMatch.replace(/;$/, '');
     });
     
-    // Then, skip quoted strings and match CSS unicode escapes (backslash + 1-6 hex digits + optional whitespace)
-    processed = processed.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\\([0-9a-fA-F]{1,6})\s?/g, (fullMatch, hex) => {
-      if (!hex) {
-        return fullMatch;
-      }
-      return resolveUnicodeEscape(hex) ?? fullMatch;
-    });
+    // Then, skip quoted strings and match CSS unicode escapes (backslash + 1-6 hex digits + optional whitespace).
+    // Only resolve when the charset is unicode-compatible.
+    if (isUnicodeCharset()) {
+      processed = processed.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\\([0-9a-fA-F]{1,6})\s?/g, (fullMatch, hex) => {
+        if (!hex) {
+          return fullMatch;
+        }
+        return resolveUnicodeEscape(hex) ?? fullMatch;
+      });
+    }
     
     return '{' + processed + '}';
   });

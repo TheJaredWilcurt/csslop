@@ -405,6 +405,26 @@ function stripLeadingZerosFromDecimals (value) {
 }
 
 /**
+ * Processes CSS comments within a custom property value. If the value
+ * consists entirely of a comment, the comment is removed (producing an
+ * empty value). If comments appear between other tokens, their content
+ * is stripped but the empty comment markers `/**​/` are kept as
+ * zero-width token separators to preserve the token sequence.
+ *
+ * @param  {string} value  The raw custom property value string.
+ * @return {string}        The value with comments processed.
+ */
+function processCustomPropertyComments (value) {
+  // Match values that are entirely a comment (with optional surrounding whitespace)
+  const commentOnlyPattern = /^\s*\/\*.*?\*\/\s*$/s;
+  if (commentOnlyPattern.test(value)) {
+    return '';
+  }
+  // Strip comment content but keep empty markers as token separators
+  return value.replace(/\/\*.*?\*\//g, '/**/');
+}
+
+/**
  * Collapses whitespace in a custom property value while preserving
  * token boundaries. Each whitespace sequence is reduced to a single
  * space, spaces after commas inside function calls are removed, and
@@ -572,9 +592,10 @@ function stringifyRule (rule, context, nested = false) {
             value = minifyValue(declaration);
           } else {
             const rawValue = declaration.rawValue || declaration.value || '';
-            const trimmedRawValue = rawValue.trim();
+            const commentProcessedValue = processCustomPropertyComments(rawValue);
+            const trimmedRawValue = commentProcessedValue.trim();
             if (trimmedRawValue === '') {
-              value = ' ';
+              value = '';
             // Preserve leading space for rgb() space-syntax values in custom properties
             } else if (/^rgb\(\s*\d+\s+\d+\s+\d+\s*\)$/i.test(trimmedRawValue)) {
               value = ' ' + trimmedRawValue;
@@ -674,6 +695,13 @@ function stringifyRule (rule, context, nested = false) {
       .filter((keyframe) => {
         return keyframe.type === 'keyframe';
       })
+      .filter((keyframe) => {
+        // Skip keyframe stops that have no meaningful declarations
+        const meaningful = (keyframe.declarations || []).filter((declaration) => {
+          return declaration.type !== 'whitespace' && declaration.type !== 'comment';
+        });
+        return meaningful.length > 0;
+      })
       .map((keyframe) => {
         let output = [];
         let stopValues = keyframe.values.map((stopValue) => {
@@ -689,7 +717,7 @@ function stringifyRule (rule, context, nested = false) {
         output.push('{');
         const renderedKeyframeDeclarations = keyframe.declarations
           ?.filter((declaration) => {
-            return declaration.type !== 'whitespace';
+            return declaration.type !== 'whitespace' && declaration.type !== 'comment';
           })
           ?.map((declaration) => {
             return [declaration.property, ':', minifyValue(declaration)].join('');
