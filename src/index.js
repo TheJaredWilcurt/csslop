@@ -4,7 +4,11 @@
 
 import { parse } from '@node-projects/css-parser';
 
-import { createMinifyContext } from './context.js';
+import {
+  clearActiveCharset,
+  createMinifyContext,
+  setActiveCharset
+} from './context.js';
 import {
   analyzePositionTryRules,
   cleanPositionTryRules,
@@ -26,7 +30,8 @@ import {
   mergeMediaRules,
   mergeSelectorRules,
   nestFlatRules,
-  removeEmptyRules
+  removeEmptyRules,
+  removeOverriddenMultiSelectorProperties
 } from './rules/optimize.js';
 import { stringifyRule } from './rules/stringify.js';
 import { minifyValue } from './value/minify.js';
@@ -164,6 +169,22 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
 }
 
 /**
+ * Extracts the first `@charset` value from raw CSS text before parsing.
+ * Scans for `@charset` followed by a quoted string and semicolon.
+ *
+ * @param  {string} css  The raw CSS string to scan.
+ * @return {string}      The first charset value (with quotes), or empty string if none found.
+ */
+function detectCharset (css) {
+  // Match @charset followed by a quoted value and semicolon
+  const match = css.match(/@charset\s+(["'][^"']+["'])\s*;/i);
+  if (match) {
+    return match[1];
+  }
+  return '';
+}
+
+/**
  * Parses, optimizes, and minifies a CSS string by applying rule merging, declaration deduplication, value compression, and dead-code elimination.
  *
  * @param  {string} input  The raw CSS string to minify.
@@ -179,12 +200,16 @@ export const minifyCSS = function (input) {
   let ast;
   const output = [];
 
+  const detectedCharset = detectCharset(source);
+  setActiveCharset(detectedCharset);
+
   try {
     ast = parse(
       preprocessDeclarationBlocks(neutralizeEscapeSequences(source)),
       { preserveFormatting: true, silent: true }
     );
   } catch {
+    clearActiveCharset();
     return source;
   }
 
@@ -217,7 +242,9 @@ export const minifyCSS = function (input) {
     ast.stylesheet.rules = deduplicateKeyframes(ast.stylesheet.rules);
 
     const mergedRules = mergeSelectorRules(ast.stylesheet.rules);
-    const declarationMergedRules = mergeByDeclarations(mergedRules);
+    const overrideCleanedRules = removeOverriddenMultiSelectorProperties(mergedRules);
+    const preCleanedRules = removeEmptyRules(overrideCleanedRules);
+    const declarationMergedRules = mergeByDeclarations(preCleanedRules);
     const nestedRules = nestFlatRules(declarationMergedRules);
     const nonEmptyRules = removeEmptyRules(nestedRules);
     const factoredRules = factorCommonParents(nonEmptyRules);
@@ -229,8 +256,10 @@ export const minifyCSS = function (input) {
 
     const mergedOutput = mergeAdjacentRulesWithIdenticalBodies(output);
 
+    clearActiveCharset();
     return restoreEscapeSequences(mergedOutput.join(''));
   }
 
+  clearActiveCharset();
   return source;
 };

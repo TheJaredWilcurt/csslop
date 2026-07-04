@@ -1,4 +1,4 @@
-# Remove empty rules with advanced selectors
+# Remove keyframes with only empty children
 
-This verifies that less common selectors do not impact the removal of empty
-rules during minification. If minified correctly, the result will be 0 bytes.
+If all of the children of a keyframe definition are empty, the entire
+`@keyframes` can be removed.

@@ -405,6 +405,26 @@ function stripLeadingZerosFromDecimals (value) {
 }
 
 /**
+ * Processes CSS comments within a custom property value. If the value
+ * consists entirely of a comment, the comment is removed (producing an
+ * empty value). If comments appear between other tokens, their content
+ * is stripped but empty comment delimiters are kept as zero-width
+ * token separators to preserve the token sequence.
+ *
+ * @param  {string} value  The raw custom property value string.
+ * @return {string}        The value with comments processed.
+ */
+function processCustomPropertyComments (value) {
+  // Match values that are entirely a comment (with optional surrounding whitespace)
+  const commentOnlyPattern = /^\s*\/\*.*?\*\/\s*$/s;
+  if (commentOnlyPattern.test(value)) {
+    return '';
+  }
+  // Strip comment content but keep empty markers as token separators
+  return value.replace(/\/\*.*?\*\//g, '/**/');
+}
+
+/**
  * Collapses whitespace in a custom property value while preserving
  * token boundaries. Each whitespace sequence is reduced to a single
  * space, spaces after commas inside function calls are removed, and
@@ -488,8 +508,8 @@ function stringifyRule (rule, context, nested = false) {
 
         // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting (spaces, #, ., :, /), and compare lengths
-          let escaped = value.replace(/([ #.:/])/g, '\\$1');
+          // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
+          let escaped = value.replace(/([ #.:/;])/g, '\\$1');
           if (escaped.length < value.length + 2) {
             return '[' + attribute + '=' + escaped + ']';
           }
@@ -497,8 +517,8 @@ function stringifyRule (rule, context, nested = false) {
         });
         // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting (spaces, #, ., :, /), and compare lengths
-          let escaped = value.replace(/([ #.:/])/g, '\\$1');
+          // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
+          let escaped = value.replace(/([ #.:/;])/g, '\\$1');
           if (escaped.length < value.length + 2) {
             return '[' + attribute + '=' + escaped + ']';
           }
@@ -506,8 +526,8 @@ function stringifyRule (rule, context, nested = false) {
         });
         // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
         minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
-          // Unescape special characters (spaces, #, ., :, /) and compare with quoted form
-          let unescaped = value.replace(/\\([ #.:/])/g, '$1');
+          // Unescape special characters (spaces, #, ., :, /, ;) and compare with quoted form
+          let unescaped = value.replace(/\\([ #.:/;])/g, '$1');
           if (unescaped.length + 2 < value.length) {
             return '[' + attribute + '="' + unescaped + '"]';
           }
@@ -572,9 +592,23 @@ function stringifyRule (rule, context, nested = false) {
             value = minifyValue(declaration);
           } else {
             const rawValue = declaration.rawValue || declaration.value || '';
-            const trimmedRawValue = rawValue.trim();
+            const commentProcessedValue = processCustomPropertyComments(rawValue);
+            const trimmedRawValue = commentProcessedValue.trim();
             if (trimmedRawValue === '') {
-              value = ' ';
+              const hasExplicitValueContent = commentProcessedValue.length > 0;
+              // When the parser absorbs a whitespace-only value into
+              // rawBetween, trailing whitespace after the colon signals an
+              // intentionally empty custom property (e.g. `--foo: ;` sets
+              // the value to a space token, which differs from an absent
+              // value). Only apply this check when the original rawValue
+              // was already empty — not when it became empty after
+              // stripping a comment.
+              const originalValueWasEmpty = rawValue.trim() === '';
+              const colonBetween = declaration.rawBetween || '';
+              // Match whitespace after the colon character
+              const hasSpaceAfterColon = /:\s/.test(colonBetween);
+              const isExplicitlyEmptyValue = hasExplicitValueContent || (originalValueWasEmpty && hasSpaceAfterColon);
+              value = isExplicitlyEmptyValue ? ' ' : '';
             // Preserve leading space for rgb() space-syntax values in custom properties
             } else if (/^rgb\(\s*\d+\s+\d+\s+\d+\s*\)$/i.test(trimmedRawValue)) {
               value = ' ' + trimmedRawValue;
@@ -674,6 +708,13 @@ function stringifyRule (rule, context, nested = false) {
       .filter((keyframe) => {
         return keyframe.type === 'keyframe';
       })
+      .filter((keyframe) => {
+        // Skip keyframe stops that have no meaningful declarations
+        const meaningful = (keyframe.declarations || []).filter((declaration) => {
+          return declaration.type !== 'whitespace' && declaration.type !== 'comment';
+        });
+        return meaningful.length > 0;
+      })
       .map((keyframe) => {
         let output = [];
         let stopValues = keyframe.values.map((stopValue) => {
@@ -689,7 +730,7 @@ function stringifyRule (rule, context, nested = false) {
         output.push('{');
         const renderedKeyframeDeclarations = keyframe.declarations
           ?.filter((declaration) => {
-            return declaration.type !== 'whitespace';
+            return declaration.type !== 'whitespace' && declaration.type !== 'comment';
           })
           ?.map((declaration) => {
             return [declaration.property, ':', minifyValue(declaration)].join('');

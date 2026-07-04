@@ -1,13 +1,20 @@
-div,
-span,
-:where(td):where(.error) {
-  border: 1px dashed hsl(0 100 50);
-  color: #FF0000;
+h1, h2 {
+  color: #001;
+}
+h1 {
+  color: #002;
+}
+h2 {
+  color: #003;
 }
 
-:is(div, span) {
-  border-color: #F00;
-  border-style: dashed;
-  border-width: 1px;
-  color: rgba(255 0 0 / 1.0);
+h3, h4 {
+  margin: 1rem;
+  padding: 1px;
+}
+h3 {
+  padding: 2px;
+}
+h4 {
+  padding: 3px;
 }
