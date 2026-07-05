@@ -53,7 +53,9 @@ function loadAllTests () {
 function runAllTests (allTests) {
   const now = new Date();
   for (const test of allTests) {
+    const testFolder = test.folder;
     const {
+      testNumber,
       description,
       expected,
       folder,
@@ -66,7 +68,13 @@ function runAllTests (allTests) {
     } else {
       folders[folder].fail++;
       fail++;
-      console.log({ expected, actual, description });
+      console.log({
+        id: '/copiedTests/' + testFolder + '/' + testNumber,
+        description,
+        source,
+        expected, 
+        actual
+      });
     }
   }
   const time = (((new Date()) - now) / 1000) + 's';

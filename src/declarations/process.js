@@ -3,6 +3,7 @@
  */
 
 import { minifyValue } from '../value/minify.js';
+import { hasInvalidQuotesCount } from '../value/quotes.js';
 import { collapseShorthandParts } from '../value/shared.js';
 
 import {
@@ -495,6 +496,10 @@ function processDeclarations (declarations, context) {
 
     const propertyName = declaration.property;
     if (!propertyName) {
+      continue;
+    }
+
+    if (propertyName === 'quotes' && hasInvalidQuotesCount(declaration.value)) {
       continue;
     }
 

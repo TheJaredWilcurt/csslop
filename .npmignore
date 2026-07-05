@@ -4,6 +4,7 @@ copiedTests/
 node_modules/
 public/
 scripts/
+site/
 tests/
 .editorconfig
 .gitignore
@@ -11,4 +12,5 @@ tests/
 eslint.config.js
 favicon.png
 index.html
+manual-testing.js
 realWorldResults.json

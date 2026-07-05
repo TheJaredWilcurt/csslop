@@ -2,6 +2,7 @@
  * @file Runs automatically just before `npm start`.
  */
 
+import { minifySiteCSS } from './minifySiteCSS.js';
 import { refreshRealWorldSite } from './refreshRealWorldSite.js';
 
 /**
@@ -9,6 +10,7 @@ import { refreshRealWorldSite } from './refreshRealWorldSite.js';
  */
 function preStart () {
   refreshRealWorldSite();
+  minifySiteCSS();
 }
 
 preStart();

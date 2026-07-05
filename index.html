@@ -2,26 +2,30 @@
 <html>
   <head>
     <title>CSSLOPlayground</title>
-    <link rel="shortcut icon" type="image/x-icon" href="favicon.png" />
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css"
-    >
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.png">
+    <link rel="stylesheet" href="/styles/fonts.css">
+    <link rel="stylesheet" href="/styles/normalize.css">
     <link
       id="theme"
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/water.css@2/out/dark.css"
+      href="/styles/dark.css"
     >
     <link
       id="code-theme"
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/sunburst.min.css"
+      href="/styles/sunburst.css"
     >
     <style>[v-cloak]{display:none}</style>
   </head>
   <body>
     <div id="app" v-cloak>
-      <div class="title" :class="{ dark: theme === 'dark' }">
+      <div
+        class="title"
+        :class="{
+          dark: theme === 'dark',
+          stupid: stupidMode
+        }"
+      >
         <div class="left">
           <a href="https://github.com/TheJaredWilcurt/csslop">
             <img
@@ -65,7 +69,8 @@
         class="container"
         :class="{
           dark: theme === 'dark',
-          loading
+          loading,
+          stupid: stupidMode
         }"
       >
         <div class="half">
@@ -145,168 +150,47 @@
             class="hljs"
             title="Minified Output"
           ></pre>
+          <div class="controls">
+            <button
+              :style="{ 'font-weight': prettyPrint ? 'bold' : 'normal' }"
+              @click="togglePrettyPrint"
+            >
+              Pretty Print
+            </button>
+            <button
+              :style="{ 'font-weight': showGzip ? 'bold' : 'normal' }"
+              @click="toggleShowGzip"
+            >
+              GZIP Sizes
+            </button>
+            <button
+              :style="{ 'font-weight': syntaxHighlighting ? 'bold' : 'normal' }"
+              @click="toggleSyntaxHighlighting"
+            >
+              Syntax Highlighting
+            </button>
+            <button
+              :style="{ 'font-weight': stupidMode ? 'bold' : 'normal' }"
+              @click="toggleStupidMode"
+            >
+              Stupid Mode
+            </button>
+          </div>
         </div>
       </div>
     </div>
-    <style>
-      @font-face {
-        font-family: 'Melting Dessert';
-        src: url('/csslop/melting-dessert.woff') format('woff');
-        font-weight: normal;
-        font-style: normal
-      }
-      *, *:before, *:after {
-        box-sizing: border-box;
-      }
-      html, body {
-        height: 100%;
-        border: 0px;
-        margin: 0px;
-        padding: 0px;
-      }
-      body {
-        max-width: 100%;
-        font-family: sans-serif;
-      }
-      .loading {
-        opacity: 0.5;
-      }
-      h1 {
-        margin: 0px;
-        font-family: "Melting Dessert", sans-serif;
-        color: #C00000;
-        span {
-          font-size: 1rem;
-        }
-      }
-      .title {
-        display: flex;
-        justify-content: space-between;
-        max-width: 1246px;
-        margin: 0 auto;
-        padding: 1rem 1rem 0rem 1rem;
-        img {
-          width: 159px;
-          height: 40px;
-        }
-      }
-      .title.dark h1 {
-        color: #00C000;
-      }
-      .left,
-      .right {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-      }
-      select,
-      button {
-        margin: 0px;
-        font-size: 0.75rem;
-      }
-      .container {
-        display: flex;
-        width: 100%;
-        height: calc(100vh - 100px);
-        align-items: center;
-        justify-content: center;
-        padding: 0rem 1rem;
-        gap: 1rem;
-        > * {
-          width: 600px;
-          max-width: 50%;
-          height: 100% !important;
-        }
-      }
-      .half {
-        display: flex;
-        flex-direction: column;
-      }
-      pre {
-        height: 100%;
-        background: var(--background);
-        border-radius: 10px;
-        margin: 0px;
-        padding: 1rem;
-        font-family: monospace;
-        white-space: pre-wrap;
-        word-break: break-all;
-        overflow: auto;
-        resize: none;
-        transition: 0s;
-      }
-      .stats {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.75rem;
-        margin-bottom: 0.5rem;
-        font-size: 0.7rem;
-        > * {
-          flex-grow: 1;
-          background: var(--background);
-          border-radius: 10px;
-          padding: 0.55rem 0rem;
-          text-align: center;
-        }
-      }
-      #codemirror {
-        .cm-editor {
-          background: var(--background-alt);
-          border-radius: 10px;
-        }
-        .cm-focused { outline: none; }
-        .cm-cursor { border-color: #000; }
-        .cm-gutters { background: var(--background); }
-        .cm-activeLineGutter { background: var(--border); }
-        .cm-activeLine { background-color: #CCEEFF87; }
-        .cm-scroller { border-radius: 10px; }
-        .hljs { background: var(--background); }
-      }
-      #codemirror.dark {
-        ::selection,
-        ::-moz-selection {
-            background: var(--border) !important;
-            color: #FFF;
-            text-shadow: none;
-        }
-        .cm-cursor { border-color: #FFF; }
-        .cm-gutters { background: var(--button-base); }
-        .cm-content { background: var(--background); }
-        .cm-gutters { border-color: var(--background-body); }
-        .cm-tooltip,
-        .cm-activeLineGutter { background: var(--background-alt); }
-        .cm-activeLine { background-color: var(--background-body); }
-        .cm-specialChar { color: #65B042; }
-        .\00037Cb { color: #3387CC; }
-        .\00037Cc { color: inherit; }
-        .\00037Cd { color: #3387CC; }
-        .\00037Ce { color: #65B042; }
-        .\00037Cf { color: inherit; }
-        .\00037Cg { color: inherit; }
-        .\00037Ch { color: inherit; }
-        .\00037Ci { color: #E28964; }
-        .\00037Cj { color: #E28964; }
-        .\00037Ck { color: inherit; }
-        .\00037Cl { color: inherit; }
-        .\00037Cm { color: #AEAEAE; }
-        .\00037Cn { color: inherit; }
-      }
-    </style>
-    <script
-      src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"
-    ></script>
-    <script
-      src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/css.min.js"
-    ></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"
-    ></script>
+    <link rel="stylesheet" href="/styles/styles.css">
+    <script src="/scripts/highlight.js"></script>
+    <script src="/scripts/hljs-css.js"></script>
+    <script src="/scripts/vue.js"></script>
     <script type="module">
       import { acceptCompletion } from '@codemirror/autocomplete';
       import { css as codeMirrorCss } from '@codemirror/lang-css';
       import { keymap } from '@codemirror/view';
+      import {
+        parse as cssParse,
+        stringify as cssStringify
+      } from '@node-projects/css-parser'
       import {
         basicSetup,
         EditorView
@@ -325,14 +209,20 @@
         data: function () {
           return {
             input: [
-              ':is(div, span),',
+              'div,',
+              'span,',
               ':where(td):where(.error) {',
-              '  color: #FF0000FF;',
+              '  border: 1px dashed hsl(0, 100, 50);',
+              '  color: #FF0000;',
               '}',
               '',
               ':is(div, span) {',
-              '  color: #FF0000FF;',
-              '}'
+              '  border-color: #F00;',
+              '  border-style: dashed;',
+              '  border-width: 1px;',
+              '  color: rgba(255 0 0 / 1.0);',
+              '}',
+              ''
             ].join('\n'),
             duration: 0,
             theme: 'dark',
@@ -340,6 +230,9 @@
             realSelected: '',
             realFilesMap: [],
             mirror: undefined,
+            prettyPrint: false,
+            stupidMode: false,
+            syntaxHighlighting: true,
             showGzip: false,
             zipped: {
               input: 0,
@@ -407,6 +300,21 @@
             } else {
               this.setTheme('dark');
             }
+          },
+          loadLocalStorageGeneric: function (key, dataName) {
+            const value = localStorage.getItem(key);
+            if (value === 'true') {
+              this[dataName] = true;
+            }
+            if (value === 'false') {
+              this[dataName] = false;
+            }
+          },
+          loadLocalStorage: function () {
+            this.loadLocalStorageGeneric('csslop-pretty-print', 'prettyPrint');
+            this.loadLocalStorageGeneric('csslop-show-gzip', 'showGzip');
+            this.loadLocalStorageGeneric('csslop-syntax-highlighting', 'syntaxHighlighting');
+            this.loadLocalStorageGeneric('csslop-stupid-mode', 'stupidMode');
           },
           setTheme: function (theme) {
             this.theme = theme;
@@ -503,9 +411,21 @@
               this.input = this.urlDecode(value);
             }
           },
+          togglePrettyPrint: function () {
+            this.prettyPrint = !this.prettyPrint;
+            localStorage.setItem('csslop-pretty-print', this.prettyPrint);
+          },
+          toggleStupidMode: function () {
+            this.stupidMode = !this.stupidMode;
+            localStorage.setItem('csslop-stupid-mode', this.stupidMode);
+          },
           toggleShowGzip: function () {
             this.showGzip = !this.showGzip;
             localStorage.setItem('csslop-show-gzip', this.showGzip);
+          },
+          toggleSyntaxHighlighting: function () {
+            this.syntaxHighlighting = !this.syntaxHighlighting;
+            localStorage.setItem('csslop-syntax-highlighting', this.syntaxHighlighting);
           }
         },
         computed: {
@@ -516,8 +436,30 @@
             return this.minfiy(this.input);
           },
           outputStyled: function () {
-            const options = { language: 'css' };
-            return window.hljs.highlight(this.output, options).value;
+            let output = this.output;
+            if (this.prettyPrint) {
+              try {
+                const ast = cssParse(output);
+                output = cssStringify(ast, { indent: '  ' });
+              } catch (error) {
+                output = [
+                  '/**',
+                  ' * PRETTY PRINT FAILED:',
+                  ' * Due to a syntax error, either in the original CSS,',
+                  ' * or, more likely, CSSLOP\'s AI generated code is',
+                  ' * just outputting garbage. Sorry about that 🤷‍♀️.',
+                  ' *',
+                  ' * ' + error.message,
+                  ' */',
+                  output
+                ].join('\n');
+              }
+            }
+            if (this.syntaxHighlighting) {
+              const options = { language: 'css' };
+              output = window.hljs.highlight(output, options).value;
+            }
+            return output;
           }
         },
         watch: {
@@ -538,10 +480,7 @@
         },
         mounted: async function () {
           this.initializeCodeMirror();
-          const showGzip = localStorage.getItem('csslop-show-gzip');
-          if (showGzip) {
-            this.showGzip = showGzip;
-          }
+          this.loadLocalStorage();
           this.zipped.input = await this.getGzippedSize(this.input);
           this.zipped.output = await this.getGzippedSize(this.output);
         }
