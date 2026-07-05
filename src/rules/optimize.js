@@ -367,6 +367,26 @@ function deduplicateKeyframes (rules) {
 }
 
 /**
+ * Removes duplicate selectors from a combined selector list by normalizing
+ * whitespace and preserving the first occurrence of each unique selector.
+ *
+ * @param  {Array} selectors  The selector strings to deduplicate.
+ * @return {Array}            A new array with duplicate selectors removed.
+ */
+function deduplicateSelectors (selectors) {
+  const seen = new Set();
+  return selectors.filter((selector) => {
+    // Normalize whitespace to single spaces for consistent comparison
+    const normalized = selector.trim().replace(/\s+/g, ' ');
+    if (seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
+}
+
+/**
  * Merges consecutive rules whose declarations are a subset of the following rule, combining their selectors and splitting out any extra declarations.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
@@ -409,7 +429,8 @@ function mergeByDeclarations (rules) {
             return !commonProperties.has(declaration.property);
           });
           result.pop();
-          result.push({ ...previousRule, selectors: [...previousRule.selectors, ...rule.selectors] });
+          const combinedSelectors = deduplicateSelectors([...previousRule.selectors, ...rule.selectors]);
+          result.push({ ...previousRule, selectors: combinedSelectors });
           if (currentOnlyDeclarations.length > 0) {
             result.push({ ...rule, declarations: currentOnlyDeclarations });
           }
@@ -504,6 +525,102 @@ function mergeLayerRules (rules, mergeSelectorRules) {
   return result;
 }
 
+/**
+ * Normalizes a selector string for consistent comparison by trimming
+ * and collapsing internal whitespace.
+ *
+ * @param  {string} selector  The raw selector string.
+ * @return {string}           The normalized selector.
+ */
+function normalizeSelector (selector) {
+  return selector.trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Removes properties from multi-selector rules when every selector in
+ * the rule has that property overridden by a later rule. For example,
+ * if `h1,h2{color:red}` is followed by `h1{color:blue}` and
+ * `h2{color:green}`, the `color` in the first rule is redundant and
+ * can be removed. If all properties are removed, the empty rule will
+ * be cleaned up by `removeEmptyRules`.
+ *
+ * @param  {Array} rules  The flat list of AST rule nodes.
+ * @return {Array}        The rules with overridden multi-selector properties removed.
+ */
+function removeOverriddenMultiSelectorProperties (rules) {
+  for (let ruleIndex = 0; ruleIndex < rules.length; ruleIndex++) {
+    const rule = rules[ruleIndex];
+    if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
+      continue;
+    }
+    const normalizedSelectors = rule.selectors.map(normalizeSelector);
+    const declarations = (rule.declarations || []).filter((declaration) => {
+      return declaration.type === 'declaration';
+    });
+    if (declarations.length === 0) {
+      continue;
+    }
+
+    // For each property in this multi-selector rule, check if ALL selectors
+    // get that property overridden in later rules
+    const propertiesToRemove = new Set();
+    for (const declaration of declarations) {
+      const property = declaration.property;
+      const allSelectorsOverridden = normalizedSelectors.every((selector) => {
+        return isSelectorPropertyOverriddenLater(rules, ruleIndex, selector, property);
+      });
+      if (allSelectorsOverridden) {
+        propertiesToRemove.add(property);
+      }
+    }
+
+    if (propertiesToRemove.size > 0) {
+      rule.declarations = (rule.declarations || []).filter((declaration) => {
+        if (declaration.type !== 'declaration') {
+          return true;
+        }
+        return !propertiesToRemove.has(declaration.property);
+      });
+    }
+  }
+  return rules;
+}
+
+/**
+ * Checks whether a given selector has a specific property overridden
+ * by any later rule in the stylesheet. A property is considered
+ * overridden if a subsequent rule contains that selector (as its only
+ * selector or among its selectors) and declares the same property.
+ *
+ * @param  {Array}   rules       The full list of AST rule nodes.
+ * @param  {number}  startIndex  The index of the current rule (search starts after this).
+ * @param  {string}  selector    The normalized selector to check.
+ * @param  {string}  property    The CSS property name to check.
+ * @return {boolean}             True if a later rule overrides this selector+property.
+ */
+function isSelectorPropertyOverriddenLater (rules, startIndex, selector, property) {
+  for (let laterIndex = startIndex + 1; laterIndex < rules.length; laterIndex++) {
+    const laterRule = rules[laterIndex];
+    if (laterRule.type !== 'rule' || !laterRule.selectors) {
+      continue;
+    }
+    const laterSelectors = laterRule.selectors.map(normalizeSelector);
+    if (!laterSelectors.includes(selector)) {
+      continue;
+    }
+    const laterDeclarations = (laterRule.declarations || []).filter((declaration) => {
+      return declaration.type === 'declaration';
+    });
+    const hasOverride = laterDeclarations.some((declaration) => {
+      return declaration.property === property;
+    });
+    if (hasOverride) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export {
   deduplicateKeyframes,
   expandPureNestedRules,
@@ -513,5 +630,6 @@ export {
   mergeMediaRules,
   mergeSelectorRules,
   nestFlatRules,
-  removeEmptyRules
+  removeEmptyRules,
+  removeOverriddenMultiSelectorProperties
 };
