@@ -2,6 +2,11 @@
  * @file Parses and minifies CSS gradient function calls by splitting arguments, normalizing default directions, and removing redundant stop positions.
  */
 
+import {
+  parseHex,
+  shortestColor
+} from './colors.js';
+
 /**
  * Splits a gradient function's argument string at top-level commas, correctly handling nested parentheses.
  *
@@ -32,6 +37,99 @@ function splitGradientArgs (argumentString) {
 }
 
 /**
+ * Checks whether a string is a valid gradient stop position consisting of one
+ * or two numeric tokens with optional CSS units.
+ *
+ * @param  {string}  positionText  The potential stop position text.
+ * @return {boolean}               Whether the text is a valid stop position.
+ */
+function isGradientStopPosition (positionText) {
+  // Match one or two numeric stop-position tokens, such as `50%`, `10px`, or `0 50%`.
+  return /^[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?(?:\s+[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)?$/i.test(positionText);
+}
+
+/**
+ * Splits a hex color stop that has an attached position with no separating
+ * whitespace back into distinct color and position parts.
+ *
+ * @param  {string}      stop  The raw gradient stop text.
+ * @return {object|null}       Parsed `color` and `position` parts, or null.
+ */
+function splitAttachedHexColorStop (stop) {
+  if (!stop.startsWith('#')) {
+    return null;
+  }
+
+  const hexLengths = [8, 6, 4, 3];
+  for (const hexLength of hexLengths) {
+    const colorLength = hexLength + 1;
+    if (stop.length <= colorLength) {
+      continue;
+    }
+
+    const colorCandidate = stop.slice(0, colorLength);
+    const positionCandidate = stop.slice(colorLength).trim();
+    const hexDigits = colorCandidate.slice(1);
+    const isHexColor = hexDigits.length === hexLength && /^[0-9a-f]+$/i.test(hexDigits);
+    if (!isHexColor || !isGradientStopPosition(positionCandidate)) {
+      continue;
+    }
+
+    return {
+      color: colorCandidate,
+      position: positionCandidate
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Splits a function-based color stop that has an attached position with no
+ * separating whitespace back into distinct color and position parts.
+ *
+ * @param  {string}      stop  The raw gradient stop text.
+ * @return {object|null}       Parsed `color` and `position` parts, or null.
+ */
+function splitAttachedFunctionColorStop (stop) {
+  const lastCloseParenthesis = stop.lastIndexOf(')');
+  if (lastCloseParenthesis === -1 || lastCloseParenthesis === stop.length - 1) {
+    return null;
+  }
+
+  const colorCandidate = stop.slice(0, lastCloseParenthesis + 1).trim();
+  const positionCandidate = stop.slice(lastCloseParenthesis + 1).trim();
+  if (!isGradientStopPosition(positionCandidate)) {
+    return null;
+  }
+
+  return {
+    color: colorCandidate,
+    position: positionCandidate
+  };
+}
+
+/**
+ * Normalizes a gradient stop color token to the same shortest representation
+ * used by the general value minifier so equivalent adjacent stops can merge.
+ *
+ * @param  {string} colorToken  The parsed stop color token.
+ * @return {string}             The normalized color token.
+ */
+function normalizeStopColorToken (colorToken) {
+  if (!colorToken.startsWith('#')) {
+    return colorToken;
+  }
+
+  const channels = parseHex(colorToken);
+  if (!channels) {
+    return colorToken;
+  }
+
+  return shortestColor(channels[0], channels[1], channels[2], channels[3]);
+}
+
+/**
  * Splits a gradient color stop into its color value and optional position.
  * The position is the trailing percentage/length token(s), while the color
  * is everything before it. Handles colors with parentheses like rgb() and hsl().
@@ -50,10 +148,35 @@ function parseColorStop (stop) {
       position: positionMatch[2].trim()
     };
   }
+  const attachedHexStop = splitAttachedHexColorStop(trimmed);
+  if (attachedHexStop) {
+    return attachedHexStop;
+  }
+  const attachedFunctionStop = splitAttachedFunctionColorStop(trimmed);
+  if (attachedFunctionStop) {
+    return attachedFunctionStop;
+  }
   return {
     color: trimmed,
     position: null
   };
+}
+
+/**
+ * Serializes a parsed gradient stop back into normalized CSS text, ensuring a
+ * separating space is preserved when a stop position is present.
+ *
+ * @param  {string} stop  The raw gradient stop string.
+ * @return {string}       The normalized gradient stop string.
+ */
+function normalizeColorStop (stop) {
+  const parsedStop = parseColorStop(stop);
+  const normalizedColor = normalizeStopColorToken(parsedStop.color);
+  if (parsedStop.position === null) {
+    return normalizedColor;
+  }
+
+  return normalizedColor + ' ' + parsedStop.position;
 }
 
 /**
@@ -225,10 +348,14 @@ function processGradientArgs (func, argsStr) {
   }
 
   // Extract color stop args (everything after the direction/shape argument)
-  const colorStopArgs = args.slice(directionArgCount);
-  if (colorStopArgs.length >= 2) {
-    const combinedStops = combineAdjacentIdenticalStops(colorStopArgs);
-    args.splice(directionArgCount, colorStopArgs.length, ...combinedStops);
+  const colorStopArgs = args.slice(directionArgCount).map((arg) => {
+    return normalizeColorStop(arg);
+  });
+  if (colorStopArgs.length > 0) {
+    const normalizedStops = colorStopArgs.length >= 2 ?
+      combineAdjacentIdenticalStops(colorStopArgs) :
+      colorStopArgs;
+    args.splice(directionArgCount, colorStopArgs.length, ...normalizedStops);
   }
 
   if (args.length > directionArgCount) {
