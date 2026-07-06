@@ -456,8 +456,7 @@ function mergeSelectorRules (rules) {
     if (rule.type === 'rule') {
       const selectorKey = rule.selectors ?
         rule.selectors.map((selector) => {
-          // Normalize selector whitespace for consistent comparison
-          return selector.trim().replace(/\s+/g, ' ');
+          return normalizeSelector(selector);
         }).sort().join(',') :
         '';
       if (selectorKey && selectorMap.has(selectorKey)) {
@@ -533,7 +532,12 @@ function mergeLayerRules (rules, mergeSelectorRules) {
  * @return {string}           The normalized selector.
  */
 function normalizeSelector (selector) {
-  return selector.trim().replace(/\s+/g, ' ');
+  return selector
+    .trim()
+    .replace(/\s+/g, ' ')
+    // Convert double-colon ::before/::after to single-colon legacy form
+    .replace(/::before\b/g, ':before')
+    .replace(/::after\b/g, ':after');
 }
 
 /**

@@ -71,6 +71,13 @@ function getMergeProps (shorthand, longhands, declarations) {
     }
     return null;
   }
+  if (shorthand === 'background-position') {
+    const hasBothAxes = presentLonghands.includes('background-position-x') && presentLonghands.includes('background-position-y');
+    if (hasBothAxes) {
+      return presentLonghands;
+    }
+    return null;
+  }
   if (shorthand === 'background') {
     const hasBackgroundProp = presentLonghands.includes('background-color') || presentLonghands.includes('background-image');
     if (hasBackgroundProp) {
@@ -167,6 +174,27 @@ function canMergeVarValue (value, context) {
   return matches.every(([, propertyName]) => {
     return context.registeredCustomProperties.has(propertyName);
   });
+}
+
+/**
+ * Resolves the background position from a value map. Prefers the combined
+ * `background-position` property if present, otherwise combines
+ * `background-position-x` and `background-position-y` into a single value.
+ *
+ * @param  {Map}          valueMap  A map of property names to their minified values.
+ * @return {string|null}            The resolved position string, or null if no position data is available.
+ */
+function resolveBackgroundPosition (valueMap) {
+  const position = valueMap.get('background-position');
+  if (position) {
+    return position;
+  }
+  const positionX = valueMap.get('background-position-x');
+  const positionY = valueMap.get('background-position-y');
+  if (positionX && positionY) {
+    return positionX + ' ' + positionY;
+  }
+  return null;
 }
 
 /**
@@ -307,12 +335,26 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
     return result.join(' ') + importantSuffix;
   }
 
+  if (shorthandName === 'background-position') {
+    const positionX = valueMap.get('background-position-x');
+    const positionY = valueMap.get('background-position-y');
+    if (!positionX || !positionY) {
+      return null;
+    }
+    return positionX + ' ' + positionY + importantSuffix;
+  }
+
   if (shorthandName === 'background') {
     const color = valueMap.get('background-color');
     const image = valueMap.get('background-image');
     const repeat = valueMap.get('background-repeat');
-    const position = valueMap.get('background-position');
     const attachment = valueMap.get('background-attachment');
+    const size = valueMap.get('background-size');
+    const origin = valueMap.get('background-origin');
+    const clip = valueMap.get('background-clip');
+
+    const position = resolveBackgroundPosition(valueMap);
+
     const result = [];
     if (color && color !== 'transparent') {
       result.push(color);
@@ -323,11 +365,34 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
     if (position && position !== '0 0' && position !== '0% 0%') {
       result.push(position);
     }
+    if (size && size !== 'auto') {
+      if (position && position !== '0 0' && position !== '0% 0%') {
+        result.push('/' + size);
+      } else {
+        result.push('0 0/' + size);
+      }
+    }
     if (repeat && repeat !== 'repeat') {
       result.push(repeat);
     }
     if (attachment && attachment !== 'scroll') {
       result.push(attachment);
+    }
+    const hasNonDefaultOrigin = origin && origin !== 'padding-box';
+    const hasNonDefaultClip = clip && clip !== 'border-box';
+    if (hasNonDefaultOrigin && hasNonDefaultClip) {
+      // Both differ from defaults: output both (first is origin, second is clip)
+      result.push(origin);
+      result.push(clip);
+    } else if (hasNonDefaultOrigin || hasNonDefaultClip) {
+      // Only one differs: must output both so the parser assigns them correctly
+      // A single <box> value sets both origin and clip in the background shorthand
+      if (origin) {
+        result.push(origin);
+      }
+      if (clip) {
+        result.push(clip);
+      }
     }
     if (!result.length) {
       return null;
@@ -654,10 +719,34 @@ function processDeclarations (declarations, context) {
     }
 
     if (newDeclarations.length) {
+      // Filter out intermediate shorthands whose longhands are entirely
+      // consumed by a higher-level shorthand created in the same iteration.
+      // For example, background-position (x + y) is redundant when
+      // background already consumed those same longhands.
+      const filteredDeclarations = newDeclarations.filter((declaration) => {
+        const longhands = shorthandMap[declaration.property];
+        if (!longhands) {
+          return true;
+        }
+        const isSubsumedByOtherShorthand = newDeclarations.some((other) => {
+          if (other === declaration) {
+            return false;
+          }
+          const otherLonghands = shorthandMap[other.property];
+          if (!otherLonghands) {
+            return false;
+          }
+          return longhands.every((longhand) => {
+            return otherLonghands.includes(longhand);
+          });
+        });
+        return !isSubsumedByOtherShorthand;
+      });
+
       result = result.filter((declaration) => {
         return !mergedProperties.has(declaration.property);
       });
-      result = [...result, ...newDeclarations];
+      result = [...result, ...filteredDeclarations];
       changed = true;
     }
   }
