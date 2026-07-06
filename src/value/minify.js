@@ -651,6 +651,10 @@ function applyPropertyOptimizations (val, property) {
     if (normalized) {
       val = normalized;
     }
+    // Restore the required separator between an image function and a following
+    // background-position when that position is not immediately followed by `/size`.
+    val = val.replace(/\)((?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)(?:\s+(?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?))?)(?!\/)/gi, ') $1');
+    val = val.replace(/\)\s+((?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)(?:\s+(?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?))?)(?=\/)/gi, ')$1');
   }
 
   if (property === 'border') {
