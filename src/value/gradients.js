@@ -163,6 +163,105 @@ function parseColorStop (stop) {
 }
 
 /**
+ * Splits a stop position into individual start and end tokens.
+ *
+ * @param  {string|null} position  The raw stop position text.
+ * @return {Array}                 The normalized position tokens.
+ */
+function splitStopPositionTokens (position) {
+  if (position === null) {
+    return [];
+  }
+
+  return position.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Serializes a color stop from its color and normalized position tokens.
+ *
+ * @param  {string} color           The normalized stop color.
+ * @param  {Array}  positionTokens  The normalized stop positions.
+ * @return {string}                 The serialized color stop.
+ */
+function serializeColorStop (color, positionTokens) {
+  if (positionTokens.length === 0) {
+    return color;
+  }
+
+  return color + ' ' + positionTokens.join(' ');
+}
+
+/**
+ * Merges consecutive stops with the same color into a single logical stop.
+ *
+ * @param  {Array}  group  The adjacent parsed stops for one color.
+ * @return {object}        The merged stop data.
+ */
+function mergeIdenticalStopGroup (group) {
+  const firstStop = group[0];
+  const lastStop = group[group.length - 1];
+  const firstPositionTokens = splitStopPositionTokens(firstStop.position);
+  const lastPositionTokens = splitStopPositionTokens(lastStop.position);
+
+  let positionTokens;
+  if (group.length === 1) {
+    positionTokens = firstPositionTokens;
+  } else {
+    const mergedTokens = [];
+    const startPosition = firstPositionTokens[0] || null;
+    const endPosition = lastPositionTokens[lastPositionTokens.length - 1] || null;
+
+    if (startPosition !== null) {
+      mergedTokens.push(startPosition);
+    }
+    if (endPosition !== null && endPosition !== startPosition) {
+      mergedTokens.push(endPosition);
+    }
+
+    positionTokens = mergedTokens;
+  }
+
+  return {
+    color: firstStop.color,
+    effectiveEndPosition: lastPositionTokens[lastPositionTokens.length - 1] || null,
+    positionTokens
+  };
+}
+
+/**
+ * Removes implied edge positions and rewrites repeated starts as `0`.
+ *
+ * @param  {Array} mergedStops  The merged stops to normalize.
+ * @return {Array}              The serialized normalized stops.
+ */
+function normalizeBoundaryPositionTokens (mergedStops) {
+  const result = [];
+  let previousEndPosition = null;
+
+  for (let stopIndex = 0; stopIndex < mergedStops.length; stopIndex++) {
+    const stop = mergedStops[stopIndex];
+    const isFirstStop = stopIndex === 0;
+    const isLastStop = stopIndex === mergedStops.length - 1;
+    const positionTokens = [...stop.positionTokens];
+
+    if (isFirstStop && positionTokens[0] === '0%') {
+      positionTokens.shift();
+    }
+    if (isLastStop && positionTokens[positionTokens.length - 1] === '100%') {
+      positionTokens.pop();
+    }
+    if (positionTokens.length > 0 && positionTokens[0] === previousEndPosition) {
+      positionTokens[0] = '0';
+    }
+
+    previousEndPosition = stop.effectiveEndPosition;
+    result.push(serializeColorStop(stop.color, positionTokens));
+  }
+
+  return result;
+}
+
+/**
  * Serializes a parsed gradient stop back into normalized CSS text, ensuring a
  * separating space is preserved when a stop position is present.
  *
@@ -222,67 +321,11 @@ function combineAdjacentIdenticalStops (args) {
   }
 
   const groups = groupConsecutiveIdenticalStops(stops);
-  const hasMergeableGroup = groups.some((group) => {
-    return group.length > 1;
+  const mergedStops = groups.map((group) => {
+    return mergeIdenticalStopGroup(group);
   });
-  if (!hasMergeableGroup) {
-    return args;
-  }
 
-  const result = [];
-  let previousEndPosition = null;
-
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-    const group = groups[groupIndex];
-    const color = group[0].color;
-    const isFirstGroup = groupIndex === 0;
-    const isLastGroup = groupIndex === groups.length - 1;
-
-    if (group.length === 1) {
-      let position = group[0].position;
-      if (position === '0%' && isFirstGroup) {
-        position = null;
-      }
-      if (position === '100%' && isLastGroup) {
-        position = null;
-      }
-      if (position !== null && position === previousEndPosition) {
-        position = '0';
-      }
-      previousEndPosition = group[0].position;
-      result.push(position ? color + ' ' + position : color);
-      continue;
-    }
-
-    const firstPosition = group[0].position;
-    const lastPosition = group[group.length - 1].position;
-
-    let startPart = firstPosition;
-    let endPart = lastPosition;
-
-    if (startPart === '0%' && isFirstGroup) {
-      startPart = null;
-    }
-    if (endPart === '100%' && isLastGroup) {
-      endPart = null;
-    }
-    if (startPart !== null && startPart === previousEndPosition) {
-      startPart = '0';
-    }
-
-    previousEndPosition = lastPosition;
-
-    const positionParts = [startPart, endPart].filter((part) => {
-      return part !== null;
-    });
-    if (positionParts.length > 0) {
-      result.push(color + ' ' + positionParts.join(' '));
-    } else {
-      result.push(color);
-    }
-  }
-
-  return result;
+  return normalizeBoundaryPositionTokens(mergedStops);
 }
 
 /**
