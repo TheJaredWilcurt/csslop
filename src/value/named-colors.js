@@ -7,6 +7,7 @@
 
 const namedColors = {
   black: [0, 0, 0],
+  transparent: [0, 0, 0],
   silver: [192, 192, 192],
   gray: [128, 128, 128],
   grey: [128, 128, 128],
