@@ -339,7 +339,9 @@ function parseColor (colorString) {
 
   // Named color
   if (namedColors[normalized]) {
-    return [...namedColors[normalized], 1];
+    // transparent has alpha=0, all other named colors have alpha=1
+    const alpha = normalized === 'transparent' ? 0 : 1;
+    return [...namedColors[normalized], alpha];
   }
 
   // Hex
