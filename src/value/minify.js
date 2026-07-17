@@ -89,7 +89,9 @@ function shortenColorValues (segment) {
       }
       const rgb = namedColors[match.toLowerCase()];
       if (rgb) {
-        channels = [rgb[0], rgb[1], rgb[2], 1];
+        // transparent has alpha=0, all other named colors have alpha=1
+        const alpha = match.toLowerCase() === 'transparent' ? 0 : 1;
+        channels = [rgb[0], rgb[1], rgb[2], alpha];
       }
     }
     if (!channels) {
@@ -521,6 +523,10 @@ function applyPropertyOptimizations (val, property) {
     if (['min-width', 'min-height'].includes(property)) {
       val = 'auto';
     }
+    // background-color: initial should become #0000 (transparent)
+    if (property === 'background-color') {
+      val = '#0000';
+    }
   }
 
   if (property === 'background' && val === 'none') {
@@ -612,6 +618,9 @@ function applyPropertyOptimizations (val, property) {
 
   // Remove space before hex colors (second pass after color evaluations)
   val = replaceOutsideStringsAndUrls(val, (segment) => {
+    // Preserve space after border style keywords (solid, dashed, etc.) before hex colors
+    segment = segment.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+#([0-9a-fA-F]{3,8})\b/gi, '$1 #$2');
+    // Then remove other spaces before hex colors
     return segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
   });
   if (property !== 'transform' && property !== 'background' && property !== 'src') {
@@ -660,6 +669,9 @@ function applyPropertyOptimizations (val, property) {
   if (property === 'border') {
     // Remove default "medium" border-width keyword
     val = val.replace(/\bmedium\s+/g, '');
+    // Restore missing space between border-style and a 4-digit hex color (with alpha) when they are adjacent
+    // This is needed because solid#0000 could be parsed as solid followed by #000 followed by position 0
+    val = val.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)#([0-9a-fA-F]{4})\b/gi, '$1 #$2');
   }
 
   if (property === 'outline') {
@@ -771,7 +783,12 @@ function minifyValue (declaration) {
 
     // Remove space before hex colors
     val = replaceOutsideStringsAndUrls(val, (segment) => {
+      // Preserve space after border style keywords by using a temporary placeholder
+      segment = segment.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+#([0-9a-fA-F]{3,8})\b/gi, '$1__BORDER_SPACE__#$2');
+      // Remove other spaces before hex colors
       segment = segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
+      // Restore the preserved space
+      segment = segment.replace(/__BORDER_SPACE__#/g, ' #');
       // Lowercase hex color tokens for consistency and shorter output
       segment = segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (m) => {
         return m.toLowerCase();

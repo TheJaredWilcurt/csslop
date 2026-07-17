@@ -139,6 +139,25 @@ function normalizeStopColorToken (colorToken) {
  */
 function parseColorStop (stop) {
   const trimmed = stop.trim();
+  
+  // Check if the entire stop is a 4-digit hex color (with alpha) like #0000
+  // These should not be split as they are complete colors
+  if (/^#[0-9a-fA-F]{4}\b$/.test(trimmed)) {
+    return {
+      color: trimmed,
+      position: null
+    };
+  }
+  
+  // Check if the entire stop is an 8-digit hex color (with alpha) like #00000000
+  // These should not be split as they are complete colors
+  if (/^#[0-9a-fA-F]{8}\b$/.test(trimmed)) {
+    return {
+      color: trimmed,
+      position: null
+    };
+  }
+  
   // Match a trailing position: one or two values that are numbers with optional units
   // like "50%", "10px", or "0". Captures the last position token(s) after the color.
   const positionMatch = trimmed.match(/^(.+?)\s+((?:\d+(?:\.\d+)?(?:%|[a-z]+)?\s*){1,2})$/i);
@@ -248,6 +267,9 @@ function normalizeBoundaryPositionTokens (mergedStops) {
       positionTokens.shift();
     }
     if (isLastStop && positionTokens[positionTokens.length - 1] === '100%') {
+      positionTokens.pop();
+    }
+    if (isLastStop && positionTokens.length === 1 && positionTokens[0] === '100%') {
       positionTokens.pop();
     }
     if (positionTokens.length > 0 && positionTokens[0] === previousEndPosition) {
