@@ -269,6 +269,9 @@ function normalizeBoundaryPositionTokens (mergedStops) {
     if (isLastStop && positionTokens[positionTokens.length - 1] === '100%') {
       positionTokens.pop();
     }
+    if (isLastStop && positionTokens.length === 1 && positionTokens[0] === '100%') {
+      positionTokens.pop();
+    }
     if (positionTokens.length > 0 && positionTokens[0] === previousEndPosition) {
       positionTokens[0] = '0';
     }
