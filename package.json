@@ -30,7 +30,7 @@
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "codemirror": "^6.0.2",
-    "css-minify-tests": "github:keithamus/css-minify-tests",
+    "css-minify-tests": "github:keithamus/css-minify-tests#gradients",
     "eslint": "^10.5.0",
     "eslint-config-tjw-base": "^5.0.0",
     "eslint-config-tjw-import-x": "^1.0.1",
