@@ -20,7 +20,7 @@
 
 * All tests pass.
 * Several new tests were created upstream, and some existing tests were improved/fixed upstream (all manually by me, no AI used).
-* The `src` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can report them and I might tell the AI's to fix it.
+* The `src` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can isolate the problem and [compare against the correct output of real minifiers](https://TheJaredWilcurt.com/playground), then use that to create a [new test upstream](https://github.com/keithamus/css-minify-tests/issues) for the AI's to be forced to pass.
 * No AI generated code exists outside of the `src` folder, this README, for example, is 100% human crafted.
 
 **AI's used:**
