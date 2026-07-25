@@ -20,7 +20,7 @@
     "publisho": "npm publish --access=public"
   },
   "dependencies": {
-    "@csstools/css-calc": "^3.2.1",
+    "@csstools/css-calc": "^3.3.0",
     "@node-projects/css-parser": "^5.2.0"
   },
   "devDependencies": {
@@ -31,12 +31,12 @@
     "@stylistic/eslint-plugin": "^5.10.0",
     "codemirror": "^6.0.2",
     "css-minify-tests": "github:keithamus/css-minify-tests",
-    "eslint": "^10.5.0",
+    "eslint": "^10.8.0",
     "eslint-config-tjw-base": "^5.0.0",
     "eslint-config-tjw-import-x": "^1.0.1",
     "eslint-config-tjw-jsdoc": "^2.0.1",
     "eslint-plugin-import-x": "^4.17.0",
-    "eslint-plugin-jsdoc": "^63.0.12",
+    "eslint-plugin-jsdoc": "^63.2.2",
     "fflate": "^0.8.3",
     "globals": "^17.7.0",
     "pretty-ms": "^9.3.0",
