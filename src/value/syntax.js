@@ -1,4 +1,8 @@
 /**
+ * @file Provides syntax-aware CSS string scanning utilities.
+ */
+
+/**
  * Finds the closing parenthesis for an opening parenthesis while respecting
  * nested parentheses and quoted strings.
  *

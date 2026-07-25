@@ -1,3 +1,7 @@
+/**
+ * @file Evaluates and minifies CSS relative color syntax.
+ */
+
 import {
   parseColor,
   rgbaToHex,

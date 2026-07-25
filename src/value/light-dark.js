@@ -1,3 +1,7 @@
+/**
+ * @file Simplifies CSS light-dark functions whose light and dark values are equivalent.
+ */
+
 import { findMatchingParenthesis } from './syntax.js';
 
 /**
