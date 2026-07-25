@@ -15,14 +15,23 @@ const __dirname = import.meta.dirname;
 /**
  * Copies the test files from css-minify-tests to the copiedTests folder.
  */
-const copyTests = function () {
-  const originalTests = join(
+export const copyTests = function (fromNpm) {
+  let originalTests = join(
     __dirname,
     '..',
-    'node_modules',
+    '..',
     'css-minify-tests',
     'tests'
   );
+  if (fromNpm) {
+    originalTests = join(
+      __dirname,
+      '..',
+      'node_modules',
+      'css-minify-tests',
+      'tests'
+    );
+  }
   const copiedTests = join(
     __dirname,
     '..',
@@ -47,5 +56,3 @@ const copyTests = function () {
     }
   }
 };
-
-copyTests();
