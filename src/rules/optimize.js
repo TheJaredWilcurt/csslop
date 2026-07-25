@@ -44,7 +44,10 @@ function expandPureNestedRules (rules) {
     const isPureNested = nonWhitespace.length > 0 && nonWhitespace.every((declaration) => {
       return declaration.type === 'rule';
     });
-    if (!isPureNested) {
+    // A comma-separated parent selector list behaves like :is() for specificity,
+    // so expanding it into descendant combinations (e.g. #a,.b → #a .c,.b .c)
+    // would change specificity. Only single-selector parents can expand safely.
+    if (!isPureNested || rule.selectors.length !== 1) {
       result.push(rule);
       continue;
     }
@@ -444,6 +447,295 @@ function mergeByDeclarations (rules) {
 }
 
 /**
+ * Splits a selector list on top-level commas, respecting parentheses and
+ * brackets so commas inside `:is(...)` or `[attr="a,b"]` are not split.
+ *
+ * @param  {string} selectorList  The selector list string.
+ * @return {Array}                The individual selector strings.
+ */
+function splitSelectorListTopLevel (selectorList) {
+  const selectors = [];
+  let current = '';
+  let depth = 0;
+  for (const character of selectorList) {
+    if (character === '(' || character === '[') {
+      depth++;
+    } else if (character === ')' || character === ']') {
+      depth--;
+    }
+    if (character === ',' && depth === 0) {
+      selectors.push(current.trim());
+      current = '';
+    } else {
+      current += character;
+    }
+  }
+  selectors.push(current.trim());
+  return selectors;
+}
+
+/**
+ * Advances past a CSS identifier (name) starting at the given index.
+ *
+ * @param  {string} text   The selector text.
+ * @param  {number} start  The index to start scanning from.
+ * @return {number}        The index just after the identifier.
+ */
+function skipSelectorName (text, start) {
+  let index = start;
+  // Advance over identifier characters (letters, digits, hyphen, underscore)
+  while (index < text.length && (/[a-zA-Z0-9_-]/).test(text[index])) {
+    index++;
+  }
+  return index;
+}
+
+/**
+ * Finds the index of the closing parenthesis matching the one at openIndex.
+ *
+ * @param  {string} text       The text to scan.
+ * @param  {number} openIndex  Index of the opening parenthesis.
+ * @return {number}            Index of the matching close parenthesis, or text length.
+ */
+function findMatchingParenthesisIndex (text, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < text.length; index++) {
+    if (text[index] === '(') {
+      depth++;
+    } else if (text[index] === ')') {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return text.length;
+}
+
+/**
+ * Compares two specificity tuples [ids, classes, types] lexicographically.
+ *
+ * @param  {Array}  first   The first specificity tuple.
+ * @param  {Array}  second  The second specificity tuple.
+ * @return {number}         Negative, zero, or positive per standard comparison.
+ */
+function compareSpecificity (first, second) {
+  for (let index = 0; index < 3; index++) {
+    if (first[index] !== second[index]) {
+      return first[index] - second[index];
+    }
+  }
+  return 0;
+}
+
+/**
+ * Computes the CSS specificity of a single complex selector as an
+ * [ids, classes, types] tuple. The nesting selector `&` is ignored because its
+ * contribution comes from the shared parent when comparing sibling selectors.
+ * Functional pseudo-classes `:is()`, `:not()`, `:has()`, and `:matches()` add
+ * the maximum specificity of their arguments; `:where()` adds nothing.
+ *
+ * @param  {string} selector  A single complex selector string.
+ * @return {Array}            The [ids, classes, types] specificity tuple.
+ */
+function computeSpecificity (selector) {
+  const specificity = [0, 0, 0];
+  const text = selector.trim();
+  let index = 0;
+  while (index < text.length) {
+    const character = text[index];
+    if (character === '#') {
+      specificity[0]++;
+      index = skipSelectorName(text, index + 1);
+    } else if (character === '.') {
+      specificity[1]++;
+      index = skipSelectorName(text, index + 1);
+    } else if (character === '[') {
+      specificity[1]++;
+      // Advance to just past the matching closing bracket
+      let bracketDepth = 0;
+      while (index < text.length) {
+        if (text[index] === '[') {
+          bracketDepth++;
+        } else if (text[index] === ']') {
+          bracketDepth--;
+          if (bracketDepth === 0) {
+            index++;
+            break;
+          }
+        }
+        index++;
+      }
+    } else if (character === ':') {
+      if (text[index + 1] === ':') {
+        specificity[2]++;
+        index = skipSelectorName(text, index + 2);
+      } else {
+        const nameStart = index + 1;
+        const nameEnd = skipSelectorName(text, nameStart);
+        const name = text.slice(nameStart, nameEnd).toLowerCase();
+        if (text[nameEnd] === '(') {
+          const closeIndex = findMatchingParenthesisIndex(text, nameEnd);
+          const inner = text.slice(nameEnd + 1, closeIndex);
+          if (name === 'where') {
+            // :where() contributes zero specificity
+          } else if (name === 'is' || name === 'not' || name === 'has' || name === 'matches') {
+            const innerMax = maxSelectorSpecificity(inner);
+            specificity[0] += innerMax[0];
+            specificity[1] += innerMax[1];
+            specificity[2] += innerMax[2];
+          } else {
+            specificity[1]++;
+          }
+          index = closeIndex + 1;
+        } else {
+          // Legacy single-colon pseudo-elements count as pseudo-elements
+          if (name === 'before' || name === 'after' || name === 'first-line' || name === 'first-letter') {
+            specificity[2]++;
+          } else {
+            specificity[1]++;
+          }
+          index = nameEnd;
+        }
+      }
+    } else if (character === '*' || character === '&') {
+      // Universal selector and nesting selector add no counted specificity here
+      index++;
+    } else if ((/[a-zA-Z]/).test(character)) {
+      specificity[2]++;
+      index = skipSelectorName(text, index);
+    } else {
+      // Combinators and whitespace do not affect specificity
+      index++;
+    }
+  }
+  return specificity;
+}
+
+/**
+ * Returns the maximum specificity tuple across a comma-separated selector list,
+ * matching how a comma-separated group behaves as `:is()`.
+ *
+ * @param  {string} selectorList  The selector list string.
+ * @return {Array}                The maximum [ids, classes, types] tuple.
+ */
+function maxSelectorSpecificity (selectorList) {
+  let maximum = [0, 0, 0];
+  for (const selector of splitSelectorListTopLevel(selectorList)) {
+    const specificity = computeSpecificity(selector);
+    if (compareSpecificity(specificity, maximum) > 0) {
+      maximum = specificity;
+    }
+  }
+  return maximum;
+}
+
+/**
+ * Builds a normalized signature of a rule's declaration body, or null when the
+ * rule contains anything other than plain declarations (e.g. nested rules).
+ *
+ * @param  {object}      rule  The AST rule node.
+ * @return {string|null}       The sorted "property:value" signature, or null.
+ */
+function nestedRuleBodySignature (rule) {
+  const declarations = (rule.declarations || []).filter((declaration) => {
+    return declaration.type !== 'whitespace' && declaration.type !== 'comment';
+  });
+  if (declarations.length === 0) {
+    return null;
+  }
+  const isAllPlainDeclarations = declarations.every((declaration) => {
+    return declaration.type === 'declaration' && declaration.property;
+  });
+  if (!isAllPlainDeclarations) {
+    return null;
+  }
+  return declarations
+    .map((declaration) => {
+      return declaration.property + ':' + (declaration.value || '').trim();
+    })
+    .sort()
+    .join(';');
+}
+
+/**
+ * Determines whether two nested rules can be merged into a shared selector list.
+ * They must have identical declaration bodies and the same specificity level,
+ * since comma-separated nested selectors share the highest specificity of the
+ * group (like `:is()`).
+ *
+ * @param  {object}  first   The first nested rule.
+ * @param  {object}  second  The second nested rule.
+ * @return {boolean}         Whether the two nested rules may be merged.
+ */
+function nestedRulesMergeable (first, second) {
+  if (!first.selectors?.length || !second.selectors?.length) {
+    return false;
+  }
+  const firstSignature = nestedRuleBodySignature(first);
+  if (firstSignature === null || firstSignature !== nestedRuleBodySignature(second)) {
+    return false;
+  }
+  const firstSpecificity = maxSelectorSpecificity(first.selectors.join(','));
+  const secondSpecificity = maxSelectorSpecificity(second.selectors.join(','));
+  return compareSpecificity(firstSpecificity, secondSpecificity) === 0;
+}
+
+/**
+ * Recursively merges consecutive nested rules within a declaration list when
+ * they share identical bodies and specificity, combining their selector lists.
+ *
+ * @param  {Array} declarations  The declaration/nested-rule entries of a parent rule.
+ * @return {Array}               The declaration list with mergeable nested rules combined.
+ */
+function mergeConsecutiveNestedRules (declarations) {
+  const recursed = declarations.map((declaration) => {
+    if (declaration.type === 'rule' && declaration.declarations) {
+      return { ...declaration, declarations: mergeConsecutiveNestedRules(declaration.declarations) };
+    }
+    return declaration;
+  });
+
+  const result = [];
+  for (const declaration of recursed) {
+    const previous = result[result.length - 1];
+    if (
+      declaration.type === 'rule' &&
+      previous &&
+      previous.type === 'rule' &&
+      nestedRulesMergeable(previous, declaration)
+    ) {
+      result[result.length - 1] = {
+        ...previous,
+        selectors: [...previous.selectors, ...declaration.selectors]
+      };
+      continue;
+    }
+    result.push(declaration);
+  }
+  return result;
+}
+
+/**
+ * Merges mergeable nested rules within every rule's body across the stylesheet,
+ * recursing into `@media` and `@layer` blocks. Top-level rules are not merged
+ * here, since only nested (comma-grouped) selectors share specificity.
+ *
+ * @param  {Array} rules  The AST rule nodes to process.
+ * @return {Array}        The rules with mergeable nested rules combined.
+ */
+function mergeIdenticalNestedRules (rules) {
+  for (const rule of rules) {
+    if (rule.type === 'rule' && rule.declarations) {
+      rule.declarations = mergeConsecutiveNestedRules(rule.declarations);
+    } else if ((rule.type === 'media' || rule.type === 'layer') && rule.rules) {
+      rule.rules = mergeIdenticalNestedRules(rule.rules);
+    }
+  }
+  return rules;
+}
+
+/**
  * Merges rules with identical normalized selectors by combining their declarations. Non-rule entries (like `@media`) break the merge window.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
@@ -630,6 +922,7 @@ export {
   expandPureNestedRules,
   factorCommonParents,
   mergeByDeclarations,
+  mergeIdenticalNestedRules,
   mergeLayerRules,
   mergeMediaRules,
   mergeSelectorRules,

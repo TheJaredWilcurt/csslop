@@ -13,7 +13,14 @@ import { join } from 'node:path';
 const __dirname = import.meta.dirname;
 
 /**
+ *
+ * @param fromNpm
+ */
+
+/**
  * Copies the test files from css-minify-tests to the copiedTests folder.
+ *
+ * @param {boolean} fromNpm  true = copy from node_modules, false = from local sister repo clone
  */
 export const copyTests = function (fromNpm) {
   let originalTests = join(

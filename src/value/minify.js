@@ -9,6 +9,7 @@ import {
   convertOklabToHex,
   evaluateColorMix,
   evaluateRelativeColor,
+  minifyRelativeColorSyntax,
   hslToRgbChannels,
   hwbToRgbChannels,
   parseHex,
@@ -395,6 +396,115 @@ function simplifyEquivalentLightDarkFunctions (value) {
         index = closingParenIndex + 1;
         continue;
       }
+    }
+
+    result += value[index];
+    index++;
+  }
+
+  return result;
+}
+
+/**
+ * Chooses the shortest valid representation for the path inside a `url(...)`
+ * token, weighing an unquoted form, an escaped single space, and a quoted form.
+ *
+ * @param  {string} path  The resolved url path, without surrounding quotes.
+ * @return {string}       The shortest valid url() content string.
+ */
+function formatUrlPath (path) {
+  // Parentheses and quote characters are invalid inside an unquoted url() token
+  const hasQuoteForcingCharacters = /[()"']/.test(path);
+  // Count spaces so escaping them can be compared against keeping the quotes
+  const spaceCount = (path.match(/ /g) || []).length;
+
+  if (hasQuoteForcingCharacters || spaceCount >= 2) {
+    // Escape any embedded double quotes so the double-quoted wrapper stays valid
+    return '"' + path.replace(/"/g, '\\"') + '"';
+  }
+
+  if (spaceCount === 1) {
+    // A lone space is one byte shorter to escape than to wrap the value in quotes
+    return path.replace(/ /g, '\\ ');
+  }
+
+  return path;
+}
+
+/**
+ * Produces the shortest valid contents for a single `url(...)` token from the
+ * raw text between its parentheses, stripping a leading current-directory
+ * indicator and normalizing quoting.
+ *
+ * @param  {string} rawContent  The trimmed text found between the url parentheses.
+ * @return {string}             The minified url() content.
+ */
+function minifyUrlContent (rawContent) {
+  const wasQuoted = rawContent.startsWith('"') || rawContent.startsWith('\'');
+  let path = rawContent;
+  if (wasQuoted) {
+    const quote = rawContent[0];
+    if (rawContent.length >= 2 && rawContent.endsWith(quote)) {
+      path = rawContent.slice(1, -1);
+    }
+  }
+
+  // Remove a leading current-directory indicator (`./`); browsers resolve it implicitly
+  path = path.replace(/^\.\//, '');
+
+  return formatUrlPath(path);
+}
+
+/**
+ * Rewrites every `url(...)` token in a CSS value to its shortest valid form,
+ * skipping any quoted strings so an embedded `url(` inside a string is ignored.
+ *
+ * @param  {string} value  The CSS value string potentially containing url() tokens.
+ * @return {string}        The value with all url() tokens minified.
+ */
+function minifyUrls (value) {
+  let result = '';
+  let index = 0;
+
+  const consumeQuoted = (start) => {
+    const quote = value[start];
+    let end = start + 1;
+    while (end < value.length) {
+      if (value[end] === '\\') {
+        end += 2;
+        continue;
+      }
+      if (value[end] === quote) {
+        end++;
+        break;
+      }
+      end++;
+    }
+    return end;
+  };
+
+  const startsUrl = (start) => {
+    return value.slice(start, start + 4).toLowerCase() === 'url(';
+  };
+
+  while (index < value.length) {
+    if (value[index] === '"' || value[index] === '\'') {
+      const end = consumeQuoted(index);
+      result += value.slice(index, end);
+      index = end;
+      continue;
+    }
+
+    if (startsUrl(index)) {
+      const closingParenIndex = findMatchingParenthesis(value, index + 3);
+      if (closingParenIndex === -1) {
+        result += value.slice(index);
+        break;
+      }
+      const inner = value.slice(index + 4, closingParenIndex).trim();
+      result += 'url(' + minifyUrlContent(inner) + ')';
+      index = closingParenIndex + 1;
+      continue;
     }
 
     result += value[index];
@@ -976,6 +1086,7 @@ function minifyValue (declaration) {
   if (typeof val === 'string') {
     val = val.trim();
     val = normalizeWhitespaceAndQuotes(val, declaration.property);
+    val = minifyUrls(val);
 
     // Instead of unconditionally removing spaces around + and - and *, handle math vs non-math
     // Collapse spaces around division operator
@@ -1039,6 +1150,9 @@ function minifyValue (declaration) {
 
     // Property-specific optimizations
     val = applyPropertyOptimizations(val, declaration.property);
+
+    // Minify relative color syntax (identity resolution and whitespace collapsing)
+    val = minifyRelativeColorSyntax(val);
   }
 
   // Gradient optimizations
