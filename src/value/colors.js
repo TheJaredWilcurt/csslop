@@ -916,26 +916,6 @@ function convertOklabToHex (L, a, b, alpha) {
   return rgbaToHex(r, g, bl, alpha !== undefined ? alpha : 1);
 }
 
-/**
- * Handle color(from ...) relative color syntax for simple identity cases.
- *
- * @param  {string}      expr  The color(from ...) expression string.
- * @return {string|null}       A hex color string if the relative color is a simple identity transform, or null otherwise.
- */
-function evaluateRelativeColor (expr) {
-  // Match: color(from <base-color> srgb r g b [/ <alpha>]) identity transform pattern
-  const match = expr.match(/^color\(\s*from\s+(.+?)\s+srgb\s+r\s+g\s+b(?:\s*\/\s*([\d.]+%?))?\s*\)$/i);
-  if (!match) {
-    return null;
-  }
-  const baseColor = parseColor(match[1]);
-  if (!baseColor) {
-    return null;
-  }
-  const alpha = parseAlphaString(match[2], baseColor[3]);
-  return rgbaToHex(baseColor[0], baseColor[1], baseColor[2], alpha);
-}
-
 export {
   hslToRgbChannels,
   rgbaToHex,
@@ -945,7 +925,6 @@ export {
   parseHex,
   evaluateColorMix,
   convertOklabToHex,
-  evaluateRelativeColor,
   shortestColor,
   srgbToOklab,
   oklabToSrgb,

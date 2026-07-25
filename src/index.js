@@ -26,6 +26,7 @@ import {
   expandPureNestedRules,
   factorCommonParents,
   mergeByDeclarations,
+  mergeIdenticalNestedRules,
   mergeLayerRules,
   mergeMediaRules,
   mergeSelectorRules,
@@ -248,7 +249,8 @@ export const minifyCSS = function (input) {
     const nestedRules = nestFlatRules(declarationMergedRules);
     const nonEmptyRules = removeEmptyRules(nestedRules);
     const factoredRules = factorCommonParents(nonEmptyRules);
-    const finalRules = nestFlatRules(factoredRules);
+    const nestedFinalRules = nestFlatRules(factoredRules);
+    const finalRules = mergeIdenticalNestedRules(nestedFinalRules);
 
     for (const rule of finalRules) {
       output.push(stringifyRule(rule, context));
