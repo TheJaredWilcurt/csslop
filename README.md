@@ -14,13 +14,13 @@
 
 * Use the tests from the open source, 3rd-party, CSS minification auditing library [css-minify-tests](https://github.com/keithamus/css-minify-tests).
 * Have AI completely generate the library logic to pass all tests.
-* Have me (an experienced library author) validate the outcomes and [make upstream corrections](https://github.com/keithamus/css-minify-tests/issues?q=author%3ATheJaredWilcurt) to the tests library.
+* Have me (an experienced library author) validate the outcomes and [make upstream corrections and improvements](https://github.com/keithamus/css-minify-tests/issues?q=author%3ATheJaredWilcurt) to the tests library.
 
 **The Results:**
 
 * All tests pass.
 * Several new tests were created upstream, and some existing tests were improved/fixed upstream (all manually by me, no AI used).
-* The `src` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can report them and I might tell the AI's to fix it.
+* The `src` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can isolate the problem and [compare against the correct output of real minifiers](https://TheJaredWilcurt.com/playground), then use that to create a [new test upstream](https://github.com/keithamus/css-minify-tests/issues) for the AI's to be forced to pass.
 * No AI generated code exists outside of the `src` folder, this README, for example, is 100% human crafted.
 
 **AI's used:**
@@ -278,7 +278,7 @@ Two different cases:
 1. `git add -A && git commit -m "Updated tests"`
 1. Then run `npm t` to see if any tests fail
 1. If they fail, give an AI this prompt:
-   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src`. Do not use naive solutions, hacks, or hard coded values. Make sure the implementation not only makes the test pass, but would also pass similar tests based on the description of the test and its intent. Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB. Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc). Group related logic into well named functions. Ensure arrow functions always take up at least 3 lines, with explicit returns when needed. Always comment regex if used. Run `npm run lint` and ensure the linter passes when done. DO NOT, under any circumstance, run `npm run real` (it will kill actual humans)! When all done, run the `beep` command to alert me you finished.
+   * **PROMPT:** Run `npm t` and fix all failing tests by modifying files in `src`. Do not use naive solutions, hacks, or hard coded values. Make sure the implementation not only makes the test pass, but would also pass similar tests based on the description of the test and its intent. Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB. Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc). Group related logic into well named functions. Ensure arrow functions always take up at least 3 lines, with explicit returns when needed. Always comment regex if used. Run `npm run lint` and correct any linter warnings/errors that occur in the `/src` folder. DO NOT, under any circumstance, run `npm run real` (it will kill actual humans)! When all done, run the `beep` command to alert me you finished.
 1. Verify only code in the `src` folder was modified
 1. Verify `npm t` passes with a 100% score
 1. Run `npm run lint`, if anything fails, have the AI fix it.
@@ -289,3 +289,22 @@ Two different cases:
 1. Do a new release on GitHub
 1. `git checkout main && git pull origin main && git pull`
 1. `npm run publish`
+
+
+## Code Organization prompt:
+
+```
+1. Check the files in the `/src` folder. If any of them are over 1000 lines long, look across the file for commonalities that could be grouped and moved to a separate file and/or folder. When creating new files, if a new organizational approach is used, re-evaluate how other files are organized and reorganize them, or their contents, into new files to match the new organizational structure, as needed.
+1. After organizing check that no tests are failing with `npm t`. If any are, fix them by modifying files in `src`.
+1. During any of your edits:
+   * Do not use naive solutions, hacks, or hard coded values.
+   * Make sure implementations not only makes the test pass, but would also pass similar tests based on the description of the test and its intent.
+   * Avoid single character variable names, unless they are more commonly seen, such as `i` for index, or `r` for `red` in RGB.
+   * Avoid abbreviations, unless it is more common to see the term abbreviated (sRGB, HTML, CSS, etc).
+   * Group related logic into well named functions.
+   * Ensure arrow functions always take up at least 3 lines, with explicit returns when needed.
+   * Always comment regex if used.
+1. After all other code edits, run `npm run lint` and ensure the linter passes.
+1. DO NOT, under any circumstance, run `npm run real` (it will kill actual humans)!
+1. When all done, run the `beep` command to alert me you finished.
+```

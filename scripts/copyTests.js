@@ -13,16 +13,32 @@ import { join } from 'node:path';
 const __dirname = import.meta.dirname;
 
 /**
- * Copies the test files from css-minify-tests to the copiedTests folder.
+ *
+ * @param fromNpm
  */
-const copyTests = function () {
-  const originalTests = join(
+
+/**
+ * Copies the test files from css-minify-tests to the copiedTests folder.
+ *
+ * @param {boolean} fromNpm  true = copy from node_modules, false = from local sister repo clone
+ */
+export const copyTests = function (fromNpm) {
+  let originalTests = join(
     __dirname,
     '..',
-    'node_modules',
+    '..',
     'css-minify-tests',
     'tests'
   );
+  if (fromNpm) {
+    originalTests = join(
+      __dirname,
+      '..',
+      'node_modules',
+      'css-minify-tests',
+      'tests'
+    );
+  }
   const copiedTests = join(
     __dirname,
     '..',
@@ -47,5 +63,3 @@ const copyTests = function () {
     }
   }
 };
-
-copyTests();

@@ -8,7 +8,6 @@ import { resolveUnicodeEscape } from '../utilities.js';
 import {
   convertOklabToHex,
   evaluateColorMix,
-  evaluateRelativeColor,
   hslToRgbChannels,
   hwbToRgbChannels,
   parseHex,
@@ -16,6 +15,7 @@ import {
   shortestColor
 } from './colors.js';
 import { minifyGradients } from './gradients.js';
+import { simplifyEquivalentLightDarkFunctions } from './light-dark.js';
 import {
   normalizeMathFunctions,
   simplifyStandaloneCalc
@@ -23,11 +23,16 @@ import {
 import { namedColors } from './named-colors.js';
 import { isQuotesNoneEquivalent } from './quotes.js';
 import {
+  evaluateRelativeColor,
+  minifyRelativeColorSyntax
+} from './relative-colors.js';
+import {
   collapseShorthandParts,
   normalizeScaleComponent,
   parseAlphaString,
   roundCompactNumber
 } from './shared.js';
+import { findMatchingParenthesis } from './syntax.js';
 import { minifyTransformValue } from './transforms.js';
 import { optimizeUnicodeRange } from './unicode-range.js';
 
@@ -173,164 +178,63 @@ function replaceOutsideStringsAndUrls (value, replacer) {
 }
 
 /**
- * Determines whether a character can appear inside a CSS identifier.
+ * Chooses the shortest valid representation for the path inside a `url(...)`
+ * token, weighing an unquoted form, an escaped single space, and a quoted form.
  *
- * @param  {string}  character  A single character.
- * @return {boolean}            True when the character is identifier-like.
+ * @param  {string} path  The resolved url path, without surrounding quotes.
+ * @return {string}       The shortest valid url() content string.
  */
-function isIdentifierCharacter (character) {
-  if (!character) {
-    return false;
+function formatUrlPath (path) {
+  // Parentheses and quote characters are invalid inside an unquoted url() token
+  const hasQuoteForcingCharacters = /[()"']/.test(path);
+  // Count spaces so escaping them can be compared against keeping the quotes
+  const spaceCount = (path.match(/ /g) || []).length;
+
+  if (hasQuoteForcingCharacters || spaceCount >= 2) {
+    // Escape any embedded double quotes so the double-quoted wrapper stays valid
+    return '"' + path.replace(/"/g, '\\"') + '"';
   }
-  const codePoint = character.charCodeAt(0);
-  const isUppercaseLetter = codePoint >= 65 && codePoint <= 90;
-  const isLowercaseLetter = codePoint >= 97 && codePoint <= 122;
-  const isDigit = codePoint >= 48 && codePoint <= 57;
-  return isUppercaseLetter || isLowercaseLetter || isDigit || character === '_' || character === '-';
+
+  if (spaceCount === 1) {
+    // A lone space is one byte shorter to escape than to wrap the value in quotes
+    return path.replace(/ /g, '\\ ');
+  }
+
+  return path;
 }
 
 /**
- * Detects a `light-dark(` function call at the provided position.
+ * Produces the shortest valid contents for a single `url(...)` token from the
+ * raw text between its parentheses, stripping a leading current-directory
+ * indicator and normalizing quoting.
  *
- * @param  {string}  value  The CSS value being scanned.
- * @param  {number}  index  The candidate start index.
- * @return {boolean}        True when a light-dark function starts at index.
+ * @param  {string} rawContent  The trimmed text found between the url parentheses.
+ * @return {string}             The minified url() content.
  */
-function startsLightDarkFunction (value, index) {
-  if (value.slice(index, index + 11).toLowerCase() !== 'light-dark(') {
-    return false;
+function minifyUrlContent (rawContent) {
+  const wasQuoted = rawContent.startsWith('"') || rawContent.startsWith('\'');
+  let path = rawContent;
+  if (wasQuoted) {
+    const quote = rawContent[0];
+    if (rawContent.length >= 2 && rawContent.endsWith(quote)) {
+      path = rawContent.slice(1, -1);
+    }
   }
-  return !isIdentifierCharacter(value[index - 1]);
+
+  // Remove a leading current-directory indicator (`./`); browsers resolve it implicitly
+  path = path.replace(/^\.\//, '');
+
+  return formatUrlPath(path);
 }
 
 /**
- * Finds the closing parenthesis for an opening parenthesis while respecting
- * nested parentheses and quoted strings.
+ * Rewrites every `url(...)` token in a CSS value to its shortest valid form,
+ * skipping any quoted strings so an embedded `url(` inside a string is ignored.
  *
- * @param  {string} value           The CSS text being scanned.
- * @param  {number} openParenIndex  The index of the opening `(` character.
- * @return {number}                 The closing `)` index, or -1 if unmatched.
+ * @param  {string} value  The CSS value string potentially containing url() tokens.
+ * @return {string}        The value with all url() tokens minified.
  */
-function findMatchingParenthesis (value, openParenIndex) {
-  let depth = 1;
-  let index = openParenIndex + 1;
-  let activeQuote = '';
-
-  while (index < value.length) {
-    const character = value[index];
-    if (activeQuote) {
-      if (character === '\\') {
-        index += 2;
-        continue;
-      }
-      if (character === activeQuote) {
-        activeQuote = '';
-      }
-      index++;
-      continue;
-    }
-
-    if (character === '"' || character === '\'') {
-      activeQuote = character;
-      index++;
-      continue;
-    }
-
-    if (character === '(') {
-      depth++;
-      index++;
-      continue;
-    }
-
-    if (character === ')') {
-      depth--;
-      if (depth === 0) {
-        return index;
-      }
-    }
-    index++;
-  }
-
-  return -1;
-}
-
-/**
- * Splits a CSS function argument list at top-level commas while respecting
- * nested parentheses and quoted strings.
- *
- * @param  {string} argumentString  The raw content between function parentheses.
- * @return {Array}                  The top-level argument strings.
- */
-function splitTopLevelFunctionArguments (argumentString) {
-  const argumentsList = [];
-  let currentArgument = '';
-  let depth = 0;
-  let index = 0;
-  let activeQuote = '';
-
-  while (index < argumentString.length) {
-    const character = argumentString[index];
-    if (activeQuote) {
-      currentArgument += character;
-      if (character === '\\') {
-        if (index + 1 < argumentString.length) {
-          currentArgument += argumentString[index + 1];
-          index += 2;
-          continue;
-        }
-      } else if (character === activeQuote) {
-        activeQuote = '';
-      }
-      index++;
-      continue;
-    }
-
-    if (character === '"' || character === '\'') {
-      activeQuote = character;
-      currentArgument += character;
-      index++;
-      continue;
-    }
-
-    if (character === '(') {
-      depth++;
-      currentArgument += character;
-      index++;
-      continue;
-    }
-
-    if (character === ')') {
-      if (depth > 0) {
-        depth--;
-      }
-      currentArgument += character;
-      index++;
-      continue;
-    }
-
-    if (character === ',' && depth === 0) {
-      argumentsList.push(currentArgument.trim());
-      currentArgument = '';
-      index++;
-      continue;
-    }
-
-    currentArgument += character;
-    index++;
-  }
-
-  argumentsList.push(currentArgument.trim());
-  return argumentsList;
-}
-
-/**
- * Simplifies `light-dark(a,b)` to `a` when both top-level arguments are identical
- * after prior minification has normalized them.
- *
- * @param  {string} value  The CSS value to simplify.
- * @return {string}        The value with redundant light-dark functions removed.
- */
-function simplifyEquivalentLightDarkFunctions (value) {
+function minifyUrls (value) {
   let result = '';
   let index = 0;
 
@@ -364,37 +268,15 @@ function simplifyEquivalentLightDarkFunctions (value) {
     }
 
     if (startsUrl(index)) {
-      const end = findMatchingParenthesis(value, index + 3);
-      if (end === -1) {
-        result += value.slice(index);
-        break;
-      }
-      result += value.slice(index, end + 1);
-      index = end + 1;
-      continue;
-    }
-
-    if (startsLightDarkFunction(value, index)) {
-      const openParenIndex = index + 10;
-      const closingParenIndex = findMatchingParenthesis(value, openParenIndex);
+      const closingParenIndex = findMatchingParenthesis(value, index + 3);
       if (closingParenIndex === -1) {
         result += value.slice(index);
         break;
       }
-
-      const argumentString = value.slice(openParenIndex + 1, closingParenIndex);
-      const argumentsList = splitTopLevelFunctionArguments(argumentString);
-      if (argumentsList.length === 2) {
-        const firstArgument = simplifyEquivalentLightDarkFunctions(argumentsList[0]);
-        const secondArgument = simplifyEquivalentLightDarkFunctions(argumentsList[1]);
-        if (firstArgument === secondArgument) {
-          result += firstArgument;
-        } else {
-          result += value.slice(index, openParenIndex + 1) + firstArgument + ',' + secondArgument + ')';
-        }
-        index = closingParenIndex + 1;
-        continue;
-      }
+      const inner = value.slice(index + 4, closingParenIndex).trim();
+      result += 'url(' + minifyUrlContent(inner) + ')';
+      index = closingParenIndex + 1;
+      continue;
     }
 
     result += value[index];
@@ -976,6 +858,7 @@ function minifyValue (declaration) {
   if (typeof val === 'string') {
     val = val.trim();
     val = normalizeWhitespaceAndQuotes(val, declaration.property);
+    val = minifyUrls(val);
 
     // Instead of unconditionally removing spaces around + and - and *, handle math vs non-math
     // Collapse spaces around division operator
@@ -1039,6 +922,9 @@ function minifyValue (declaration) {
 
     // Property-specific optimizations
     val = applyPropertyOptimizations(val, declaration.property);
+
+    // Minify relative color syntax (identity resolution and whitespace collapsing)
+    val = minifyRelativeColorSyntax(val);
   }
 
   // Gradient optimizations

@@ -362,6 +362,50 @@ function processIsSelector (selector) {
 }
 
 /**
+ * Flattens a top-level `:is()` selector into its individual parts when the rule
+ * acts as a nesting parent. A nesting parent's entire selector list is treated
+ * as `:is()` when computing the specificity of its nested children, so lifting
+ * the parts out of an inner `:is()` does not change specificity. The `:is()` is
+ * kept when any part contains a pseudo (`:`), since such selectors may be
+ * unsupported and rely on `:is()` for forgiving parsing.
+ *
+ * @param  {string} selector  A minified CSS selector string.
+ * @return {Array}            The flattened selector parts, or the original selector.
+ */
+function flattenNestingParentIsSelector (selector) {
+  if (!selector.startsWith(':is(')) {
+    return [selector];
+  }
+  let depth = 0;
+  let closingIndex = -1;
+  for (let index = 4; index < selector.length; index++) {
+    if (selector[index] === '(') {
+      depth++;
+    } else if (selector[index] === ')') {
+      if (depth === 0) {
+        closingIndex = index;
+        break;
+      }
+      depth--;
+    }
+  }
+  // The :is() must span the entire selector to be safely liftable
+  if (closingIndex !== selector.length - 1) {
+    return [selector];
+  }
+  const parts = splitParametersByComma(selector.slice(4, -1)).map((part) => {
+    return part.trim();
+  });
+  const hasPotentiallyUnsupportedPart = parts.some((part) => {
+    return part.includes(':');
+  });
+  if (hasPotentiallyUnsupportedPart) {
+    return [selector];
+  }
+  return parts;
+}
+
+/**
  * Removes spaces after commas only inside parenthesized groups (function
  * calls like `var()`, `calc()`), leaving top-level comma spacing intact.
  *
@@ -548,6 +592,15 @@ function stringifyRule (rule, context, nested = false) {
         minified = mergeAdjacentWherePseudoClasses(minified);
         return minified;
       });
+      // When this rule is a nesting parent, its whole selector list is treated
+      // as :is() for the children's specificity, so a top-level :is() can be
+      // safely lifted into the list without altering specificity.
+      const isNestingParent = (rule.declarations || []).some((declaration) => {
+        return declaration.type === 'rule';
+      });
+      if (isNestingParent) {
+        uniqueSelectors = uniqueSelectors.flatMap(flattenNestingParentIsSelector);
+      }
       uniqueSelectors = uniqueSelectors.flatMap(processIsSelector);
       uniqueSelectors = [...new Set(uniqueSelectors)];
       output.push(uniqueSelectors.join(','));
@@ -628,8 +681,11 @@ function stringifyRule (rule, context, nested = false) {
 
   if (rule.type === 'media') {
     const normalizedMedia = normalizeMedia(rule.media);
+    // A custom-media reference is a parenthesized dashed-ident like (--modern);
+    // no space is needed after @media when the query begins with such a token.
+    const isCustomMediaReference = normalizedMedia.startsWith('(--');
     let separator;
-    if (nested && normalizedMedia.startsWith('(')) {
+    if ((nested && normalizedMedia.startsWith('(')) || isCustomMediaReference) {
       separator = '';
     } else {
       separator = ' ';
@@ -892,6 +948,18 @@ function stringifyRule (rule, context, nested = false) {
       return '/*' + rule.comment + '*/';
     }
     return '';
+  }
+
+  if (rule.type === 'custom-media') {
+    // Collapse whitespace, strip spaces around commas, and tighten parentheses
+    const condition = (rule.media || '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*,\s*/g, ',')
+      .replace(/\(\s+/g, '(')
+      .replace(/\s+\)/g, ')')
+      .trim();
+    const conditionSeparator = condition ? ' ' : '';
+    return '@custom-media ' + rule.name + conditionSeparator + condition + ';';
   }
 
   if (rule.type === 'at-rule') {
