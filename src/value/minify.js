@@ -5,10 +5,10 @@
 import { isUnicodeCharset } from '../context.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
+import { evaluateColorMix } from './color-mix.js';
 import {
   convertLabToHex,
   convertOklabToHex,
-  evaluateColorMix,
   hslToRgbChannels,
   hwbToRgbChannels,
   parseHex,
