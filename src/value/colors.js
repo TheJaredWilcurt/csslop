@@ -896,6 +896,87 @@ function normalizeColorMix (colorSpace, parsed1, parsed2) {
 }
 
 /**
+ * CIE Lab D50 reference white point.
+ *
+ * @type {Array}
+ */
+const D50_WHITE_XYZ = [0.96422, 1, 0.82521];
+
+/**
+ * Converts a CIE Lab f-function value back to a linear-light ratio.
+ *
+ * @param  {number} f  The f value.
+ * @return {number}    The linear ratio.
+ */
+function labFToLinearRatio (f) {
+  const delta = 6 / 29;
+  if (f > delta) {
+    return f * f * f;
+  }
+  return 3 * delta * delta * (f - 16 / 116);
+}
+
+/**
+ * Converts CIE Lab (D50) components to linear-light sRGB using Bradford adaptation to D65.
+ *
+ * @param  {number} L  The lightness component.
+ * @param  {number} a  The green-red axis component.
+ * @param  {number} b  The blue-yellow axis component.
+ * @return {object}    An object with r, g, b linear sRGB components.
+ */
+function labToLinearSrgb (L, a, b) {
+  const fy = (L + 16) / 116;
+  const fx = fy + a / 500;
+  const fz = fy - b / 200;
+
+  const x = labFToLinearRatio(fx) * D50_WHITE_XYZ[0];
+  const y = labFToLinearRatio(fy) * D50_WHITE_XYZ[1];
+  const z = labFToLinearRatio(fz) * D50_WHITE_XYZ[2];
+
+  // Matrix from D50 XYZ (Bradford-adapted) to linear sRGB.
+  const red = 3.1338561 * x - 1.6168667 * y - 0.4906146 * z;
+  const green = -0.9787684 * x + 1.9161415 * y + 0.0334540 * z;
+  const blue = 0.0719453 * x - 0.2289914 * y + 1.4052427 * z;
+
+  return { r: red, g: green, b: blue };
+}
+
+/**
+ * Converts CIE Lab (D50) components to clamped, gamma-encoded sRGB (0–1).
+ *
+ * @param  {number} L  The lightness component.
+ * @param  {number} a  The green-red axis component.
+ * @param  {number} b  The blue-yellow axis component.
+ * @return {object}    An object with r, g, b sRGB components.
+ */
+function labToSrgb (L, a, b) {
+  const linear = labToLinearSrgb(L, a, b);
+  return {
+    r: Math.max(0, Math.min(1, delinearize(linear.r))),
+    g: Math.max(0, Math.min(1, delinearize(linear.g))),
+    b: Math.max(0, Math.min(1, delinearize(linear.b)))
+  };
+}
+
+/**
+ * Convert a standalone lab() value (CIE Lab, D50) to hex if it fits in sRGB gamut; returns null if out-of-gamut.
+ *
+ * @param  {number}      L      The Lab lightness component.
+ * @param  {number}      a      The Lab a-axis component.
+ * @param  {number}      b      The Lab b-axis component.
+ * @param  {number}      alpha  The alpha value from 0 to 1.
+ * @return {string|null}        A hex color string, or null if out-of-gamut.
+ */
+function convertLabToHex (L, a, b, alpha) {
+  const linear = labToLinearSrgb(L, a, b);
+  if (linear.r < -0.002 || linear.r > 1.002 || linear.g < -0.002 || linear.g > 1.002 || linear.b < -0.002 || linear.b > 1.002) {
+    return null;
+  }
+  const srgb = labToSrgb(L, a, b);
+  return rgbaToHex(Math.round(srgb.r * 255), Math.round(srgb.g * 255), Math.round(srgb.b * 255), alpha !== undefined ? alpha : 1);
+}
+
+/**
  * Convert a standalone oklab() value to hex if it fits in sRGB gamut; returns null if out-of-gamut.
  *
  * @param  {number}      L      The OKLab lightness component.
@@ -924,6 +1005,7 @@ export {
   parseColor,
   parseHex,
   evaluateColorMix,
+  convertLabToHex,
   convertOklabToHex,
   shortestColor,
   srgbToOklab,

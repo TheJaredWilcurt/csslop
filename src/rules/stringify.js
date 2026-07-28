@@ -22,7 +22,7 @@ import {
 function stringifyDeclarations (declarations) {
   return declarations
     .filter((declaration) => {
-      return declaration.type !== 'whitespace';
+      return declaration.type !== 'whitespace' && declaration.type !== 'comment' && declaration.property;
     })
     .map((declaration) => {
       return [declaration.property, ':', minifyValue(declaration)].join('');
@@ -852,6 +852,31 @@ function stringifyRule (rule, context, nested = false) {
   }
 
   if (rule.type === 'property') {
+    const propertyDeclarations = (rule.declarations || []).filter((declaration) => {
+      return declaration.type === 'declaration' && declaration.property;
+    });
+    const hasSyntaxDescriptor = propertyDeclarations.some((declaration) => {
+      return declaration.property === 'syntax';
+    });
+    const hasInheritsDescriptor = propertyDeclarations.some((declaration) => {
+      return declaration.property === 'inherits';
+    });
+    if (!hasSyntaxDescriptor || !hasInheritsDescriptor) {
+      return '';
+    }
+
+    const syntaxDeclaration = propertyDeclarations.find((declaration) => {
+      return declaration.property === 'syntax';
+    });
+    const syntaxValue = (syntaxDeclaration.value || '').replace(/["']/g, '').trim();
+    const isUniversalSyntax = syntaxValue === '*';
+    const hasInitialValue = propertyDeclarations.some((declaration) => {
+      return declaration.property === 'initial-value';
+    });
+    if (!isUniversalSyntax && !hasInitialValue) {
+      return '';
+    }
+
     let renderedDeclarations = stringifyDeclarations(rule.declarations || []);
     if (!renderedDeclarations) {
       return '';

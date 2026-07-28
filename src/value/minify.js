@@ -6,6 +6,7 @@ import { isUnicodeCharset } from '../context.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import {
+  convertLabToHex,
   convertOklabToHex,
   evaluateColorMix,
   hslToRgbChannels,
@@ -359,6 +360,24 @@ function convertColorsToHex (val) {
     }
   }
 
+  // Convert in-gamut lab() (CIE Lab, D50) to hex when it produces a shorter representation
+  val = val.replace(/\blab\(\s*(-?(?:\d+|\d*\.\d+)%?)\s+(-?(?:\d+|\d*\.\d+)%?)\s+(-?(?:\d+|\d*\.\d+)%?)(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, lStr, aStr, bStr, alphaStr) => {
+    const alpha = parseAlphaString(alphaStr);
+    const l = parseFloat(lStr);
+    const aNumber = parseFloat(aStr);
+    const a = aStr.endsWith('%') ? aNumber * 1.25 : aNumber;
+    const bNumber = parseFloat(bStr);
+    const b = bStr.endsWith('%') ? bNumber * 1.25 : bNumber;
+    const hex = convertLabToHex(l, a, b, alpha);
+    if (!hex) {
+      return match; // out-of-gamut: keep native lab form
+    }
+    if (hex.length < match.length) {
+      return hex;
+    }
+    return match;
+  });
+
   // Minify whitespace and numeric precision inside wide-gamut and functional color notations
   val = val.replace(/\b(oklab|oklch|lch|lab|color|hwb)\((.*?)\)/gi, (match, func, inner) => {
     // Collapse whitespace to single space
@@ -400,6 +419,14 @@ function convertColorsToHex (val) {
         rounded = '-' + rounded.substring(2);
       }
       return before + rounded;
+    });
+    // Remove trailing ".0" from numbers so integer channel values stay integer
+    // (e.g. display-p3 1.0 0.0 0.0 becomes display-p3 1 0 0)
+    minified = minified.replace(/(-?\d*)\.0\b/g, (match, integer) => {
+      if (integer === '' || integer === '-' || integer === '-0') {
+        return '0';
+      }
+      return integer;
     });
     return func + '(' + minified.trim() + ')';
   });
@@ -715,6 +742,11 @@ function applyPropertyOptimizations (val, property) {
     val = val.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
       return roundCompactNumber(parseFloat(amount) * (96 / 72)) + 'px';
     });
+  }
+
+  if (property === 'syntax') {
+    // Remove whitespace around pipe separators in @property syntax descriptors
+    val = val.replace(/\s*\|\s*/g, '|');
   }
 
   // Simplify clamp() where all three arguments are identical (e.g. clamp(1rem,1rem,1rem) → 1rem)
