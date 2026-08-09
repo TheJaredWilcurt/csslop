@@ -9,6 +9,7 @@ import { evaluateColorMix } from './color-mix.js';
 import {
   convertLabToHex,
   convertOklabToHex,
+  convertOklchToHex,
   hslToRgbChannels,
   hwbToRgbChannels,
   parseHex,
@@ -31,6 +32,7 @@ import {
   collapseShorthandParts,
   normalizeScaleComponent,
   parseAlphaString,
+  parseAngleToDegrees,
   roundCompactNumber
 } from './shared.js';
 import { findMatchingParenthesis } from './syntax.js';
@@ -337,6 +339,97 @@ function normalizeWhitespaceAndQuotes (val, property) {
 }
 
 /**
+ * The OKLCH chroma value that `100%` resolves to, per CSS Color Level 4.
+ *
+ * @type {number}
+ */
+const OKLCH_CHROMA_PERCENT_REFERENCE = 0.4;
+
+/**
+ * Regex matching an `oklch()` function with three space-separated components
+ * and an optional slash-delimited alpha. Lightness and chroma accept numbers
+ * or percentages, hue accepts a number with an optional CSS angle unit, and
+ * every component accepts the `none` keyword.
+ *
+ * @type {RegExp}
+ */
+const OKLCH_FUNCTION_PATTERN = new RegExp(
+  '\\boklch\\(\\s*' +
+  '(none|-?(?:\\d+|\\d*\\.\\d+)%?)\\s+' +
+  '(none|-?(?:\\d+|\\d*\\.\\d+)%?)\\s+' +
+  '(none|-?(?:\\d+|\\d*\\.\\d+)(?:deg|grad|rad|turn)?)' +
+  '(?:\\s*/\\s*(none|-?(?:\\d+|\\d*\\.\\d+)%?))?' +
+  '\\s*\\)',
+  'gi'
+);
+
+/**
+ * Parses an OKLCH lightness or chroma component into its numeric value.
+ * Missing components (`none`) resolve to zero, and percentages are scaled
+ * against the reference value for that component.
+ *
+ * @param  {string}      token             The raw component token.
+ * @param  {number}      percentReference  The value that `100%` represents for this component.
+ * @return {number|null}                   The numeric component value, or null when unparsable.
+ */
+function parseOklchComponent (token, percentReference) {
+  const normalized = token.trim().toLowerCase();
+  if (normalized === 'none') {
+    return 0;
+  }
+  const numeric = parseFloat(normalized);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  if (normalized.endsWith('%')) {
+    return numeric / 100 * percentReference;
+  }
+  return numeric;
+}
+
+/**
+ * Parses an OKLCH hue component into degrees, treating `none` as zero.
+ *
+ * @param  {string}      token  The raw hue token, optionally carrying an angle unit.
+ * @return {number|null}        The hue in degrees, or null when unparsable.
+ */
+function parseOklchHue (token) {
+  const normalized = token.trim().toLowerCase();
+  if (normalized === 'none') {
+    return 0;
+  }
+  return parseAngleToDegrees(normalized);
+}
+
+/**
+ * Converts `oklch()` colors that fall inside the sRGB gamut to their hex
+ * equivalent when that is shorter. Out-of-gamut colors have no sRGB
+ * representation, so they are left in their native color space.
+ *
+ * @param  {string} value  The CSS value string that may contain oklch() colors.
+ * @return {string}        The value with in-gamut oklch() colors replaced by hex.
+ */
+function convertOklchFunctionsToHex (value) {
+  return value.replace(OKLCH_FUNCTION_PATTERN, (match, lightnessToken, chromaToken, hueToken, alphaToken) => {
+    const lightness = parseOklchComponent(lightnessToken, 1);
+    const chroma = parseOklchComponent(chromaToken, OKLCH_CHROMA_PERCENT_REFERENCE);
+    const hue = parseOklchHue(hueToken);
+    if (lightness === null || chroma === null || hue === null) {
+      return match;
+    }
+    const alpha = alphaToken?.trim().toLowerCase() === 'none' ? 0 : parseAlphaString(alphaToken);
+    const hex = convertOklchToHex(lightness, chroma, hue, alpha);
+    if (!hex) {
+      return match; // out-of-gamut: keep native oklch form
+    }
+    if (hex.length < match.length) {
+      return hex;
+    }
+    return match;
+  });
+}
+
+/**
  * Converts CSS color functions (rgb, hsl, hwb, oklab, color-mix, etc.) to their
  * shortest hex equivalents and applies hex shortening.
  *
@@ -377,6 +470,9 @@ function convertColorsToHex (val) {
     }
     return match;
   });
+
+  // Convert in-gamut oklch() to hex before precision rounding, so the full authored precision is used
+  val = convertOklchFunctionsToHex(val);
 
   // Minify whitespace and numeric precision inside wide-gamut and functional color notations
   val = val.replace(/\b(oklab|oklch|lch|lab|color|hwb)\((.*?)\)/gi, (match, func, inner) => {

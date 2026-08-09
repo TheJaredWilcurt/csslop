@@ -174,9 +174,76 @@ function mergeAdjacentWherePseudoClasses (selector) {
 }
 
 /**
+ * Matches a compound selector built exclusively from long-established simple
+ * selectors: an optional type or universal selector, followed by any number of
+ * id and class selectors. Anything else (pseudo-classes, pseudo-elements,
+ * attribute matchers, combinators, descendant sequences) is excluded, because
+ * those may be unrecognized by a browser and `:is()` forgiving parsing is what
+ * keeps the remaining selectors in the rule alive.
+ *
+ * @type {RegExp}
+ */
+const BROWSER_SAFE_COMPOUND_SELECTOR = /^(?:\*|[a-zA-Z][a-zA-Z0-9_-]*)?(?:[#.][a-zA-Z_-][a-zA-Z0-9_-]*)*$/;
+
+/**
+ * Matches every id or class selector within a compound selector, used to count
+ * each one's specificity contribution.
+ *
+ * @type {RegExp}
+ */
+const ID_OR_CLASS_SELECTOR = /[#.][a-zA-Z_-][a-zA-Z0-9_-]*/g;
+
+/**
+ * Computes the specificity of a compound selector known to consist only of
+ * type, universal, id, and class selectors, as an "ids,classes,types" key.
+ *
+ * @param  {string} compoundSelector  A browser-safe compound selector.
+ * @return {string}                   The specificity key for equality comparison.
+ */
+function getSimpleCompoundSpecificityKey (compoundSelector) {
+  const idsAndClasses = compoundSelector.match(ID_OR_CLASS_SELECTOR) || [];
+  const identifierCount = idsAndClasses.filter((selector) => {
+    return selector.startsWith('#');
+  }).length;
+  const classCount = idsAndClasses.length - identifierCount;
+  // Whatever precedes the first id/class is the type or universal selector, if any
+  const typePortion = compoundSelector.split(/[#.]/)[0];
+  const typeCount = typePortion && typePortion !== '*' ? 1 : 0;
+  return identifierCount + ',' + classCount + ',' + typeCount;
+}
+
+/**
+ * Determines whether a `:is()` selector list can be decomposed into a plain
+ * comma-separated selector list. `:is()` applies the highest specificity of its
+ * arguments to every match, so decomposing is only equivalent when all
+ * arguments share one specificity. It also parses forgivingly, so every
+ * argument must additionally be a selector every browser understands.
+ *
+ * @param  {Array}   parts  The selector strings inside the `:is()`.
+ * @return {boolean}        True when the `:is()` wrapper can be dropped.
+ */
+function canDecomposeIsSelector (parts) {
+  if (parts.length < 2) {
+    return false;
+  }
+  const allBrowserSafe = parts.every((part) => {
+    return part !== '' && BROWSER_SAFE_COMPOUND_SELECTOR.test(part);
+  });
+  if (!allBrowserSafe) {
+    return false;
+  }
+  const specificityKeys = parts.map((part) => {
+    return getSimpleCompoundSpecificityKey(part);
+  });
+  return specificityKeys.every((key) => {
+    return key === specificityKeys[0];
+  });
+}
+
+/**
  * Processes a bare `:is()` selector by merging `:link`+`:visited` into `:any-link`,
- * de-duplicating, sorting alphabetically, and conditionally expanding into individual
- * selectors when all parts are simple type/universal selectors with no modifications.
+ * de-duplicating, sorting alphabetically, and decomposing into individual selectors
+ * when the remaining parts are browser-safe and share one level of specificity.
  *
  * @param  {string} selector  A minified CSS selector string.
  * @return {Array}            An array of one or more processed selector strings.
@@ -223,7 +290,6 @@ function processIsSelector (selector) {
     }
   }
   parts.push(currentPart);
-  const originalCount = parts.length;
   // Replace :link + :visited with :any-link
   const hasLink = parts.includes(':link');
   const hasVisited = parts.includes(':visited');
@@ -243,11 +309,8 @@ function processIsSelector (selector) {
   if (parts.length === 1) {
     return parts;
   }
-  // Expand if all parts are simple type/universal selectors and no dedup/replacement occurred
-  const allSimple = parts.every((part) => {
-    return /^[a-z*][a-z0-9-]*$/i.test(part);
-  });
-  if (allSimple && parts.length === originalCount) {
+  // Drop the :is() wrapper when the parts are equivalent as a plain selector list
+  if (canDecomposeIsSelector(parts)) {
     return parts;
   }
   return [':is(' + parts.join(',') + ')'];

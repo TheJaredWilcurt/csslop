@@ -508,6 +508,20 @@ function convertOklabToHex (L, a, b, alpha) {
   return rgbaToHex(r, g, bl, alpha !== undefined ? alpha : 1);
 }
 
+/**
+ * Convert a standalone oklch() value to hex if it fits in the sRGB gamut; returns null if out-of-gamut.
+ *
+ * @param  {number}      L      The OKLCH lightness component, 0 to 1.
+ * @param  {number}      C      The OKLCH chroma component.
+ * @param  {number}      H      The OKLCH hue angle in degrees.
+ * @param  {number}      alpha  The alpha value from 0 to 1.
+ * @return {string|null}        A hex color string, or null if the color is outside the sRGB gamut.
+ */
+function convertOklchToHex (L, C, H, alpha) {
+  const lab = oklchToOklab(L, C, H);
+  return convertOklabToHex(lab.L, lab.a, lab.b, alpha);
+}
+
 export {
   hslToRgbChannels,
   rgbaToHex,
@@ -517,6 +531,7 @@ export {
   parseHex,
   convertLabToHex,
   convertOklabToHex,
+  convertOklchToHex,
   shortestColor,
   srgbToOklab,
   oklabToSrgb,

@@ -3,6 +3,7 @@
  */
 
 import {
+  convertOklchToHex,
   oklabToRgb,
   parseColor,
   rgbToOklab,
@@ -372,6 +373,11 @@ function evaluateColorMix (expr) {
     const C = lch1.C * t1 + lch2.C * t2;
     const H = interpolateHueShorter(lch1.H, lch2.H, t2);
     const alpha = (a1 * t1 + a2 * t2) * alphaMultiplier;
+    // In-gamut results have an exact sRGB equivalent, which is always shorter than oklch()
+    const hex = convertOklchToHex(L, C, H, alpha >= 1 ? 1 : alpha);
+    if (hex) {
+      return hex;
+    }
     return formatOklch(L, C, H, alpha);
   }
 
