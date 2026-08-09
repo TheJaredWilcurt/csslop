@@ -3,6 +3,7 @@
   <head>
     <title>CSSLOPlayground</title>
     <link rel="shortcut icon" type="image/x-icon" href="favicon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/styles/fonts.css">
     <link rel="stylesheet" href="/styles/normalize.css">
     <link
@@ -79,14 +80,14 @@
               title="Amount of characters in the input to minify"
               @click="toggleShowGzip"
             >
-              <strong>Input:</strong>
-              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <strong>Input<template v-if="!showGzip">:</template></strong>
+              <template v-if="showGzip">&nbsp;(<span>gzip</span><em>gz</em>):</template>
               <div>
                 <template v-if="showGzip">
-                  {{ zipped.input.toLocaleString() }}&nbsp;bytes
+                  {{ zipped.input.toLocaleString() }}<span>&nbsp;bytes</span><em>b</em>
                 </template>
                 <template v-else>
-                  {{ (input.length).toLocaleString() }}&nbsp;bytes
+                  {{ (input.length).toLocaleString() }}<span>&nbsp;bytes</span><em>b</em>
                 </template>
               </div>
             </button>
@@ -94,14 +95,14 @@
               title="Amount of characters in the output (lower is better, to an extent)"
               @click="toggleShowGzip"
             >
-              <strong>Output:</strong>
-              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <strong>Output<template v-if="!showGzip">:</template></strong>
+              <template v-if="showGzip">&nbsp;(<span>gzip</span><em>gz</em>):</template>
               <div>
                 <template v-if="showGzip">
-                  {{ zipped.output.toLocaleString() }}&nbsp;bytes
+                  {{ zipped.output.toLocaleString() }}<span>&nbsp;bytes</span><em>b</em>
                 </template>
                 <template v-else>
-                  {{ (output.length).toLocaleString() }}&nbsp;bytes
+                  {{ (output.length).toLocaleString() }}<span>&nbsp;bytes</span><em>b</em>
                 </template>
               </div>
             </button>
@@ -109,14 +110,14 @@
               title="How many bytes saved during minfication (higher is better)"
               @click="toggleShowGzip"
             >
-              <strong>Savings</strong>
-              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <strong>Savings<template v-if="!showGzip">:</template></strong>
+              <template v-if="showGzip">&nbsp;(<span>gzip</span><em>gz</em>):</template>
               <div>
                 <template v-if="showGzip">
-                  {{ (zipped.input - zipped.output).toLocaleString() }}&nbsp;bytes
+                  {{ (zipped.input - zipped.output).toLocaleString() }}<span>&nbsp;bytes</span><em>b</em>
                 </template>
                 <template v-else>
-                  {{ (input.length - output.length).toLocaleString() }}&nbsp;bytes
+                  {{ (input.length - output.length).toLocaleString() }}<span>&nbsp;bytes</span><em>b</em>
                 </template>
               </div>
             </button>
@@ -124,8 +125,8 @@
               title="Percent of original size (lower is better)"
               @click="toggleShowGzip"
             >
-              <strong>Reduction:</strong>
-              <template v-if="showGzip">&nbsp;(gzip):</template>
+              <strong>Reduction<template v-if="!showGzip">:</template></strong>
+              <template v-if="showGzip">&nbsp;(<span>gzip</span><em>gz</em>):</template>
               <div>
                 <template v-if="showGzip">
                   {{ Math.round((zipped.output / zipped.input) * 10000) / 100 }}%

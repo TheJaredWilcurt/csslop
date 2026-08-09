@@ -5,9 +5,11 @@
 import { isUnicodeCharset } from '../context.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
+import { evaluateColorMix } from './color-mix.js';
 import {
+  convertLabToHex,
   convertOklabToHex,
-  evaluateColorMix,
+  convertOklchToHex,
   hslToRgbChannels,
   hwbToRgbChannels,
   parseHex,
@@ -30,6 +32,7 @@ import {
   collapseShorthandParts,
   normalizeScaleComponent,
   parseAlphaString,
+  parseAngleToDegrees,
   roundCompactNumber
 } from './shared.js';
 import { findMatchingParenthesis } from './syntax.js';
@@ -336,6 +339,97 @@ function normalizeWhitespaceAndQuotes (val, property) {
 }
 
 /**
+ * The OKLCH chroma value that `100%` resolves to, per CSS Color Level 4.
+ *
+ * @type {number}
+ */
+const OKLCH_CHROMA_PERCENT_REFERENCE = 0.4;
+
+/**
+ * Regex matching an `oklch()` function with three space-separated components
+ * and an optional slash-delimited alpha. Lightness and chroma accept numbers
+ * or percentages, hue accepts a number with an optional CSS angle unit, and
+ * every component accepts the `none` keyword.
+ *
+ * @type {RegExp}
+ */
+const OKLCH_FUNCTION_PATTERN = new RegExp(
+  '\\boklch\\(\\s*' +
+  '(none|-?(?:\\d+|\\d*\\.\\d+)%?)\\s+' +
+  '(none|-?(?:\\d+|\\d*\\.\\d+)%?)\\s+' +
+  '(none|-?(?:\\d+|\\d*\\.\\d+)(?:deg|grad|rad|turn)?)' +
+  '(?:\\s*/\\s*(none|-?(?:\\d+|\\d*\\.\\d+)%?))?' +
+  '\\s*\\)',
+  'gi'
+);
+
+/**
+ * Parses an OKLCH lightness or chroma component into its numeric value.
+ * Missing components (`none`) resolve to zero, and percentages are scaled
+ * against the reference value for that component.
+ *
+ * @param  {string}      token             The raw component token.
+ * @param  {number}      percentReference  The value that `100%` represents for this component.
+ * @return {number|null}                   The numeric component value, or null when unparsable.
+ */
+function parseOklchComponent (token, percentReference) {
+  const normalized = token.trim().toLowerCase();
+  if (normalized === 'none') {
+    return 0;
+  }
+  const numeric = parseFloat(normalized);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  if (normalized.endsWith('%')) {
+    return numeric / 100 * percentReference;
+  }
+  return numeric;
+}
+
+/**
+ * Parses an OKLCH hue component into degrees, treating `none` as zero.
+ *
+ * @param  {string}      token  The raw hue token, optionally carrying an angle unit.
+ * @return {number|null}        The hue in degrees, or null when unparsable.
+ */
+function parseOklchHue (token) {
+  const normalized = token.trim().toLowerCase();
+  if (normalized === 'none') {
+    return 0;
+  }
+  return parseAngleToDegrees(normalized);
+}
+
+/**
+ * Converts `oklch()` colors that fall inside the sRGB gamut to their hex
+ * equivalent when that is shorter. Out-of-gamut colors have no sRGB
+ * representation, so they are left in their native color space.
+ *
+ * @param  {string} value  The CSS value string that may contain oklch() colors.
+ * @return {string}        The value with in-gamut oklch() colors replaced by hex.
+ */
+function convertOklchFunctionsToHex (value) {
+  return value.replace(OKLCH_FUNCTION_PATTERN, (match, lightnessToken, chromaToken, hueToken, alphaToken) => {
+    const lightness = parseOklchComponent(lightnessToken, 1);
+    const chroma = parseOklchComponent(chromaToken, OKLCH_CHROMA_PERCENT_REFERENCE);
+    const hue = parseOklchHue(hueToken);
+    if (lightness === null || chroma === null || hue === null) {
+      return match;
+    }
+    const alpha = alphaToken?.trim().toLowerCase() === 'none' ? 0 : parseAlphaString(alphaToken);
+    const hex = convertOklchToHex(lightness, chroma, hue, alpha);
+    if (!hex) {
+      return match; // out-of-gamut: keep native oklch form
+    }
+    if (hex.length < match.length) {
+      return hex;
+    }
+    return match;
+  });
+}
+
+/**
  * Converts CSS color functions (rgb, hsl, hwb, oklab, color-mix, etc.) to their
  * shortest hex equivalents and applies hex shortening.
  *
@@ -358,6 +452,27 @@ function convertColorsToHex (val) {
       val = result;
     }
   }
+
+  // Convert in-gamut lab() (CIE Lab, D50) to hex when it produces a shorter representation
+  val = val.replace(/\blab\(\s*(-?(?:\d+|\d*\.\d+)%?)\s+(-?(?:\d+|\d*\.\d+)%?)\s+(-?(?:\d+|\d*\.\d+)%?)(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, lStr, aStr, bStr, alphaStr) => {
+    const alpha = parseAlphaString(alphaStr);
+    const l = parseFloat(lStr);
+    const aNumber = parseFloat(aStr);
+    const a = aStr.endsWith('%') ? aNumber * 1.25 : aNumber;
+    const bNumber = parseFloat(bStr);
+    const b = bStr.endsWith('%') ? bNumber * 1.25 : bNumber;
+    const hex = convertLabToHex(l, a, b, alpha);
+    if (!hex) {
+      return match; // out-of-gamut: keep native lab form
+    }
+    if (hex.length < match.length) {
+      return hex;
+    }
+    return match;
+  });
+
+  // Convert in-gamut oklch() to hex before precision rounding, so the full authored precision is used
+  val = convertOklchFunctionsToHex(val);
 
   // Minify whitespace and numeric precision inside wide-gamut and functional color notations
   val = val.replace(/\b(oklab|oklch|lch|lab|color|hwb)\((.*?)\)/gi, (match, func, inner) => {
@@ -400,6 +515,14 @@ function convertColorsToHex (val) {
         rounded = '-' + rounded.substring(2);
       }
       return before + rounded;
+    });
+    // Remove trailing ".0" from numbers so integer channel values stay integer
+    // (e.g. display-p3 1.0 0.0 0.0 becomes display-p3 1 0 0)
+    minified = minified.replace(/(-?\d*)\.0\b/g, (match, integer) => {
+      if (integer === '' || integer === '-' || integer === '-0') {
+        return '0';
+      }
+      return integer;
     });
     return func + '(' + minified.trim() + ')';
   });
@@ -715,6 +838,11 @@ function applyPropertyOptimizations (val, property) {
     val = val.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
       return roundCompactNumber(parseFloat(amount) * (96 / 72)) + 'px';
     });
+  }
+
+  if (property === 'syntax') {
+    // Remove whitespace around pipe separators in @property syntax descriptors
+    val = val.replace(/\s*\|\s*/g, '|');
   }
 
   // Simplify clamp() where all three arguments are identical (e.g. clamp(1rem,1rem,1rem) → 1rem)

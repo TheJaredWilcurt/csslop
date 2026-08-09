@@ -40,7 +40,7 @@ jobs:
       - name: Verify Node
         run: node -v && npm -v
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --allow-git=root
       - name: Build
         run: npm run build
       - name: Setup Pages

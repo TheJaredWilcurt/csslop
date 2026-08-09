@@ -114,6 +114,36 @@ function parseAlphaString (alphaStr, fallback = 1) {
 }
 
 /**
+ * Conversion factors from each CSS angle unit to degrees.
+ *
+ * @type {{[key: string]: number}}
+ */
+const ANGLE_UNIT_TO_DEGREES = {
+  deg: 1,
+  grad: 360 / 400,
+  rad: 180 / Math.PI,
+  turn: 360
+};
+
+/**
+ * Parses a CSS angle token (e.g. "90", "90deg", ".25turn") into degrees.
+ * Unitless values are treated as degrees, per the CSS Color specification's
+ * handling of hue components.
+ *
+ * @param  {string}      angleToken  The angle token, with or without a unit suffix.
+ * @return {number|null}             The angle in degrees, or null if the token is not a valid angle.
+ */
+function parseAngleToDegrees (angleToken) {
+  // Capture the numeric portion and an optional CSS angle unit suffix
+  const match = String(angleToken).trim().match(/^(-?(?:\d+|\d*\.\d+))(deg|grad|rad|turn)?$/i);
+  if (!match) {
+    return null;
+  }
+  const unit = match[2] ? match[2].toLowerCase() : 'deg';
+  return parseFloat(match[1]) * ANGLE_UNIT_TO_DEGREES[unit];
+}
+
+/**
  * Collapses redundant CSS shorthand parts using the standard box-model
  * reduction rules: 4-value → 3-value → 2-value → 1-value.
  *
@@ -142,5 +172,6 @@ export {
   formatDimension,
   normalizeScaleComponent,
   parseAlphaString,
+  parseAngleToDegrees,
   roundCompactNumber
 };
