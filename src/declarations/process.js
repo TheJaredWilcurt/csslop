@@ -5,11 +5,45 @@
 import { minifyValue } from '../value/minify.js';
 import { hasInvalidQuotesCount } from '../value/quotes.js';
 import { collapseShorthandParts } from '../value/shared.js';
+import { splitTopLevelComponents } from '../value/syntax.js';
 
 import {
   shorthandMap,
   shorthandOverrideMap
 } from './config.js';
+
+/**
+ * CSS-wide keywords, which are only valid as the entire value of a declaration
+ * and never as an individual component of a shorthand value.
+ *
+ * @type {Set<string>}
+ */
+const CSS_WIDE_KEYWORDS = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
+
+/**
+ * Shorthand properties that themselves hold a full width/style/color value for a
+ * single edge of a box, so they can only collapse into their parent shorthand
+ * when every edge carries the exact same value.
+ *
+ * @type {Set<string>}
+ */
+const EDGE_SHORTHANDS = new Set([
+  'border-top',
+  'border-right',
+  'border-bottom',
+  'border-left',
+  'border-inline-start',
+  'border-inline-end',
+  'border-block-start',
+  'border-block-end'
+]);
+
+/**
+ * The four physical edge shorthands that together cover the `border` shorthand.
+ *
+ * @type {Array}
+ */
+const BORDER_EDGE_PROPERTIES = ['border-top', 'border-right', 'border-bottom', 'border-left'];
 
 /**
  * Reorders declarations so that shorthands appear before any related longhands they would override, preventing cascade issues in the minified output.
@@ -105,6 +139,12 @@ function getMergeProps (shorthand, longhands, declarations) {
     );
     if (hasAllBorderParts) {
       return ['border-width', 'border-style', 'border-color'];
+    }
+    const hasAllBorderEdges = BORDER_EDGE_PROPERTIES.every((edgeProperty) => {
+      return presentLonghands.includes(edgeProperty);
+    });
+    if (hasAllBorderEdges) {
+      return [...BORDER_EDGE_PROPERTIES];
     }
     return null;
   }
@@ -487,6 +527,54 @@ function absorbBackgroundLonghandsIntoShorthand (declarations) {
 }
 
 /**
+ * Checks whether a shorthand affects nothing beyond the longhands being merged.
+ * When a shorthand also resets unrelated properties (for example `border` resets
+ * `border-image`), replacing the longhands with a bare shorthand value would
+ * change the rendered result.
+ *
+ * @param  {string}  shorthandName  The target shorthand property name.
+ * @param  {Array}   properties     The longhand property names being merged.
+ * @return {boolean}                True when the shorthand only affects the merged longhands.
+ */
+function shorthandAffectsOnlyMergedLonghands (shorthandName, properties) {
+  const overrides = shorthandOverrideMap[shorthandName] || [];
+  if (overrides.length) {
+    return false;
+  }
+  const longhands = shorthandMap[shorthandName] || [];
+  return longhands.every((longhand) => {
+    return properties.includes(longhand);
+  });
+}
+
+/**
+ * Resolves how a set of longhand values that contain CSS-wide keywords such as
+ * `inherit` may be merged. A CSS-wide keyword is only valid as a declaration's
+ * entire value, so it can never appear as one component of a shorthand value:
+ * `border-width:0;border-style:inherit;border-color:inherit` cannot become
+ * `border:0 inherit inherit`. Only a set where every longhand carries the same
+ * keyword can merge, and then only into a shorthand that affects nothing else.
+ *
+ * @param  {Array}       values         The cleaned longhand values, in longhand order.
+ * @param  {string}      shorthandName  The target shorthand property name.
+ * @param  {Array}       properties     The longhand property names being merged.
+ * @return {string|null}                The shared keyword to use as the whole shorthand value, or null when merging is unsafe.
+ */
+function resolveCssWideKeywordMerge (values, shorthandName, properties) {
+  const normalizedValues = values.map((value) => {
+    return value.toLowerCase();
+  });
+  const sharedKeyword = normalizedValues[0];
+  const isSharedByAll = normalizedValues.every((value) => {
+    return value === sharedKeyword;
+  });
+  if (!isSharedByAll || !shorthandAffectsOnlyMergedLonghands(shorthandName, properties)) {
+    return null;
+  }
+  return sharedKeyword;
+}
+
+/**
  * Try to merge longhand properties into a shorthand.
  *
  * @param  {Array}       properties     The longhand property names to merge.
@@ -562,6 +650,32 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
   // Only use !important if ALL values have it
   const useImportant = allImportant;
   const importantSuffix = useImportant ? '!important' : '';
+
+  const usesCssWideKeyword = cleanValues.some((value) => {
+    return CSS_WIDE_KEYWORDS.has(value.toLowerCase());
+  });
+  if (usesCssWideKeyword) {
+    const sharedKeyword = resolveCssWideKeywordMerge(cleanValues, shorthandName, properties);
+    if (!sharedKeyword) {
+      return null;
+    }
+    return sharedKeyword + importantSuffix;
+  }
+
+  // Each edge shorthand holds a complete width/style/color value, so the edges
+  // only collapse into their parent shorthand when they are all identical.
+  const mergesEdgeShorthands = properties.every((property) => {
+    return EDGE_SHORTHANDS.has(property);
+  });
+  if (mergesEdgeShorthands) {
+    const allEdgesMatch = cleanValues.every((value) => {
+      return value === cleanValues[0];
+    });
+    if (!allEdgesMatch) {
+      return null;
+    }
+    return cleanValues[0] + importantSuffix;
+  }
 
   if (shorthandName === 'position-try') {
     const order = valueMap.get('position-try-order');
@@ -774,10 +888,127 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
     })
   );
   if (isBorderLikeShorthand) {
+    // Every component of a border/outline shorthand accepts a single value, so a
+    // per-edge value such as `border-color:#0000 red` cannot be merged directly.
+    const hasOnlySingleComponentValues = cleanValues.every((value) => {
+      return splitTopLevelComponents(value).length === 1;
+    });
+    if (!hasOnlySingleComponentValues) {
+      return null;
+    }
     return cleanValues.join(' ') + importantSuffix;
   }
 
   return null;
+}
+
+/**
+ * Finds the index of the last declaration for a property, which is the one that
+ * wins the cascade within a rule.
+ *
+ * @param  {Array}  declarations  The declarations to search.
+ * @param  {string} property      The property name to look for.
+ * @return {number}               The index of the matching declaration, or -1 when absent.
+ */
+function findLastDeclarationIndex (declarations, property) {
+  for (let index = declarations.length - 1; index >= 0; index--) {
+    if (declarations[index].property === property) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Rewrites a `border-width` + `border-style` + `border-color` trio whose color
+ * differs per edge into a `border` shorthand built from the first color, followed
+ * by a `border-color` override that restores the per-edge colors. The rewrite is
+ * only applied when the resulting pair is shorter than the three longhands.
+ *
+ * @param  {Array} declarations  The declarations of a single rule.
+ * @return {Array}               The declarations, with the trio rewritten when it is shorter.
+ */
+function collapseBorderTrioWithPerEdgeColor (declarations) {
+  const trioProperties = ['border-width', 'border-style', 'border-color'];
+  const trioIndexes = trioProperties.map((property) => {
+    return findLastDeclarationIndex(declarations, property);
+  });
+  const hasWholeTrio = trioIndexes.every((index) => {
+    return index !== -1;
+  });
+  if (!hasWholeTrio) {
+    return declarations;
+  }
+
+  const trioValues = trioIndexes.map((index) => {
+    return minifyValue(declarations[index]);
+  });
+  const allImportant = trioValues.every((value) => {
+    return value.includes('!important');
+  });
+  const noneImportant = trioValues.every((value) => {
+    return !value.includes('!important');
+  });
+  if (!allImportant && !noneImportant) {
+    return declarations;
+  }
+  const importantSuffix = allImportant ? '!important' : '';
+
+  const [width, style, color] = trioValues.map((value) => {
+    return value.replace('!important', '').trim();
+  });
+  const colorComponents = splitTopLevelComponents(color);
+  const isSingleComponent = (value) => {
+    return splitTopLevelComponents(value).length === 1;
+  };
+  const canBuildShorthand = (
+    isSingleComponent(width) &&
+    isSingleComponent(style) &&
+    colorComponents.length > 1
+  );
+  if (!canBuildShorthand) {
+    return declarations;
+  }
+  const usesCssWideKeyword = [width, style, ...colorComponents].some((value) => {
+    return CSS_WIDE_KEYWORDS.has(value.toLowerCase());
+  });
+  if (usesCssWideKeyword) {
+    return declarations;
+  }
+
+  const borderValue = [width, style, colorComponents[0]].join(' ') + importantSuffix;
+  const colorValue = color + importantSuffix;
+  const rewrittenLength = ('border:' + borderValue + ';border-color:' + colorValue).length;
+  const longhandLength = (
+    'border-width:' + trioValues[0] +
+    ';border-style:' + trioValues[1] +
+    ';border-color:' + trioValues[2]
+  ).length;
+  if (rewrittenLength >= longhandLength) {
+    return declarations;
+  }
+
+  const replacedIndexes = new Set(trioIndexes);
+  const insertionIndex = Math.min(...trioIndexes);
+  return declarations.flatMap((declaration, index) => {
+    if (index === insertionIndex) {
+      return [
+        {
+          property: 'border',
+          value: borderValue,
+          isAssembledShorthand: true
+        },
+        {
+          property: 'border-color',
+          value: colorValue
+        }
+      ];
+    }
+    if (replacedIndexes.has(index)) {
+      return [];
+    }
+    return [declaration];
+  });
 }
 
 /**
@@ -926,7 +1157,11 @@ function processDeclarations (declarations, context) {
         continue;
       }
 
-      newDeclarations.push({ property: shorthand, value: mergedValue });
+      newDeclarations.push({
+        property: shorthand,
+        value: mergedValue,
+        isAssembledShorthand: true
+      });
       const isMarginPaddingInset = (
         shorthand === 'margin' ||
         shorthand === 'padding' ||
@@ -988,6 +1223,8 @@ function processDeclarations (declarations, context) {
       changed = true;
     }
   }
+
+  result = collapseBorderTrioWithPerEdgeColor(result);
 
   return orderDeclarations(result);
 }

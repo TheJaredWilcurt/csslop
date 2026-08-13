@@ -59,7 +59,9 @@ const POSITION_AREA_SHORTHANDS = {
  * Regex matching hex color tokens (#rgb, #rgba, #rrggbb, #rrggbbaa) and CSS named
  * color keywords. Hex patterns are ordered longest-first to avoid partial matches.
  * Named colors are sorted longest-first so longer names like `darkslategray` are
- * matched before shorter substrings.
+ * matched before shorter substrings. A named color only counts as a color keyword
+ * when it is a complete identifier, so hyphens on either side disqualify it (this
+ * keeps identifiers such as the custom property name in `var(--grey)` intact).
  *
  * @type {RegExp}
  */
@@ -68,11 +70,11 @@ const COLOR_TOKEN_PATTERN = new RegExp(
   '#[0-9a-fA-F]{6}(?![0-9a-fA-F])|' +
   '#[0-9a-fA-F]{4}(?![0-9a-fA-F])|' +
   '#[0-9a-fA-F]{3}(?![0-9a-fA-F])|' +
-  '\\b(?:' +
+  '(?<![\\w-])(?:' +
   Object.keys(namedColors).sort((a, b) => {
     return b.length - a.length;
   }).join('|') +
-  ')\\b',
+  ')(?![\\w-])',
   'gi'
 );
 
@@ -178,6 +180,37 @@ function replaceOutsideStringsAndUrls (value, replacer) {
   }
 
   return result;
+}
+
+/**
+ * Lowercases every hex color token in a CSS value, since uppercase hex digits
+ * compress worse and are equivalent to their lowercase form.
+ *
+ * @param  {string} value  The CSS value string.
+ * @return {string}        The value with all hex color tokens lowercased.
+ */
+function lowercaseHexColors (value) {
+  return replaceOutsideStringsAndUrls(value, (segment) => {
+    // Match hex color tokens of 3 to 8 hex digits
+    return segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (hexColor) => {
+      return hexColor.toLowerCase();
+    });
+  });
+}
+
+/**
+ * Removes whitespace that precedes a hex color token. A `#` unambiguously starts
+ * a hash token in CSS, so no separator is required between it and a preceding
+ * ident, keyword, or number (e.g. `1px solid #f00` becomes `1px solid#f00`).
+ *
+ * @param  {string} value  The CSS value string.
+ * @return {string}        The value with spaces before hex colors removed.
+ */
+function elideSpaceBeforeHexColors (value) {
+  return replaceOutsideStringsAndUrls(value, (segment) => {
+    // Match whitespace followed by a hex color token of 3 to 8 hex digits
+    return segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
+  });
 }
 
 /**
@@ -682,11 +715,12 @@ function convertMillisecondsToSeconds (value) {
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
- * @param  {string} val       The CSS value string after generic minification.
- * @param  {string} property  The CSS property name.
- * @return {string}           The value with property-specific optimizations applied.
+ * @param  {string}  val                    The CSS value string after generic minification.
+ * @param  {string}  property               The CSS property name.
+ * @param  {boolean} allowsHexSpaceElision  Whether the space preceding a hex color may be removed.
+ * @return {string}                         The value with property-specific optimizations applied.
  */
-function applyPropertyOptimizations (val, property) {
+function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
   if (property === 'font-weight' && isUnicodeCharset()) {
     // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
@@ -859,12 +893,9 @@ function applyPropertyOptimizations (val, property) {
   val = replaceOutsideStringsAndUrls(val, shortenColorValues);
 
   // Remove space before hex colors (second pass after color evaluations)
-  val = replaceOutsideStringsAndUrls(val, (segment) => {
-    // Preserve space after border style keywords (solid, dashed, etc.) before hex colors
-    segment = segment.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+#([0-9a-fA-F]{3,8})\b/gi, '$1 #$2');
-    // Then remove other spaces before hex colors
-    return segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
-  });
+  if (allowsHexSpaceElision) {
+    val = elideSpaceBeforeHexColors(val);
+  }
   if (property !== 'transform' && property !== 'background' && property !== 'src') {
     // Restore space after close-paren when followed by an alphanumeric, hash, or hyphen
     val = val.replace(/\)(?=[0-9a-zA-Z#-])/g, ') ');
@@ -911,9 +942,6 @@ function applyPropertyOptimizations (val, property) {
   if (property === 'border') {
     // Remove default "medium" border-width keyword
     val = val.replace(/\bmedium\s+/g, '');
-    // Restore missing space between border-style and a 4-digit hex color (with alpha) when they are adjacent
-    // This is needed because solid#0000 could be parsed as solid followed by #000 followed by position 0
-    val = val.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)#([0-9a-fA-F]{4})\b/gi, '$1 #$2');
   }
 
   if (property === 'outline') {
@@ -982,6 +1010,10 @@ function minifyValue (declaration) {
     return 'none';
   }
   let val = declaration.value;
+  // Values assembled from already-minified longhands keep the separator spaces
+  // between their components, because those spaces delimit the shorthand's
+  // parts rather than the authored whitespace of a single written value.
+  const allowsHexSpaceElision = !declaration.isAssembledShorthand;
 
   if (typeof val === 'string') {
     val = val.trim();
@@ -1024,20 +1056,10 @@ function minifyValue (declaration) {
       val = roundCompactNumber(rawNumber, 4) + rawUnit;
     }
 
-    // Remove space before hex colors
-    val = replaceOutsideStringsAndUrls(val, (segment) => {
-      // Preserve space after border style keywords by using a temporary placeholder
-      segment = segment.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+#([0-9a-fA-F]{3,8})\b/gi, '$1__BORDER_SPACE__#$2');
-      // Remove other spaces before hex colors
-      segment = segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
-      // Restore the preserved space
-      segment = segment.replace(/__BORDER_SPACE__#/g, ' #');
-      // Lowercase hex color tokens for consistency and shorter output
-      segment = segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (m) => {
-        return m.toLowerCase();
-      });
-      return segment;
-    });
+    val = lowercaseHexColors(val);
+    if (allowsHexSpaceElision) {
+      val = elideSpaceBeforeHexColors(val);
+    }
 
     // Convert color functions to hex equivalents
     val = convertColorsToHex(val);
@@ -1049,7 +1071,7 @@ function minifyValue (declaration) {
     val = simplifyEquivalentLightDarkFunctions(val);
 
     // Property-specific optimizations
-    val = applyPropertyOptimizations(val, declaration.property);
+    val = applyPropertyOptimizations(val, declaration.property, allowsHexSpaceElision);
 
     // Minify relative color syntax (identity resolution and whitespace collapsing)
     val = minifyRelativeColorSyntax(val);
