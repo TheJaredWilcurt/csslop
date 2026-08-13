@@ -121,12 +121,11 @@ function stringifyAtRule (rule, context) {
 /**
  * Converts a parsed CSS AST rule node into a minified CSS string, dispatching to specialized handlers for each rule type including selectors, `@media`, `@keyframes`, `@layer`, and other at-rules.
  *
- * @param  {object}  rule     The AST rule node to stringify.
- * @param  {object}  context  The minification context with registered custom property data.
- * @param  {boolean} nested   Whether this rule is nested inside another rule, affecting spacing.
- * @return {string}           The minified CSS string for this rule, or an empty string if the rule is empty.
+ * @param  {object} rule     The AST rule node to stringify.
+ * @param  {object} context  The minification context with registered custom property data.
+ * @return {string}          The minified CSS string for this rule, or an empty string if the rule is empty.
  */
-function stringifyRule (rule, context, nested = false) {
+function stringifyRule (rule, context) {
   if (rule.type === 'rule') {
     let declarations = rule.declarations
       ?.filter((declaration) => {
@@ -308,7 +307,7 @@ function stringifyRule (rule, context, nested = false) {
       .join(';');
 
     let renderedNested = nestedRules.map((nestedRule) => {
-      return stringifyRule(nestedRule, context, true);
+      return stringifyRule(nestedRule, context);
     }).join('');
 
     output.push(renderedDeclarations);
@@ -323,11 +322,11 @@ function stringifyRule (rule, context, nested = false) {
 
   if (rule.type === 'media') {
     const normalizedMedia = normalizeMedia(rule.media);
-    // A custom-media reference is a parenthesized dashed-ident like (--modern);
-    // no space is needed after @media when the query begins with such a token.
-    const isCustomMediaReference = normalizedMedia.startsWith('(--');
+    // An opening parenthesis unambiguously starts the first media condition
+    // (including custom-media references like `(--modern)`), so the space after
+    // `@media` is only required when the query begins with an identifier.
     let separator;
-    if ((nested && normalizedMedia.startsWith('(')) || isCustomMediaReference) {
+    if (normalizedMedia.startsWith('(')) {
       separator = '';
     } else {
       separator = ' ';
@@ -343,7 +342,7 @@ function stringifyRule (rule, context, nested = false) {
       return [unescapeIdent(declaration.property), ':', minifyValue(declaration)].join('');
     }).join(';');
     const renderedRules = subRules.map((childRule) => {
-      return stringifyRule(childRule, context, false);
+      return stringifyRule(childRule, context);
     }).join('');
     const children = [renderedDeclarations, renderedRules].filter(Boolean).join('');
     if (!children) {

@@ -51,7 +51,43 @@ const shorthandOverrideMap = {
   mask: ['mask-border', 'mask-border-source', 'mask-border-slice', 'mask-border-width', 'mask-border-outset', 'mask-border-repeat', 'mask-border-mode']
 };
 
+/**
+ * CSS-wide keywords, which are only valid as the entire value of a declaration
+ * and never as an individual component of a shorthand value.
+ *
+ * @type {Set<string>}
+ */
+const CSS_WIDE_KEYWORDS = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
+
+/**
+ * Shorthand properties that themselves hold a full width/style/color value for a
+ * single edge of a box, so they can only collapse into their parent shorthand
+ * when every edge carries the exact same value.
+ *
+ * @type {Set<string>}
+ */
+const EDGE_SHORTHANDS = new Set([
+  'border-top',
+  'border-right',
+  'border-bottom',
+  'border-left',
+  'border-inline-start',
+  'border-inline-end',
+  'border-block-start',
+  'border-block-end'
+]);
+
+/**
+ * The four physical edge shorthands that together cover the `border` shorthand.
+ *
+ * @type {Array}
+ */
+const BORDER_EDGE_PROPERTIES = ['border-top', 'border-right', 'border-bottom', 'border-left'];
+
 export {
+  BORDER_EDGE_PROPERTIES,
+  CSS_WIDE_KEYWORDS,
+  EDGE_SHORTHANDS,
   shorthandMap,
   shorthandOverrideMap
 };

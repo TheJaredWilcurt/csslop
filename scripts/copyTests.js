@@ -13,37 +13,39 @@ import { join } from 'node:path';
 const __dirname = import.meta.dirname;
 
 /**
- *
- * @param fromNpm
- */
-
-/**
  * Copies the test files from css-minify-tests to the copiedTests folder.
- *
- * @param {boolean} fromNpm  true = copy from node_modules, false = from local sister repo clone
  */
-export const copyTests = function (fromNpm) {
-  let originalTests = join(
+export const copyTests = function () {
+  const originalTests = join(
     __dirname,
     '..',
     '..',
     'css-minify-tests',
     'tests'
   );
-  if (fromNpm) {
-    originalTests = join(
-      __dirname,
-      '..',
-      'node_modules',
-      'css-minify-tests',
-      'tests'
-    );
-  }
   const copiedTests = join(
     __dirname,
     '..',
     'copiedTests'
   );
+
+  if (!existsSync(originalTests)) {
+    console.log([
+      '',
+      'COPY FAILED:',
+      '',
+      'You must `git clone` css-minify-tests to:',
+      join(__dirname, '..', '..'),
+      '',
+      'HTTPS',
+      'git clone https://github.com/keithamus/css-minify-tests.git',
+      '',
+      'SSH',
+      'git clone git@github.com:keithamus/css-minify-tests.git',
+      ''
+    ].join('\n'));
+    return;
+  }
 
   // Clear folder
   rmSync(copiedTests, { recursive: true, force: true });
@@ -63,3 +65,5 @@ export const copyTests = function (fromNpm) {
     }
   }
 };
+
+copyTests();

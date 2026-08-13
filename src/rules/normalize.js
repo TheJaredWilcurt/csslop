@@ -70,7 +70,21 @@ function normalizeMedia (media) {
       return fullMatch;
     }
   );
-  return media;
+  return compactLogicalOperators(media.trim());
+}
+
+/**
+ * Removes the whitespace between a closing parenthesis and a following `and`/`or`
+ * logical operator, which a closing parenthesis already separates unambiguously.
+ * The space after the operator is required, since it separates the operator from
+ * the next condition's opening parenthesis.
+ *
+ * @param  {string} condition  A normalized `@media` or `@supports` condition string.
+ * @return {string}            The condition with tightened logical operator spacing.
+ */
+function compactLogicalOperators (condition) {
+  // Compact logical operator spacing: ") and (" → ")and (", ") or (" → ")or ("
+  return condition.replace(/\)\s*(and|or)\s*\(/gi, ')$1 (');
 }
 
 /**
@@ -83,10 +97,7 @@ function normalizeSupports (supports) {
   // Collapse whitespace and strip spaces around punctuation
   supports = supports.replace(/\s+/g, ' ').replace(/\s*([:,])\s*/g, '$1').replace(/\s*([=<>])\s*/g, '$1').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
   supports = supports.replace(/\s+and\s+/g, ' and ').replace(/\s+or\s+/g, ' or ').replace(/\s+not\s+/g, ' not ');
-  // Compact logical operator spacing: ") and (" → ")and ("
-  supports = supports.replace(/\)\s*and\s*\(/g, ')and (');
-  supports = supports.replace(/\)\s*or\s*\(/g, ')or (');
-  return supports;
+  return compactLogicalOperators(supports);
 }
 
 /**
