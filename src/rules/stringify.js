@@ -11,6 +11,7 @@ import {
 } from './custom-properties.js';
 import {
   canUnwrapSupports,
+  normalizeLayerNames,
   normalizeMedia,
   normalizeSupports,
   unescapeIdent,
@@ -41,6 +42,34 @@ function stringifyDeclarations (declarations) {
 }
 
 /**
+ * Matches a complete `@layer` statement, which declares layer names without a
+ * block and ends with the semicolon that separates it from the CSS that follows
+ * it. Layer names are identifiers, so any block, string, or function character
+ * means the string is something other than a lone layer statement.
+ *
+ * @type {RegExp}
+ */
+const LAYER_STATEMENT_PATTERN = /^@layer [^{}();'"]*;$/;
+
+/**
+ * Removes the semicolon of a trailing `@layer` statement, since that semicolon
+ * only exists to separate the statement from whatever comes after it. When the
+ * statement ends a stylesheet or a block, there is nothing left to separate.
+ *
+ * @param  {Array} ruleStrings  The stringified rules, in output order.
+ * @return {Array}              The stringified rules, without the redundant semicolon.
+ */
+function removeRedundantLayerStatementSemicolon (ruleStrings) {
+  const lastIndex = ruleStrings.length - 1;
+  if (lastIndex < 0 || !LAYER_STATEMENT_PATTERN.test(ruleStrings[lastIndex])) {
+    return ruleStrings;
+  }
+  const result = [...ruleStrings];
+  result[lastIndex] = result[lastIndex].slice(0, -1);
+  return result;
+}
+
+/**
  * Recursively stringifies child rules into a concatenated minified CSS string.
  *
  * @param  {Array}  rules    The child AST rule nodes to stringify.
@@ -48,9 +77,10 @@ function stringifyDeclarations (declarations) {
  * @return {string}          The concatenated minified CSS for all child rules.
  */
 function stringifyChildRules (rules, context) {
-  return (rules || []).map((childRule) => {
+  const ruleStrings = (rules || []).map((childRule) => {
     return stringifyRule(childRule, context);
-  }).join('');
+  }).filter(Boolean);
+  return removeRedundantLayerStatementSemicolon(ruleStrings).join('');
 }
 /**
  * Minifies a `@function` prelude (signature) by collapsing whitespace around
@@ -341,9 +371,7 @@ function stringifyRule (rule, context) {
     const renderedDeclarations = mediaDeclarations.map((declaration) => {
       return [unescapeIdent(declaration.property), ':', minifyValue(declaration)].join('');
     }).join(';');
-    const renderedRules = subRules.map((childRule) => {
-      return stringifyRule(childRule, context);
-    }).join('');
+    const renderedRules = stringifyChildRules(subRules, context);
     const children = [renderedDeclarations, renderedRules].filter(Boolean).join('');
     if (!children) {
       return '';
@@ -474,10 +502,11 @@ function stringifyRule (rule, context) {
   }
 
   if (rule.type === 'layer') {
+    const layerNames = normalizeLayerNames(rule.layer);
     if (rule.rules && rule.rules.length) {
-      return '@layer ' + (rule.layer || '') + '{' + stringifyChildRules(rule.rules, context) + '}';
+      return '@layer ' + layerNames + '{' + stringifyChildRules(rule.rules, context) + '}';
     } else {
-      return '@layer ' + rule.layer + ';';
+      return '@layer ' + layerNames + ';';
     }
   }
 
@@ -635,4 +664,7 @@ function stringifyRule (rule, context) {
   return ''; // Ignore unknown for now
 }
 
-export { stringifyRule };
+export {
+  removeRedundantLayerStatementSemicolon,
+  stringifyRule
+};

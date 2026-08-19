@@ -49,6 +49,18 @@ function unescapeSelector (selector) {
 }
 
 /**
+ * Normalizes a `@layer` cascade layer name list by trimming it and removing the
+ * optional whitespace that may surround the commas separating the layer names.
+ *
+ * @param  {string} layerNames  The raw layer name list (e.g. "reset, base,\n  components").
+ * @return {string}             The normalized comma-separated layer name list.
+ */
+function normalizeLayerNames (layerNames) {
+  // Collapse the optional whitespace surrounding the commas between layer names
+  return String(layerNames ?? '').trim().replace(/\s*,\s*/g, ',');
+}
+
+/**
  * Normalizes a `@media` query string by collapsing whitespace, stripping the default "all and" prefix, and converting min/max-width to range syntax.
  *
  * @param  {string} media  The raw `@media` query string.
@@ -112,6 +124,7 @@ function canUnwrapSupports (supports) {
 
 export {
   canUnwrapSupports,
+  normalizeLayerNames,
   normalizeMedia,
   normalizeSupports,
   unescapeIdent,
