@@ -30,6 +30,7 @@ import {
 } from './relative-colors.js';
 import {
   collapseShorthandParts,
+  convertAbsoluteLengthToPx,
   normalizeScaleComponent,
   parseAlphaString,
   parseAngleToDegrees,
@@ -712,6 +713,49 @@ function convertMillisecondsToSeconds (value) {
 }
 
 /**
+ * Matches an absolute CSS length token: an optionally signed number followed by
+ * an absolute length unit. The lookbehind rejects digits that belong to a larger
+ * identifier, such as the custom property name in `var(--size-2in)`, where the
+ * digits and unit do not form a value of their own.
+ *
+ * @type {RegExp}
+ */
+const ABSOLUTE_LENGTH_PATTERN = /(?<![\w#.%-])(-?(?:\d+|\d*\.\d+))(pt|pc|in|cm|mm|q)\b/gi;
+
+/**
+ * The largest difference in pixels that a rounded conversion may introduce and
+ * still count as exact, which allows for binary floating point error without
+ * allowing a visible change to the rendered length.
+ *
+ * @type {number}
+ */
+const PIXEL_ROUNDING_TOLERANCE = 1e-6;
+
+/**
+ * Converts absolute length values (pt, pc, in, cm, mm, Q) to their pixel
+ * equivalent when the conversion is exact and the pixel form is no longer than
+ * the original. Normalizing to px also improves compression by reducing the
+ * number of distinct unit strings in the output.
+ *
+ * @param  {string} value  A CSS value segment, outside strings and urls.
+ * @return {string}        The segment with eligible absolute lengths converted to px.
+ */
+function convertAbsoluteLengthsToPx (value) {
+  return value.replace(ABSOLUTE_LENGTH_PATTERN, (token, amount, unit) => {
+    const pixels = convertAbsoluteLengthToPx(amount, unit);
+    if (pixels === null) {
+      return token;
+    }
+    const converted = roundCompactNumber(pixels) + 'px';
+    const isExact = Math.abs(parseFloat(converted) - pixels) < PIXEL_ROUNDING_TOLERANCE;
+    if (!isExact || converted.length > token.length) {
+      return token;
+    }
+    return converted;
+  });
+}
+
+/**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
@@ -867,11 +911,11 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
     });
   }
 
-  if (property === 'font-size') {
-    // Convert point (pt) font-size values to their pixel (px) equivalent
-    val = val.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
-      return roundCompactNumber(parseFloat(amount) * (96 / 72)) + 'px';
-    });
+  // Custom properties hold an arbitrary token stream rather than a typed value,
+  // so a unit-like token in one is not necessarily a length.
+  const isCustomProperty = Boolean(property) && property.startsWith('--');
+  if (!isCustomProperty) {
+    val = replaceOutsideStringsAndUrls(val, convertAbsoluteLengthsToPx);
   }
 
   if (property === 'syntax') {

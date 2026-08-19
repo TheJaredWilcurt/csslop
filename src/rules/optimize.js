@@ -4,7 +4,10 @@
 
 import { escapeRegexString } from '../utilities.js';
 
-import { normalizeMedia } from './normalize.js';
+import {
+  normalizeLayerNames,
+  normalizeMedia
+} from './normalize.js';
 
 /**
  * Expands rules that contain only nested sub-rules into flat rules with combined selectors, enabling further merging when the combined selectors already exist elsewhere.
@@ -786,7 +789,7 @@ function mergeLayerRules (rules, mergeSelectorRules) {
   const result = [];
   for (const rule of rules) {
     if (rule.type === 'layer') {
-      const layerName = rule.layer || '';
+      const layerName = normalizeLayerNames(rule.layer);
       if (rule.rules && rule.rules.length > 0) {
         if (layerName && layerBlockMap.has(layerName)) {
           layerBlockMap.get(layerName).rules.push(...rule.rules);

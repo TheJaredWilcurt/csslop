@@ -34,7 +34,10 @@ import {
   removeEmptyRules,
   removeOverriddenMultiSelectorProperties
 } from './rules/optimize.js';
-import { stringifyRule } from './rules/stringify.js';
+import {
+  removeRedundantLayerStatementSemicolon,
+  stringifyRule
+} from './rules/stringify.js';
 import { minifyValue } from './value/minify.js';
 
 /**
@@ -256,7 +259,7 @@ export const minifyCSS = function (input) {
       output.push(stringifyRule(rule, context));
     }
 
-    const mergedOutput = mergeAdjacentRulesWithIdenticalBodies(output);
+    const mergedOutput = removeRedundantLayerStatementSemicolon(mergeAdjacentRulesWithIdenticalBodies(output));
 
     clearActiveCharset();
     return restoreEscapeSequences(mergedOutput.join(''));

@@ -8,6 +8,7 @@ import { hasInvalidQuotesCount } from '../value/quotes.js';
 import { absorbBackgroundLonghandsIntoShorthand } from './background.js';
 import { collapseBorderTrioWithPerEdgeColor } from './border.js';
 import { shorthandMap } from './config.js';
+import { hoistCssWideKeywordsIntoShorthands } from './css-wide-keywords.js';
 import {
   getMergeProps,
   tryMergeToShorthand
@@ -304,6 +305,7 @@ function processDeclarations (declarations, context) {
   result = removeLonghandsOverriddenByShorthands(result);
   result = absorbBackgroundLonghandsIntoShorthand(result);
   result = mergeLonghandsIntoShorthands(result, context);
+  result = hoistCssWideKeywordsIntoShorthands(result);
   result = collapseBorderTrioWithPerEdgeColor(result);
 
   return orderDeclarations(result);
