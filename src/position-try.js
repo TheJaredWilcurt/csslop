@@ -163,41 +163,9 @@ function filterUnusedPositionTry (rules, positionTryRules, positionTryUsage) {
   });
 }
 
-/**
- * Removes duplicate and redundant UTF-8 `@charset` rules, keeping only the first
- * non-UTF-8 charset declaration and moving it to the top of the document.
- * Per the CSS specification, `@charset` must be the very first thing in a stylesheet.
- *
- * @param  {Array} rules  The top-level AST rule nodes to filter.
- * @return {Array}        A new array of rules with the first non-UTF-8 `@charset` at the start and all others removed.
- */
-function filterRedundantCharsets (rules) {
-  let keptCharset = null;
-
-  const filtered = rules.filter((rule) => {
-    if (rule.type !== 'charset') {
-      return true;
-    }
-    if (!keptCharset) {
-      // Strip surrounding quotes from the charset value for comparison
-      const normalizedCharset = rule.charset?.toLowerCase().replace(/["']/g, '');
-      if (normalizedCharset !== 'utf-8') {
-        keptCharset = rule;
-      }
-    }
-    return false;
-  });
-
-  if (keptCharset) {
-    return [keptCharset, ...filtered];
-  }
-  return filtered;
-}
-
 export {
   analyzePositionTryRules,
   cleanPositionTryRules,
   collectRuleMetadata,
-  filterRedundantCharsets,
   filterUnusedPositionTry
 };

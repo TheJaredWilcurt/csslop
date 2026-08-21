@@ -5,6 +5,10 @@
 import { parse } from '@node-projects/css-parser';
 
 import {
+  detectCharset,
+  filterRedundantCharsets
+} from './charset.js';
+import {
   clearActiveCharset,
   createMinifyContext,
   setActiveCharset
@@ -13,7 +17,6 @@ import {
   analyzePositionTryRules,
   cleanPositionTryRules,
   collectRuleMetadata,
-  filterRedundantCharsets,
   filterUnusedPositionTry
 } from './position-try.js';
 import {
@@ -170,22 +173,6 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
     result.push(ruleString);
   }
   return result;
-}
-
-/**
- * Extracts the first `@charset` value from raw CSS text before parsing.
- * Scans for `@charset` followed by a quoted string and semicolon.
- *
- * @param  {string} css  The raw CSS string to scan.
- * @return {string}      The first charset value (with quotes), or empty string if none found.
- */
-function detectCharset (css) {
-  // Match @charset followed by a quoted value and semicolon
-  const match = css.match(/@charset\s+(["'][^"']+["'])\s*;/i);
-  if (match) {
-    return match[1];
-  }
-  return '';
 }
 
 /**

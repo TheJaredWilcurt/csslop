@@ -2,6 +2,8 @@
  * @file Manages the shared minification context for tracking registered custom properties and their syntax.
  */
 
+import { isUnicodeCompatibleCharset } from './charset.js';
+
 /**
  * Creates a fresh minification context used to track `@property`-registered custom properties and their declared syntax types across the entire stylesheet.
  *
@@ -22,18 +24,15 @@ function createMinifyContext () {
 let activeCharset = '';
 
 /**
- * Returns true when the active charset is a unicode-compatible encoding
- * (UTF-8, UTF-16, or the default when no `@charset` is declared), meaning
- * CSS unicode escapes can safely be resolved to literal characters.
+ * Returns true when the active charset leaves the stylesheet in a
+ * unicode-compatible encoding (UTF-8, a UTF-16 label that falls back to UTF-8,
+ * an unrecognized label, or the default when no `@charset` is declared),
+ * meaning CSS unicode escapes can safely be resolved to literal characters.
  *
  * @return {boolean} True if the active charset supports unicode characters.
  */
 function isUnicodeCharset () {
-  if (!activeCharset) {
-    return true;
-  }
-  const normalized = activeCharset.toLowerCase().replace(/["']/g, '');
-  return normalized === 'utf-8' || normalized.startsWith('utf-16');
+  return isUnicodeCompatibleCharset(activeCharset);
 }
 
 /**
