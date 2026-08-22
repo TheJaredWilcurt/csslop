@@ -756,6 +756,51 @@ function convertAbsoluteLengthsToPx (value) {
 }
 
 /**
+ * Properties whose `initial` value is a number the browser resolves, so the
+ * keyword only ever shortens for the two that have a shorter written form.
+ *
+ * @type {Set<string>}
+ */
+const NUMERIC_INITIAL_PROPERTIES = new Set([
+  'opacity',
+  'z-index',
+  'flex-grow',
+  'flex-shrink',
+  'order',
+  'line-height',
+  'zoom'
+]);
+
+/**
+ * Properties whose `initial` value is zero.
+ *
+ * @type {Set<string>}
+ */
+const ZERO_INITIAL_PROPERTIES = new Set(['margin', 'padding']);
+
+/**
+ * Properties whose `initial` value is `auto`.
+ *
+ * @type {Set<string>}
+ */
+const AUTO_INITIAL_PROPERTIES = new Set(['min-width', 'min-height']);
+
+/**
+ * Properties whose value is a time, where a millisecond amount may be worth
+ * rewriting in seconds.
+ *
+ * @type {Set<string>}
+ */
+const TIME_PROPERTIES = new Set([
+  'transition',
+  'transition-duration',
+  'transition-delay',
+  'animation',
+  'animation-duration',
+  'animation-delay'
+]);
+
+/**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
@@ -773,15 +818,7 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
   }
 
   // Convert ms to s for time-related properties when the seconds form is shorter
-  const isTimeProperty = (
-    property === 'transition' ||
-    property === 'transition-duration' ||
-    property === 'transition-delay' ||
-    property === 'animation' ||
-    property === 'animation-duration' ||
-    property === 'animation-delay'
-  );
-  if (isTimeProperty) {
+  if (TIME_PROPERTIES.has(property)) {
     val = convertMillisecondsToSeconds(val);
   }
 
@@ -823,7 +860,7 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
 
   // Initial values
   if (val === 'initial') {
-    if (['opacity', 'z-index', 'flex-grow', 'flex-shrink', 'order', 'line-height', 'zoom'].includes(property)) {
+    if (NUMERIC_INITIAL_PROPERTIES.has(property)) {
       // Just leaving them or mapping some: opacity: initial -> opacity: 1
       if (property === 'opacity') {
         val = '1';
@@ -832,10 +869,10 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
         val = 'auto';
       }
     }
-    if (['margin', 'padding'].includes(property)) {
+    if (ZERO_INITIAL_PROPERTIES.has(property)) {
       val = '0';
     }
-    if (['min-width', 'min-height'].includes(property)) {
+    if (AUTO_INITIAL_PROPERTIES.has(property)) {
       val = 'auto';
     }
     // background-color: initial should become #0000 (transparent)
@@ -1043,7 +1080,7 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
  * @param  {object} declaration  The CSS declaration object with property and value fields.
  * @return {string}              The minified value string.
  */
-function minifyValue (declaration) {
+function computeMinifiedValue (declaration) {
   if (declaration.property === 'position-area') {
     const shorthand = POSITION_AREA_SHORTHANDS[declaration.value];
     if (shorthand) {
@@ -1135,4 +1172,63 @@ function minifyValue (declaration) {
   return val;
 }
 
-export { minifyValue };
+/**
+ * Memoizes minified values for the current stylesheet. Minification runs many
+ * passes over the same declarations (deduplication, shorthand assembly,
+ * CSS-wide keyword hoisting, stringification), and the result only depends on
+ * the declaration fields that make up the cache key, so each distinct
+ * property/value pair is minified once per stylesheet.
+ *
+ * @type {Map<string, string>}
+ */
+const minifiedValueCache = new Map();
+
+/**
+ * Discards every memoized value. The minifier calls this at the start of each
+ * stylesheet, since the active `@charset` can change how a value minifies and
+ * the cache should not outlive the pass that filled it.
+ */
+function clearMinifiedValueCache () {
+  minifiedValueCache.clear();
+}
+
+/**
+ * Builds the cache key for a declaration from every field the value minifier
+ * reads. A null character cannot appear in a property name or in a parsed CSS
+ * value, so it safely delimits the parts.
+ *
+ * @param  {object} declaration  The CSS declaration object.
+ * @return {string}              The cache key.
+ */
+function createMinifiedValueCacheKey (declaration) {
+  const assembledFlag = declaration.isAssembledShorthand ? '1' : '0';
+  return declaration.property + '\u0000' + assembledFlag + '\u0000' + declaration.value;
+}
+
+/**
+ * Minifies a CSS declaration's value, reusing the memoized result when the same
+ * property and value has already been minified during this pass.
+ *
+ * @param  {object} declaration  The CSS declaration object with property and value fields.
+ * @return {string}              The minified value string.
+ */
+function minifyValue (declaration) {
+  // Only string values have a stable, collision-free key; anything else is rare
+  // enough that minifying it again costs less than encoding its type.
+  if (typeof declaration.value !== 'string') {
+    return computeMinifiedValue(declaration);
+  }
+  const cacheKey = createMinifiedValueCacheKey(declaration);
+  const cachedValue = minifiedValueCache.get(cacheKey);
+  if (cachedValue !== undefined) {
+    return cachedValue;
+  }
+  const minifiedValue = computeMinifiedValue(declaration);
+  minifiedValueCache.set(cacheKey, minifiedValue);
+  return minifiedValue;
+}
+
+export {
+  clearMinifiedValueCache,
+  minifyValue
+};

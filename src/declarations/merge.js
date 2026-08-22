@@ -8,9 +8,10 @@ import {
   BORDER_EDGE_PROPERTIES,
   CSS_WIDE_KEYWORDS,
   EDGE_SHORTHANDS,
-  shorthandMap,
-  shorthandOverrideMap
+  getLonghandsOf,
+  getOverridesOf
 } from './config.js';
+import { indexFirstDeclarationByProperty } from './lookup.js';
 import { buildShorthandValue } from './shorthand-values.js';
 
 /**
@@ -24,64 +25,62 @@ const MIXED_IMPORTANT_SHORTHANDS = new Set(['margin', 'padding', 'inset', 'posit
 /**
  * Determines which longhand properties are present and eligible for merging into a given shorthand. Returns null when the required longhands for the shorthand are not all available.
  *
- * @param  {string}     shorthand     The CSS shorthand property name.
- * @param  {Array}      longhands     The expected longhand property names for this shorthand.
- * @param  {Array}      declarations  The current array of CSS declaration objects.
- * @return {Array|null}               The list of longhand names to merge, or null if merging is not possible.
+ * @param  {string}     shorthand           The CSS shorthand property name.
+ * @param  {Array}      longhands           The expected longhand property names for this shorthand.
+ * @param  {Set}        declaredProperties  The property names the rule currently declares.
+ * @return {Array|null}                     The list of longhand names to merge, or null if merging is not possible.
  */
-function getMergeProps (shorthand, longhands, declarations) {
+function getMergeProps (shorthand, longhands, declaredProperties) {
   const presentLonghands = longhands.filter((longhand) => {
-    return declarations.some((declaration) => {
-      return declaration.property === longhand;
-    });
+    return declaredProperties.has(longhand);
   });
   if (presentLonghands.length === 0) {
     return null;
   }
   if (shorthand === 'font') {
-    const hasRequiredFontProps = presentLonghands.includes('font-size') && presentLonghands.includes('font-family');
+    const hasRequiredFontProps = declaredProperties.has('font-size') && declaredProperties.has('font-family');
     if (hasRequiredFontProps) {
       return presentLonghands;
     }
     return null;
   }
   if (shorthand === 'background-position') {
-    const hasBothAxes = presentLonghands.includes('background-position-x') && presentLonghands.includes('background-position-y');
+    const hasBothAxes = declaredProperties.has('background-position-x') && declaredProperties.has('background-position-y');
     if (hasBothAxes) {
       return presentLonghands;
     }
     return null;
   }
   if (shorthand === 'background') {
-    const hasBackgroundProp = presentLonghands.includes('background-color') || presentLonghands.includes('background-image');
+    const hasBackgroundProp = declaredProperties.has('background-color') || declaredProperties.has('background-image');
     if (hasBackgroundProp) {
       return presentLonghands;
     }
     return null;
   }
   if (shorthand === 'mask') {
-    if (presentLonghands.includes('mask-image')) {
+    if (declaredProperties.has('mask-image')) {
       return presentLonghands;
     }
     return null;
   }
   if (shorthand === 'border-image') {
-    if (presentLonghands.includes('border-image-source')) {
+    if (declaredProperties.has('border-image-source')) {
       return presentLonghands;
     }
     return null;
   }
   if (shorthand === 'border') {
     const hasAllBorderParts = (
-      presentLonghands.includes('border-width') &&
-      presentLonghands.includes('border-style') &&
-      presentLonghands.includes('border-color')
+      declaredProperties.has('border-width') &&
+      declaredProperties.has('border-style') &&
+      declaredProperties.has('border-color')
     );
     if (hasAllBorderParts) {
       return ['border-width', 'border-style', 'border-color'];
     }
     const hasAllBorderEdges = BORDER_EDGE_PROPERTIES.every((edgeProperty) => {
-      return presentLonghands.includes(edgeProperty);
+      return declaredProperties.has(edgeProperty);
     });
     if (hasAllBorderEdges) {
       return [...BORDER_EDGE_PROPERTIES];
@@ -90,9 +89,9 @@ function getMergeProps (shorthand, longhands, declarations) {
   }
   if (shorthand === 'flex') {
     const hasAllFlexParts = (
-      presentLonghands.includes('flex-grow') &&
-      presentLonghands.includes('flex-shrink') &&
-      presentLonghands.includes('flex-basis')
+      declaredProperties.has('flex-grow') &&
+      declaredProperties.has('flex-shrink') &&
+      declaredProperties.has('flex-basis')
     );
     if (hasAllFlexParts) {
       return ['flex-grow', 'flex-shrink', 'flex-basis'];
@@ -150,13 +149,12 @@ function canMergeVarValue (value, context) {
  * @return {boolean}                True when the shorthand only affects the merged longhands.
  */
 function shorthandAffectsOnlyMergedLonghands (shorthandName, properties) {
-  const overrides = shorthandOverrideMap[shorthandName] || [];
-  if (overrides.length) {
+  if (getOverridesOf(shorthandName).size) {
     return false;
   }
-  const longhands = shorthandMap[shorthandName] || [];
-  return longhands.every((longhand) => {
-    return properties.includes(longhand);
+  const mergedProperties = new Set(properties);
+  return [...getLonghandsOf(shorthandName)].every((longhand) => {
+    return mergedProperties.has(longhand);
   });
 }
 
@@ -196,10 +194,9 @@ function resolveCssWideKeywordMerge (values, shorthandName, properties) {
  * @return {Array|null}               The minified longhand values, or null when one is missing.
  */
 function collectLonghandValues (properties, declarations) {
+  const declarationByProperty = indexFirstDeclarationByProperty(declarations);
   const values = properties.map((property) => {
-    const declaration = declarations.find((candidate) => {
-      return candidate.property === property;
-    });
+    const declaration = declarationByProperty.get(property);
     if (declaration) {
       return minifyValue(declaration);
     }

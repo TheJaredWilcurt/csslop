@@ -12,6 +12,31 @@ const BACKGROUND_ATTACHMENT_KEYWORDS = new Set(['scroll', 'fixed', 'local']);
 const BACKGROUND_BOX_KEYWORDS = new Set(['border-box', 'padding-box', 'content-box']);
 
 /**
+ * Functions that produce a value other than an image, so a token calling one of
+ * them is never a background image even though it looks like a function call.
+ *
+ * @type {Set<string>}
+ */
+const NON_IMAGE_FUNCTION_NAMES = new Set([
+  'calc',
+  'min',
+  'max',
+  'clamp',
+  'var',
+  'env',
+  'rgb',
+  'rgba',
+  'hsl',
+  'hsla',
+  'hwb',
+  'lab',
+  'lch',
+  'oklab',
+  'oklch',
+  'color'
+]);
+
+/**
  * Resolves the background position from a value map. Prefers the combined
  * `background-position` property if present, otherwise combines
  * `background-position-x` and `background-position-y` into a single value.
@@ -51,7 +76,7 @@ function isBackgroundImageToken (token) {
     return false;
   }
   const functionName = functionNameMatch[1].toLowerCase();
-  return !['calc', 'min', 'max', 'clamp', 'var', 'env', 'rgb', 'rgba', 'hsl', 'hsla', 'hwb', 'lab', 'lch', 'oklab', 'oklch', 'color'].includes(functionName);
+  return !NON_IMAGE_FUNCTION_NAMES.has(functionName);
 }
 
 /**
