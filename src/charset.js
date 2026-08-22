@@ -118,6 +118,64 @@ const ENCODING_BY_LABEL = createEncodingByLabelLookup();
 const SHORTEST_LABEL_BY_ENCODING = createShortestLabelLookup();
 
 /**
+ * The byte sequence an engine looks for when a stylesheet declares its
+ * encoding: the lowercase `@charset` keyword, a single space, a double-quoted
+ * label, and a semicolon. Engines compare these raw bytes instead of parsing
+ * CSS syntax, so a rule written any other way (single quotes, an uppercased
+ * keyword, padded whitespace, escaped label bytes) declares nothing at all.
+ * https://drafts.csswg.org/css-syntax-3/#determine-the-fallback-encoding
+ *
+ * @type {RegExp}
+ */
+// Matches `@charset "label";` anywhere in raw CSS text, capturing the quoted label
+const ENCODING_DECLARATION_PATTERN = /@charset ("[^"]*");/;
+
+/**
+ * The same byte sequence, but required to make up an entire at-rule, so that
+ * text surrounding the keyword disqualifies the rule as a declaration.
+ *
+ * @type {RegExp}
+ */
+// Matches raw at-rule text that is exactly `@charset "label";`, capturing the quoted label
+const ENCODING_DECLARATION_RULE_PATTERN = /^@charset ("[^"]*");$/;
+
+/**
+ * Reads the quoted label of an encoding declaration out of raw CSS text.
+ * Text that does not contain the declaration byte sequence declares no
+ * encoding, so an empty string is returned for it.
+ *
+ * @param  {string} text     The raw CSS text to read the declaration from.
+ * @param  {RegExp} pattern  The byte sequence pattern to read the text with.
+ * @return {string}          The declared value including its quotes, or empty string when nothing is declared.
+ */
+function readEncodingDeclarationValue (text, pattern) {
+  if (!text) {
+    return '';
+  }
+  const match = String(text).match(pattern);
+  if (!match) {
+    return '';
+  }
+  return match[1];
+}
+
+/**
+ * Reads the value a `@charset` AST node declares, based on the raw text the
+ * rule was written with rather than its parsed value. A rule the engine never
+ * reads as an encoding declaration is inert, and reports no value.
+ *
+ * @param  {object} rule  A `@charset` AST rule node.
+ * @return {string}       The declared value including its quotes, or empty string when the rule is inert.
+ */
+function readCharsetRuleValue (rule) {
+  let ruleText = rule.rawSource;
+  if (!ruleText) {
+    ruleText = '@charset ' + rule.charset + ';';
+  }
+  return readEncodingDeclarationValue(String(ruleText).trim(), ENCODING_DECLARATION_RULE_PATTERN);
+}
+
+/**
  * Reduces a raw `@charset` value to the label that gets looked up, by removing
  * the surrounding quotes, trimming whitespace, and lowercasing it, since
  * Encoding Standard labels are matched ASCII case-insensitively.
@@ -188,18 +246,14 @@ function optimizeCharsetValue (charsetValue) {
 /**
  * Finds the `@charset` value that applies to a stylesheet by scanning the raw
  * CSS text before it is parsed. Only the first `@charset` of a document has any
- * effect, so later ones (usually the result of concatenating files) are ignored.
+ * effect, so later ones (usually the result of concatenating files) are ignored,
+ * and only text matching the declaration byte sequence declares an encoding.
  *
  * @param  {string} css  The raw CSS string to scan.
- * @return {string}      The first `@charset` value (with quotes), or empty string when none is declared.
+ * @return {string}      The first declared `@charset` value (with quotes), or empty string when none is declared.
  */
 function detectCharset (css) {
-  // Match @charset followed by a quoted value and semicolon
-  const match = css.match(/@charset\s+(["'][^"']+["'])\s*;/i);
-  if (match) {
-    return match[1];
-  }
-  return '';
+  return readEncodingDeclarationValue(css, ENCODING_DECLARATION_PATTERN);
 }
 
 /**
@@ -207,7 +261,9 @@ function detectCharset (css) {
  * stylesheet. Only the first `@charset` is meaningful, and it is only honored
  * when it is the very first thing in the file, so it is shortened and hoisted
  * to the front while every later `@charset` is dropped. A first `@charset` that
- * leaves the stylesheet in the default UTF-8 encoding is dropped as well.
+ * leaves the stylesheet in the default UTF-8 encoding is dropped as well, as is
+ * any `@charset` that is not written as an encoding declaration, since engines
+ * discard those without ever reading an encoding from them.
  *
  * @param  {Array} rules  The top-level AST rule nodes to filter.
  * @return {Array}        A new array of rules, with at most one `@charset` rule, placed at the start.
@@ -220,13 +276,18 @@ function filterRedundantCharsets (rules) {
     if (rule.type !== 'charset') {
       return true;
     }
+    const declaredValue = readCharsetRuleValue(rule);
+    if (!declaredValue) {
+      return false;
+    }
     if (!foundCharset) {
       foundCharset = true;
-      const optimizedCharset = optimizeCharsetValue(rule.charset);
+      const optimizedCharset = optimizeCharsetValue(declaredValue);
       if (optimizedCharset) {
         hoistedCharset = {
           ...rule,
-          charset: optimizedCharset
+          charset: optimizedCharset,
+          rawSource: '@charset ' + optimizedCharset + ';'
         };
       }
     }
