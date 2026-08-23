@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.24",
+  "version": "0.0.25",
   "description": "Experimental CSS minification",
   "scripts": {
     "prestart": "node ./scripts/prestart.js",
@@ -16,7 +16,9 @@
     "real": "node ./tests/realworld.test.js",
     "lint": "eslint *.js scripts src tests --fix",
     "fix": "npm run lint",
-    "bump": "npx --yes -- @jsdevtools/version-bump-prompt patch && npm i"
+    "bump": "npx --yes -- @jsdevtools/version-bump-prompt patch && npm i",
+    "outdated": "npm outdated",
+    "proto": "proto pin node latest --resolve --tool-native && proto pin npm latest --resolve --tool-native && git status"
   },
   "dependencies": {
     "@csstools/css-calc": "^3.3.0",
@@ -56,7 +58,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "26.5.1"
+      "version": "26.7.0"
     },
     "packageManager": {
       "name": "npm",
