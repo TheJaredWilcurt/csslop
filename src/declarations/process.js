@@ -7,8 +7,15 @@ import { hasInvalidQuotesCount } from '../value/quotes.js';
 
 import { absorbBackgroundLonghandsIntoShorthand } from './background.js';
 import { collapseBorderTrioWithPerEdgeColor } from './border.js';
-import { shorthandMap } from './config.js';
+import {
+  getLonghandsOf,
+  shorthandMap
+} from './config.js';
 import { hoistCssWideKeywordsIntoShorthands } from './css-wide-keywords.js';
+import {
+  collectDeclaredProperties,
+  indexFirstDeclarationByProperty
+} from './lookup.js';
 import {
   getMergeProps,
   tryMergeToShorthand
@@ -49,17 +56,95 @@ function usesModernSyntax (value) {
 }
 
 /**
- * Finds the index of the last declaration matching a predicate, which is the
- * declaration that wins the cascade within a rule.
+ * Creates the bookkeeping for the declarations that survive deduplication.
  *
- * @param  {Array}                     declarations  The declarations to search.
- * @param  {function(object): boolean} predicate     Called with each declaration, returning whether it matches.
- * @return {number}                                  The index of the matching declaration, or -1 when absent.
+ * A dropped declaration leaves an empty slot behind instead of being spliced
+ * out, so that every position already recorded stays valid. Two indexes then
+ * answer the questions the deduplication loop asks about the survivors: which
+ * declaration last set a given property, and which vendor-prefixed
+ * declarations are still standing.
+ *
+ * @return {object} The surviving-declaration bookkeeping.
  */
-function findLastIndex (declarations, predicate) {
-  for (let index = declarations.length - 1; index >= 0; index--) {
-    if (predicate(declarations[index])) {
-      return index;
+function createSurvivingDeclarations () {
+  return {
+    slots: [],
+    positionsByProperty: new Map(),
+    vendorPrefixedPositions: []
+  };
+}
+
+/**
+ * Records a declaration as surviving, at the end of the output so far.
+ *
+ * @param {object} survivors    The surviving-declaration bookkeeping.
+ * @param {object} declaration  The declaration to keep.
+ */
+function keepDeclaration (survivors, declaration) {
+  const position = survivors.slots.length;
+  survivors.slots.push(declaration);
+  if (!declaration.property) {
+    return;
+  }
+  const positions = survivors.positionsByProperty.get(declaration.property);
+  if (positions) {
+    positions.push(position);
+  } else {
+    survivors.positionsByProperty.set(declaration.property, [position]);
+  }
+  if (declaration.property.startsWith('-')) {
+    survivors.vendorPrefixedPositions.push(position);
+  }
+}
+
+/**
+ * Drops a declaration that a later one made redundant. Only the last surviving
+ * declaration of a property is ever dropped, which is the one at the end of
+ * that property's position list.
+ *
+ * @param {object} survivors  The surviving-declaration bookkeeping.
+ * @param {number} position   The position of the declaration to drop.
+ */
+function dropDeclaration (survivors, position) {
+  const { property } = survivors.slots[position];
+  survivors.slots[position] = null;
+  survivors.positionsByProperty.get(property).pop();
+  const vendorPrefixedEntry = survivors.vendorPrefixedPositions.lastIndexOf(position);
+  if (vendorPrefixedEntry !== -1) {
+    survivors.vendorPrefixedPositions.splice(vendorPrefixedEntry, 1);
+  }
+}
+
+/**
+ * Finds the surviving declaration that last set a property, which is the one
+ * that currently wins the cascade within the rule.
+ *
+ * @param  {object} survivors  The surviving-declaration bookkeeping.
+ * @param  {string} property   The property name to look for.
+ * @return {number}            The position of the matching declaration, or -1 when absent.
+ */
+function findLastPositionOfProperty (survivors, property) {
+  const positions = survivors.positionsByProperty.get(property);
+  if (!positions?.length) {
+    return -1;
+  }
+  return positions[positions.length - 1];
+}
+
+/**
+ * Finds the surviving vendor-prefixed declaration that last set the prefixed
+ * form of a property, such as `-webkit-transform` for `transform`. Only the
+ * prefixed declarations are visited, rather than every survivor.
+ *
+ * @param  {object} survivors  The surviving-declaration bookkeeping.
+ * @param  {string} property   The unprefixed property name.
+ * @return {number}            The position of the matching declaration, or -1 when absent.
+ */
+function findLastVendorPrefixedPosition (survivors, property) {
+  for (let entry = survivors.vendorPrefixedPositions.length - 1; entry >= 0; entry--) {
+    const position = survivors.vendorPrefixedPositions[entry];
+    if (survivors.slots[position].property.endsWith(property)) {
+      return position;
     }
   }
   return -1;
@@ -74,11 +159,11 @@ function findLastIndex (declarations, predicate) {
  * @return {Array}               The surviving declarations, in source order.
  */
 function deduplicateDeclarations (declarations) {
-  const result = [];
+  const survivors = createSurvivingDeclarations();
 
   for (const declaration of declarations) {
     if (declaration.type === 'rule' || declaration.type === 'media') {
-      result.push(declaration);
+      keepDeclaration(survivors, declaration);
       continue;
     }
 
@@ -93,35 +178,23 @@ function deduplicateDeclarations (declarations) {
 
     const minifiedValue = minifyValue(declaration);
 
-    let previousIndex = findLastIndex(result, (candidate) => {
-      return candidate.property === propertyName;
-    });
+    const previousPosition = findLastPositionOfProperty(survivors, propertyName);
 
     // An unprefixed property with the same value also replaces its prefixed form
-    let prefixedIndex = -1;
+    let prefixedPosition = -1;
     if (!propertyName.startsWith('-')) {
-      prefixedIndex = findLastIndex(result, (candidate) => {
-        return (
-          candidate.property &&
-          candidate.property.endsWith(propertyName) &&
-          candidate.property.startsWith('-')
-        );
-      });
+      prefixedPosition = findLastVendorPrefixedPosition(survivors, propertyName);
     }
 
-    if (prefixedIndex !== -1) {
-      const prefixedValue = minifyValue(result[prefixedIndex]);
+    if (prefixedPosition !== -1) {
+      const prefixedValue = minifyValue(survivors.slots[prefixedPosition]);
       if (minifiedValue === prefixedValue) {
-        result.splice(prefixedIndex, 1);
-        // Re-adjust previousIndex if we removed an item before it
-        if (previousIndex > prefixedIndex) {
-          previousIndex--;
-        }
+        dropDeclaration(survivors, prefixedPosition);
       }
     }
 
-    if (previousIndex !== -1) {
-      const previousValue = minifyValue(result[previousIndex]);
+    if (previousPosition !== -1) {
+      const previousValue = minifyValue(survivors.slots[previousPosition]);
 
       if (previousValue.includes('!important') && !minifiedValue.includes('!important')) {
         continue;
@@ -129,18 +202,37 @@ function deduplicateDeclarations (declarations) {
 
       // Fallbacks for custom variables or older browser functions should be kept
       if (usesModernSyntax(minifiedValue) && !usesModernSyntax(previousValue)) {
-        result.push(declaration);
+        keepDeclaration(survivors, declaration);
         continue;
       }
 
       // Otherwise override previous identical property
-      result.splice(previousIndex, 1);
+      dropDeclaration(survivors, previousPosition);
     }
 
-    result.push(declaration);
+    keepDeclaration(survivors, declaration);
   }
 
-  return result;
+  return survivors.slots.filter((slot) => {
+    return slot !== null;
+  });
+}
+
+/**
+ * Indexes the position of the first declaration of each property, which is the
+ * earliest position a property can occupy within the rule.
+ *
+ * @param  {Array} declarations  The declarations of a single rule, in source order.
+ * @return {Map}                 Map of property name to its first index.
+ */
+function indexFirstDeclarationOfEachProperty (declarations) {
+  const firstIndexByProperty = new Map();
+  declarations.forEach((declaration, index) => {
+    if (declaration.property && !firstIndexByProperty.has(declaration.property)) {
+      firstIndexByProperty.set(declaration.property, index);
+    }
+  });
+  return firstIndexByProperty;
 }
 
 /**
@@ -152,6 +244,9 @@ function deduplicateDeclarations (declarations) {
  */
 function removeLonghandsOverriddenByShorthands (declarations) {
   const propertiesToRemove = new Set();
+  // A longhand precedes the shorthand exactly when its first occurrence does,
+  // so one index of first positions answers every shorthand's question.
+  const firstIndexByProperty = indexFirstDeclarationOfEachProperty(declarations);
 
   declarations.forEach((declaration, shorthandIndex) => {
     if (!declaration.property || !shorthandMap[declaration.property]) {
@@ -159,10 +254,8 @@ function removeLonghandsOverriddenByShorthands (declarations) {
     }
     const overridden = getOverriddenLonghands(declaration.property);
     for (const longhandProperty of overridden) {
-      const longhandIndex = declarations.findIndex((candidate, index) => {
-        return candidate.property === longhandProperty && index < shorthandIndex;
-      });
-      if (longhandIndex !== -1) {
+      const longhandIndex = firstIndexByProperty.get(longhandProperty);
+      if (longhandIndex !== undefined && longhandIndex < shorthandIndex) {
         propertiesToRemove.add(longhandProperty);
       }
     }
@@ -194,10 +287,9 @@ function getReplacedLonghands (shorthandName, mergeableProperties, relevantDecla
   if (!hasMixedImportant || !MIXED_IMPORTANT_SHORTHANDS.has(shorthandName)) {
     return mergeableProperties;
   }
+  const declarationByProperty = indexFirstDeclarationByProperty(relevantDeclarations);
   return mergeableProperties.filter((property) => {
-    const declaration = relevantDeclarations.find((candidate) => {
-      return candidate.property === property;
-    });
+    const declaration = declarationByProperty.get(property);
     return declaration && !minifyValue(declaration).includes('!important');
   });
 }
@@ -217,15 +309,12 @@ function removeSubsumedShorthands (builtDeclarations) {
       return true;
     }
     const isSubsumedByOtherShorthand = builtDeclarations.some((other) => {
-      if (other === declaration) {
+      if (other === declaration || !shorthandMap[other.property]) {
         return false;
       }
-      const otherLonghands = shorthandMap[other.property];
-      if (!otherLonghands) {
-        return false;
-      }
+      const otherLonghands = getLonghandsOf(other.property);
       return longhands.every((longhand) => {
-        return otherLonghands.includes(longhand);
+        return otherLonghands.has(longhand);
       });
     });
     return !isSubsumedByOtherShorthand;
@@ -249,21 +338,23 @@ function mergeLonghandsIntoShorthands (declarations, context) {
     builtShorthand = false;
     const replacedProperties = new Set();
     const builtDeclarations = [];
+    // Every shorthand asks the same questions of the same declarations, so the
+    // set of declared properties is gathered once per pass rather than rescanned
+    // for each of the dozens of shorthand families.
+    const declaredProperties = collectDeclaredProperties(result);
 
     for (const [shorthand, longhands] of Object.entries(shorthandMap)) {
-      const shorthandAlreadyExists = result.some((declaration) => {
-        return declaration.property === shorthand;
-      });
-      if (shorthandAlreadyExists) {
+      if (declaredProperties.has(shorthand)) {
         continue;
       }
 
-      const mergeableProperties = getMergeProps(shorthand, longhands, result);
+      const mergeableProperties = getMergeProps(shorthand, longhands, declaredProperties);
       if (!mergeableProperties) {
         continue;
       }
+      const mergeablePropertySet = new Set(mergeableProperties);
       const relevantDeclarations = result.filter((declaration) => {
-        return mergeableProperties.includes(declaration.property);
+        return mergeablePropertySet.has(declaration.property);
       });
       const mergedValue = tryMergeToShorthand(mergeableProperties, relevantDeclarations, shorthand, context);
       if (!mergedValue) {

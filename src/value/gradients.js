@@ -351,6 +351,88 @@ function combineAdjacentIdenticalStops (args) {
 }
 
 /**
+ * The `to <side>` linear-gradient directions that are shorter to write as an
+ * angle, keyed by the normalized keyword form. Corner directions are listed
+ * under both keyword orders, since either spells the same corner.
+ *
+ * @type {Map<string, string>}
+ */
+const LINEAR_DIRECTION_ANGLES = new Map([
+  ['to top', '0deg'],
+  ['to right', '90deg'],
+  ['to left', '270deg'],
+  ['to top right', '45deg'],
+  ['to right top', '45deg'],
+  ['to bottom right', '135deg'],
+  ['to right bottom', '135deg'],
+  ['to bottom left', '225deg'],
+  ['to left bottom', '225deg'],
+  ['to top left', '315deg'],
+  ['to left top', '315deg']
+]);
+
+/**
+ * The linear-gradient directions that are already the default, so writing them
+ * out adds nothing.
+ *
+ * @type {Set<string>}
+ */
+const DEFAULT_LINEAR_DIRECTIONS = new Set(['to bottom', '180deg']);
+
+/**
+ * The radial-gradient shapes that are already the default.
+ *
+ * @type {Set<string>}
+ */
+const DEFAULT_RADIAL_SHAPES = new Set(['ellipse at center', 'circle at center']);
+
+/**
+ * Rewrites the leading direction argument of a linear gradient into its
+ * shortest form, dropping it when it is the default.
+ *
+ * @param  {Array}  args  The gradient arguments, rewritten in place.
+ * @return {number}       The number of leading arguments that are not color stops.
+ */
+function normalizeLinearGradientDirection (args) {
+  const firstDirection = args[0].toLowerCase().replace(/\s+/g, ' ').trim();
+  if (DEFAULT_LINEAR_DIRECTIONS.has(firstDirection)) {
+    args.shift();
+    return 0;
+  }
+  const angle = LINEAR_DIRECTION_ANGLES.get(firstDirection);
+  if (angle) {
+    args[0] = angle;
+    return 1;
+  }
+  // Check if first arg looks like a direction (angle or "to ..." keyword)
+  const looksLikeDirection = /^\d+(\.\d+)?deg$/i.test(firstDirection) || firstDirection.startsWith('to ');
+  if (looksLikeDirection) {
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * Drops the leading shape argument of a radial gradient when it is the default.
+ *
+ * @param  {Array}  args  The gradient arguments, rewritten in place.
+ * @return {number}       The number of leading arguments that are not color stops.
+ */
+function normalizeRadialGradientShape (args) {
+  const firstShape = args[0].toLowerCase().replace(/\s+/g, ' ').trim();
+  if (DEFAULT_RADIAL_SHAPES.has(firstShape)) {
+    args.shift();
+    return 0;
+  }
+  // Check if first arg is a radial shape/size descriptor
+  const looksLikeShape = /\b(circle|ellipse|closest|farthest|at)\b/i.test(firstShape);
+  if (looksLikeShape) {
+    return 1;
+  }
+  return 0;
+}
+
+/**
  * Optimizes gradient arguments by removing default direction or shape keywords, combining adjacent identical color stops, and trimming redundant 0% or 100% stop positions from the first and last stops.
  *
  * @param  {string} func     The gradient function name (e.g. "linear-gradient").
@@ -363,52 +445,11 @@ function processGradientArgs (func, argsStr) {
 
   let directionArgCount = 0;
 
-  if (functionLower.includes('linear')) {
-    if (args.length > 1) {
-      const firstDirection = args[0].toLowerCase().replace(/\s+/g, ' ').trim();
-      if (firstDirection === 'to bottom' || firstDirection === '180deg') {
-        args.shift();
-      } else if (firstDirection === 'to top') {
-        args[0] = '0deg';
-        directionArgCount = 1;
-      } else if (firstDirection === 'to right') {
-        args[0] = '90deg';
-        directionArgCount = 1;
-      } else if (firstDirection === 'to left') {
-        args[0] = '270deg';
-        directionArgCount = 1;
-      } else if (firstDirection === 'to top right' || firstDirection === 'to right top') {
-        args[0] = '45deg';
-        directionArgCount = 1;
-      } else if (firstDirection === 'to bottom right' || firstDirection === 'to right bottom') {
-        args[0] = '135deg';
-        directionArgCount = 1;
-      } else if (firstDirection === 'to bottom left' || firstDirection === 'to left bottom') {
-        args[0] = '225deg';
-        directionArgCount = 1;
-      } else if (firstDirection === 'to top left' || firstDirection === 'to left top') {
-        args[0] = '315deg';
-        directionArgCount = 1;
-      } else {
-        // Check if first arg looks like a direction (angle or "to ..." keyword)
-        const looksLikeDirection = /^\d+(\.\d+)?deg$/i.test(firstDirection) || firstDirection.startsWith('to ');
-        if (looksLikeDirection) {
-          directionArgCount = 1;
-        }
-      }
-    }
-  } else if (functionLower.includes('radial')) {
-    if (args.length > 1) {
-      const firstShape = args[0].toLowerCase().replace(/\s+/g, ' ').trim();
-      if (firstShape === 'ellipse at center' || firstShape === 'circle at center') {
-        args.shift();
-      } else {
-        // Check if first arg is a radial shape/size descriptor
-        const looksLikeShape = /\b(circle|ellipse|closest|farthest|at)\b/i.test(firstShape);
-        if (looksLikeShape) {
-          directionArgCount = 1;
-        }
-      }
+  if (args.length > 1) {
+    if (functionLower.includes('linear')) {
+      directionArgCount = normalizeLinearGradientDirection(args);
+    } else if (functionLower.includes('radial')) {
+      directionArgCount = normalizeRadialGradientShape(args);
     }
   }
 

@@ -84,10 +84,70 @@ const EDGE_SHORTHANDS = new Set([
  */
 const BORDER_EDGE_PROPERTIES = ['border-top', 'border-right', 'border-bottom', 'border-left'];
 
+/**
+ * Converts a lookup table of property name to property list into the same
+ * lookup keyed by name with each list as a set, so that "does this shorthand
+ * cover that property" is a single key lookup rather than a list scan.
+ *
+ * @param  {object} propertyListsByName  A lookup of property name to an array of property names.
+ * @return {Map}                         The same lookup with each array stored as a set.
+ */
+function createPropertySetLookup (propertyListsByName) {
+  const setsByName = new Map();
+  for (const [name, propertyList] of Object.entries(propertyListsByName)) {
+    setsByName.set(name, new Set(propertyList));
+  }
+  return setsByName;
+}
+
+/**
+ * The longhands of each shorthand, as sets for membership testing.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const LONGHANDS_BY_SHORTHAND = createPropertySetLookup(shorthandMap);
+
+/**
+ * The extra properties each shorthand resets, as sets for membership testing.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const OVERRIDES_BY_SHORTHAND = createPropertySetLookup(shorthandOverrideMap);
+
+/**
+ * An immutable empty set, returned for properties that are not shorthands so
+ * callers can test membership without first checking for a missing entry.
+ *
+ * @type {Set<string>}
+ */
+const NO_PROPERTIES = new Set();
+
+/**
+ * Returns the set of longhands a shorthand expands into.
+ *
+ * @param  {string} shorthandName  The CSS shorthand property name.
+ * @return {Set}                   The longhand property names, empty when the name is not a shorthand.
+ */
+function getLonghandsOf (shorthandName) {
+  return LONGHANDS_BY_SHORTHAND.get(shorthandName) || NO_PROPERTIES;
+}
+
+/**
+ * Returns the set of extra properties a shorthand resets beyond its longhands.
+ *
+ * @param  {string} shorthandName  The CSS shorthand property name.
+ * @return {Set}                   The reset property names, empty when the shorthand resets nothing else.
+ */
+function getOverridesOf (shorthandName) {
+  return OVERRIDES_BY_SHORTHAND.get(shorthandName) || NO_PROPERTIES;
+}
+
 export {
   BORDER_EDGE_PROPERTIES,
   CSS_WIDE_KEYWORDS,
   EDGE_SHORTHANDS,
+  getLonghandsOf,
+  getOverridesOf,
   shorthandMap,
   shorthandOverrideMap
 };

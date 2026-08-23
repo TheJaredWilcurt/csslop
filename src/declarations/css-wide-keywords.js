@@ -6,28 +6,45 @@ import { minifyValue } from '../value/minify.js';
 
 import {
   CSS_WIDE_KEYWORDS,
-  shorthandMap,
-  shorthandOverrideMap
+  getLonghandsOf,
+  getOverridesOf,
+  shorthandMap
 } from './config.js';
+import { collectDeclaredProperties } from './lookup.js';
+
+/**
+ * The leaf longhands each property ultimately sets, computed on first use. The
+ * shorthand tables never change, so a property always expands the same way.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const leafPropertiesByProperty = new Map();
 
 /**
  * Expands a property into the set of leaf longhands it ultimately sets, so that
  * different groupings of the same box, such as `border-width` and
  * `border-top-width`, can be compared for equivalent coverage.
  *
- * @param  {string} property        The property name to expand.
- * @param  {Set}    leafProperties  The set collecting the leaf longhand names.
- * @return {Set}                    The set of leaf longhand property names.
+ * @param  {string} property  The property name to expand.
+ * @return {Set}              The set of leaf longhand property names.
  */
-function expandToLeafProperties (property, leafProperties = new Set()) {
+function expandToLeafProperties (property) {
+  const cachedLeaves = leafPropertiesByProperty.get(property);
+  if (cachedLeaves) {
+    return cachedLeaves;
+  }
+  const leafProperties = new Set();
   const longhands = shorthandMap[property];
   if (!longhands) {
     leafProperties.add(property);
-    return leafProperties;
+  } else {
+    for (const longhand of longhands) {
+      for (const leafProperty of expandToLeafProperties(longhand)) {
+        leafProperties.add(leafProperty);
+      }
+    }
   }
-  for (const longhand of longhands) {
-    expandToLeafProperties(longhand, leafProperties);
-  }
+  leafPropertiesByProperty.set(property, leafProperties);
   return leafProperties;
 }
 
@@ -44,7 +61,9 @@ function expandToLeafProperties (property, leafProperties = new Set()) {
 function coversEveryLonghandOfShorthand (shorthandName, properties) {
   const coveredLeaves = new Set();
   for (const property of properties) {
-    expandToLeafProperties(property, coveredLeaves);
+    for (const leafProperty of expandToLeafProperties(property)) {
+      coveredLeaves.add(leafProperty);
+    }
   }
   return [...expandToLeafProperties(shorthandName)].every((leafProperty) => {
     return coveredLeaves.has(leafProperty);
@@ -70,10 +89,10 @@ function coversEveryLonghandOfShorthand (shorthandName, properties) {
  * @return {Array}                 The matching longhand entries, in source order.
  */
 function collectLonghandEntries (declarations, shorthandName) {
-  const longhands = shorthandMap[shorthandName];
+  const longhands = getLonghandsOf(shorthandName);
   const entries = [];
   declarations.forEach((declaration, index) => {
-    if (!declaration.property || !longhands.includes(declaration.property)) {
+    if (!declaration.property || !longhands.has(declaration.property)) {
       return;
     }
     const minifiedValue = minifyValue(declaration);
@@ -170,12 +189,12 @@ function resolveSharedKeyword (entries) {
  * @return {boolean}                 Whether an earlier declaration would be discarded.
  */
 function resetsEarlierDeclaration (declarations, shorthandName, insertionIndex) {
-  const resetProperties = shorthandOverrideMap[shorthandName] || [];
-  if (!resetProperties.length) {
+  const resetProperties = getOverridesOf(shorthandName);
+  if (!resetProperties.size) {
     return false;
   }
   return declarations.slice(0, insertionIndex).some((declaration) => {
-    return resetProperties.includes(declaration.property);
+    return resetProperties.has(declaration.property);
   });
 }
 
@@ -184,15 +203,13 @@ function resetsEarlierDeclaration (declarations, shorthandName, insertionIndex) 
  * keyword, followed by the longhands that override it, when that is shorter
  * than the group of longhands it replaces.
  *
- * @param  {Array}      declarations   The declarations of a single rule.
- * @param  {string}     shorthandName  The target shorthand property name.
- * @return {Array|null}                The rewritten declarations, or null when the rewrite does not apply.
+ * @param  {Array}      declarations        The declarations of a single rule.
+ * @param  {string}     shorthandName       The target shorthand property name.
+ * @param  {Set}        declaredProperties  The property names the rule currently declares.
+ * @return {Array|null}                     The rewritten declarations, or null when the rewrite does not apply.
  */
-function rewriteGroupAsKeywordShorthand (declarations, shorthandName) {
-  const shorthandAlreadyExists = declarations.some((declaration) => {
-    return declaration.property === shorthandName;
-  });
-  if (shorthandAlreadyExists) {
+function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredProperties) {
+  if (declaredProperties.has(shorthandName)) {
     return null;
   }
 
@@ -271,12 +288,17 @@ function rewriteGroupAsKeywordShorthand (declarations, shorthandName) {
  */
 function hoistCssWideKeywordsIntoShorthands (declarations) {
   let result = declarations;
+  // Every shorthand needs to know which properties the rule declares, so that
+  // set is kept alongside the declarations and only rebuilt after a rewrite
+  // actually changes them.
+  let declaredProperties = collectDeclaredProperties(result);
   // Shorthands are visited in declaration order, so the widest shorthand of a
   // family is rewritten before the narrower shorthands it contains.
   for (const shorthandName of Object.keys(shorthandMap)) {
-    const rewritten = rewriteGroupAsKeywordShorthand(result, shorthandName);
+    const rewritten = rewriteGroupAsKeywordShorthand(result, shorthandName, declaredProperties);
     if (rewritten) {
       result = rewritten;
+      declaredProperties = collectDeclaredProperties(result);
     }
   }
   return result;

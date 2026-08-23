@@ -104,6 +104,35 @@ function expandPureNestedRules (rules) {
 }
 
 /**
+ * Builds a reusable matcher that expresses child selectors as nested selectors
+ * relative to one parent. The combinator pattern is compiled once per parent so
+ * that testing many children against the same parent does not rebuild it.
+ *
+ * @param  {string}                          parentSelector  The parent selector string.
+ * @return {function(string): (string|null)}                 A matcher returning the nested selector, or null when the child cannot be nested.
+ */
+function createNestedSelectorMatcher (parentSelector) {
+  const parent = parentSelector.trim();
+  // Match a child selector that starts with the parent followed by a combinator (>, +, ~)
+  const combinatorPattern = new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$');
+
+  return (childSelector) => {
+    const child = childSelector.trim();
+    if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
+      return '&' + child.slice(parent.length);
+    }
+    if (child.startsWith(parent + ' ')) {
+      return child.slice(parent.length + 1);
+    }
+    const combinatorMatch = child.match(combinatorPattern);
+    if (combinatorMatch) {
+      return combinatorMatch[1] + combinatorMatch[2];
+    }
+    return null;
+  };
+}
+
+/**
  * Attempts to express a child selector as a nested selector relative to a parent, returning the nested form or null if nesting is not possible.
  *
  * @param  {string}      parentSel  The parent selector string.
@@ -111,22 +140,7 @@ function expandPureNestedRules (rules) {
  * @return {string|null}            The nested selector using & syntax, or null if the child cannot be nested under the parent.
  */
 function tryNestSelector (parentSel, childSel) {
-  const parent = parentSel.trim();
-  const child = childSel.trim();
-  if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
-    return '&' + child.slice(parent.length);
-  }
-  if (child.startsWith(parent + ' ')) {
-    return child.slice(parent.length + 1);
-  }
-  // Match child selector that starts with the parent followed by a combinator (>, +, ~)
-  const combinatorMatch = child.match(
-    new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$')
-  );
-  if (combinatorMatch) {
-    return combinatorMatch[1] + combinatorMatch[2];
-  }
-  return null;
+  return createNestedSelectorMatcher(parentSel)(childSel);
 }
 
 /**
@@ -174,6 +188,87 @@ function removeEmptyRules (rules) {
 }
 
 /**
+ * Determines whether a character is CSS whitespace.
+ *
+ * @param  {string}  character  A single character from a selector.
+ * @return {boolean}            Whether the character is whitespace.
+ */
+function isSelectorWhitespace (character) {
+  // Match a single whitespace character
+  return (/\s/).test(character);
+}
+
+/**
+ * Collects every prefix of a child selector that could act as its nesting
+ * parent. A parent always ends immediately before a pseudo-class colon, a
+ * descendant whitespace run, or the whitespace run leading into a combinator,
+ * so only those few positions can start a nestable remainder. Enumerating them
+ * turns "which earlier rule can host this one" into a set of key lookups
+ * instead of a comparison against every preceding rule.
+ *
+ * @param  {string} childSelector  The trimmed child selector.
+ * @return {Set}                   The candidate parent selector strings.
+ */
+function collectCandidateParentSelectors (childSelector) {
+  const candidates = new Set();
+  for (let index = 1; index < childSelector.length; index++) {
+    const character = childSelector[index];
+    if (character === ':' || isSelectorWhitespace(character)) {
+      candidates.add(childSelector.slice(0, index));
+      continue;
+    }
+    if (character !== '>' && character !== '+' && character !== '~') {
+      continue;
+    }
+    // A combinator may be separated from its parent by whitespace, which
+    // belongs to neither side, so the parent ends where that run begins.
+    let boundary = index;
+    while (boundary > 0 && isSelectorWhitespace(childSelector[boundary - 1])) {
+      boundary--;
+    }
+    if (boundary > 0) {
+      candidates.add(childSelector.slice(0, boundary));
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Finds the most recently emitted rule that can host a child selector as a
+ * nested rule, matching the behaviour of scanning backwards through the emitted
+ * rules but only visiting the handful of rules whose selector is a viable
+ * parent prefix.
+ *
+ * @param  {Array}       emittedRules     The rules emitted so far.
+ * @param  {Map}         indexBySelector  Map of each emitted single-selector rule's selector to its index.
+ * @param  {string}      childSelector    The trimmed child selector to nest.
+ * @return {object|null}                  The `parentIndex` and `nestedSelector`, or null when nothing can host the child.
+ */
+function findNestingParent (emittedRules, indexBySelector, childSelector) {
+  const parentIndexes = [];
+  for (const candidateParent of collectCandidateParentSelectors(childSelector)) {
+    const parentIndex = indexBySelector.get(candidateParent);
+    if (parentIndex !== undefined) {
+      parentIndexes.push(parentIndex);
+    }
+  }
+  // The nearest preceding parent wins, exactly as a backwards scan would.
+  parentIndexes.sort((first, second) => {
+    return second - first;
+  });
+  for (const parentIndex of parentIndexes) {
+    const nestedSelector = tryNestSelector(emittedRules[parentIndex].selectors[0], childSelector);
+    if (nestedSelector !== null) {
+      return {
+        nestedSelector,
+        parentIndex
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Groups flat CSS rules into nested structures where a child selector can be expressed relative to a preceding parent, reducing output size through CSS nesting.
  *
  * @param  {Array} rules  The flat AST rule nodes to nest.
@@ -181,29 +276,22 @@ function removeEmptyRules (rules) {
  */
 function nestFlatRules (rules) {
   const result = [];
+  const indexBySelector = new Map();
   for (const rule of rules) {
     if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
       result.push(rule);
       continue;
     }
     const childSelector = rule.selectors[0].trim();
-    let wasNested = false;
-    for (let j = result.length - 1; j >= 0; j--) {
-      const parentRule = result[j];
-      if (parentRule.type !== 'rule' || parentRule.selectors?.length !== 1) {
-        continue;
-      }
-      const nestedSelector = tryNestSelector(parentRule.selectors[0], childSelector);
-      if (nestedSelector !== null) {
-        parentRule.declarations = parentRule.declarations || [];
-        parentRule.declarations.push({ ...rule, selectors: [nestedSelector] });
-        wasNested = true;
-        break;
-      }
+    const nesting = findNestingParent(result, indexBySelector, childSelector);
+    if (nesting) {
+      const parentRule = result[nesting.parentIndex];
+      parentRule.declarations = parentRule.declarations || [];
+      parentRule.declarations.push({ ...rule, selectors: [nesting.nestedSelector] });
+      continue;
     }
-    if (!wasNested) {
-      result.push(rule);
-    }
+    indexBySelector.set(childSelector, result.length);
+    result.push(rule);
   }
   for (const rule of result) {
     if (rule.type === 'rule' && rule.declarations) {
@@ -277,6 +365,7 @@ function factorCommonParents (rules) {
       continue;
     }
     // Collect the run of consecutive rules that can all nest under the candidate.
+    const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
     const run = [];
     const nestedForms = [];
     let lookahead = index;
@@ -285,7 +374,7 @@ function factorCommonParents (rules) {
       if (sibling.type !== 'rule' || sibling.selectors?.length !== 1) {
         break;
       }
-      const nestedSelector = tryNestSelector(candidateParent, sibling.selectors[0]);
+      const nestedSelector = matchNestedSelector(sibling.selectors[0]);
       if (nestedSelector === null) {
         break;
       }
@@ -745,8 +834,12 @@ function mergeIdenticalNestedRules (rules) {
  * @return {Array}        A new array of rules with same-selector rules combined.
  */
 function mergeSelectorRules (rules) {
-  let result = [];
-  let selectorMap = new Map();
+  // A merged rule moves to the end of the output. Its old slot is emptied
+  // instead of spliced out so that every recorded position stays valid, and the
+  // position map locates that slot without searching the output.
+  const slots = [];
+  const positionByRule = new Map();
+  const selectorMap = new Map();
   for (const rule of rules) {
     if (rule.type === 'rule') {
       const selectorKey = rule.selectors ?
@@ -757,23 +850,26 @@ function mergeSelectorRules (rules) {
       if (selectorKey && selectorMap.has(selectorKey)) {
         const existingRule = selectorMap.get(selectorKey);
         existingRule.declarations.push(...(rule.declarations || []));
-        result = result.filter((candidate) => {
-          return candidate !== existingRule;
-        });
-        result.push(existingRule);
+        slots[positionByRule.get(existingRule)] = null;
+        positionByRule.set(existingRule, slots.length);
+        slots.push(existingRule);
       } else {
         selectorMap.set(selectorKey, rule);
-        result.push(rule);
+        positionByRule.set(rule, slots.length);
+        slots.push(rule);
       }
     } else {
       if (rule.type === 'whitespace') {
         continue;
       }
-      result.push(rule);
+      slots.push(rule);
       selectorMap.clear();
+      positionByRule.clear();
     }
   }
-  return result;
+  return slots.filter((slot) => {
+    return slot !== null;
+  });
 }
 
 /**
@@ -836,6 +932,61 @@ function normalizeSelector (selector) {
 }
 
 /**
+ * Indexes, for every normalized selector in the stylesheet, the last rule that
+ * declares each property under it. Comparing that index against a rule's own
+ * position answers "is this selector's property overridden later" in constant
+ * time, instead of rescanning and renormalizing every following rule.
+ *
+ * @param  {Array} rules  The flat list of AST rule nodes.
+ * @return {Map}          Map of normalized selector to a map of property name to its last declaring rule index.
+ */
+function indexLastDeclaringRuleBySelector (rules) {
+  const lastRuleIndexBySelector = new Map();
+  rules.forEach((rule, ruleIndex) => {
+    if (rule.type !== 'rule' || !rule.selectors) {
+      return;
+    }
+    const declaredProperties = (rule.declarations || []).filter((declaration) => {
+      return declaration.type === 'declaration';
+    }).map((declaration) => {
+      return declaration.property;
+    });
+    if (declaredProperties.length === 0) {
+      return;
+    }
+    for (const selector of rule.selectors) {
+      const normalizedSelector = normalizeSelector(selector);
+      let lastRuleIndexByProperty = lastRuleIndexBySelector.get(normalizedSelector);
+      if (!lastRuleIndexByProperty) {
+        lastRuleIndexByProperty = new Map();
+        lastRuleIndexBySelector.set(normalizedSelector, lastRuleIndexByProperty);
+      }
+      for (const property of declaredProperties) {
+        lastRuleIndexByProperty.set(property, ruleIndex);
+      }
+    }
+  });
+  return lastRuleIndexBySelector;
+}
+
+/**
+ * Checks whether a given selector has a specific property overridden
+ * by any later rule in the stylesheet. A property is considered
+ * overridden if a subsequent rule contains that selector (as its only
+ * selector or among its selectors) and declares the same property.
+ *
+ * @param  {Map}     lastRuleIndexBySelector  The index built by `indexLastDeclaringRuleBySelector`.
+ * @param  {number}  startIndex               The index of the current rule (search starts after this).
+ * @param  {string}  selector                 The normalized selector to check.
+ * @param  {string}  property                 The CSS property name to check.
+ * @return {boolean}                          True if a later rule overrides this selector+property.
+ */
+function isSelectorPropertyOverriddenLater (lastRuleIndexBySelector, startIndex, selector, property) {
+  const lastRuleIndex = lastRuleIndexBySelector.get(selector)?.get(property);
+  return lastRuleIndex !== undefined && lastRuleIndex > startIndex;
+}
+
+/**
  * Removes properties from multi-selector rules when every selector in
  * the rule has that property overridden by a later rule. For example,
  * if `h1,h2{color:red}` is followed by `h1{color:blue}` and
@@ -847,6 +998,10 @@ function normalizeSelector (selector) {
  * @return {Array}        The rules with overridden multi-selector properties removed.
  */
 function removeOverriddenMultiSelectorProperties (rules) {
+  // Only rules that follow the one being pruned are ever consulted, and pruning
+  // never adds a declaration, so a single index built up front stays accurate.
+  const lastRuleIndexBySelector = indexLastDeclaringRuleBySelector(rules);
+
   for (let ruleIndex = 0; ruleIndex < rules.length; ruleIndex++) {
     const rule = rules[ruleIndex];
     if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
@@ -866,7 +1021,7 @@ function removeOverriddenMultiSelectorProperties (rules) {
     for (const declaration of declarations) {
       const property = declaration.property;
       const allSelectorsOverridden = normalizedSelectors.every((selector) => {
-        return isSelectorPropertyOverriddenLater(rules, ruleIndex, selector, property);
+        return isSelectorPropertyOverriddenLater(lastRuleIndexBySelector, ruleIndex, selector, property);
       });
       if (allSelectorsOverridden) {
         propertiesToRemove.add(property);
@@ -883,41 +1038,6 @@ function removeOverriddenMultiSelectorProperties (rules) {
     }
   }
   return rules;
-}
-
-/**
- * Checks whether a given selector has a specific property overridden
- * by any later rule in the stylesheet. A property is considered
- * overridden if a subsequent rule contains that selector (as its only
- * selector or among its selectors) and declares the same property.
- *
- * @param  {Array}   rules       The full list of AST rule nodes.
- * @param  {number}  startIndex  The index of the current rule (search starts after this).
- * @param  {string}  selector    The normalized selector to check.
- * @param  {string}  property    The CSS property name to check.
- * @return {boolean}             True if a later rule overrides this selector+property.
- */
-function isSelectorPropertyOverriddenLater (rules, startIndex, selector, property) {
-  for (let laterIndex = startIndex + 1; laterIndex < rules.length; laterIndex++) {
-    const laterRule = rules[laterIndex];
-    if (laterRule.type !== 'rule' || !laterRule.selectors) {
-      continue;
-    }
-    const laterSelectors = laterRule.selectors.map(normalizeSelector);
-    if (!laterSelectors.includes(selector)) {
-      continue;
-    }
-    const laterDeclarations = (laterRule.declarations || []).filter((declaration) => {
-      return declaration.type === 'declaration';
-    });
-    const hasOverride = laterDeclarations.some((declaration) => {
-      return declaration.property === property;
-    });
-    if (hasOverride) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export {

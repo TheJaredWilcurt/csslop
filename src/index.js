@@ -41,7 +41,10 @@ import {
   removeRedundantLayerStatementSemicolon,
   stringifyRule
 } from './rules/stringify.js';
-import { minifyValue } from './value/minify.js';
+import {
+  clearMinifiedValueCache,
+  minifyValue
+} from './value/minify.js';
 
 /**
  * Splits a minified CSS selector list at top-level commas, respecting
@@ -176,6 +179,27 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
 }
 
 /**
+ * Prepares the module-level state a single minification pass relies on: the
+ * active charset, and an empty value cache, since a value memoized under a
+ * different charset may no longer minify the same way.
+ *
+ * @param {string} charset  The `@charset` value detected in the source.
+ */
+function beginMinificationPass (charset) {
+  setActiveCharset(charset);
+  clearMinifiedValueCache();
+}
+
+/**
+ * Releases the module-level state a minification pass built up, so a cache
+ * filled by a large stylesheet is not retained until the next pass runs.
+ */
+function endMinificationPass () {
+  clearActiveCharset();
+  clearMinifiedValueCache();
+}
+
+/**
  * Parses, optimizes, and minifies a CSS string by applying rule merging, declaration deduplication, value compression, and dead-code elimination.
  *
  * @param  {string} input  The raw CSS string to minify.
@@ -192,7 +216,7 @@ export const minifyCSS = function (input) {
   const output = [];
 
   const detectedCharset = detectCharset(source);
-  setActiveCharset(detectedCharset);
+  beginMinificationPass(detectedCharset);
 
   try {
     ast = parse(
@@ -200,7 +224,7 @@ export const minifyCSS = function (input) {
       { preserveFormatting: true, silent: true }
     );
   } catch {
-    clearActiveCharset();
+    endMinificationPass();
     return source;
   }
 
@@ -248,10 +272,10 @@ export const minifyCSS = function (input) {
 
     const mergedOutput = removeRedundantLayerStatementSemicolon(mergeAdjacentRulesWithIdenticalBodies(output));
 
-    clearActiveCharset();
+    endMinificationPass();
     return restoreEscapeSequences(mergedOutput.join(''));
   }
 
-  clearActiveCharset();
+  endMinificationPass();
   return source;
 };

@@ -55,20 +55,46 @@ function orderDeclarations (declarations) {
 }
 
 /**
+ * The overridden longhands of each shorthand, computed on first use. The
+ * shorthand tables never change, so the answer for a property name is the same
+ * every time it is asked for.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const overriddenLonghandsByShorthand = new Map();
+
+/**
+ * Collects all longhands that a shorthand would override.
+ *
+ * @param  {string} shorthandProperty  The CSS shorthand property name.
+ * @return {Set}                       The longhand property names the shorthand overrides, including nested longhands.
+ */
+function collectOverriddenLonghands (shorthandProperty) {
+  const direct = shorthandMap[shorthandProperty] || [];
+  const overrides = shorthandOverrideMap[shorthandProperty] || [];
+  const all = new Set([...direct, ...overrides]);
+  for (const property of direct) {
+    const nested = shorthandMap[property] || [];
+    for (const nestedProperty of nested) {
+      all.add(nestedProperty);
+    }
+  }
+  return all;
+}
+
+/**
  * Get all longhands that a shorthand would override.
  *
  * @param  {string} shorthandProperty  The CSS shorthand property name.
- * @return {Array}                     A deduplicated array of all longhand property names that the shorthand overrides, including nested longhands.
+ * @return {Set}                       The longhand property names that the shorthand overrides, including nested longhands.
  */
 function getOverriddenLonghands (shorthandProperty) {
-  const direct = shorthandMap[shorthandProperty] || [];
-  const overrides = shorthandOverrideMap[shorthandProperty] || [];
-  const all = [...direct, ...overrides];
-  for (const property of direct) {
-    const nested = shorthandMap[property] || [];
-    all.push(...nested);
+  let overridden = overriddenLonghandsByShorthand.get(shorthandProperty);
+  if (!overridden) {
+    overridden = collectOverriddenLonghands(shorthandProperty);
+    overriddenLonghandsByShorthand.set(shorthandProperty, overridden);
   }
-  return [...new Set(all)];
+  return overridden;
 }
 
 export {
