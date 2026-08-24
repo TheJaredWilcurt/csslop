@@ -2,6 +2,8 @@
  * @file Handles `@position-try` rule analysis, usage tracking, and dead-rule elimination during CSS minification.
  */
 
+import { registersCustomProperty } from './rules/property.js';
+
 /**
  * Scans top-level rules to register `@property` custom properties in the context and collect `@position-try` rule declarations and initial usage counts.
  *
@@ -14,7 +16,7 @@ function collectRuleMetadata (rules, context) {
   const positionTryUsage = new Map();
 
   for (const rule of rules) {
-    if (rule.type === 'property' && rule.name) {
+    if (rule.type === 'property' && rule.name && registersCustomProperty(rule)) {
       context.registeredCustomProperties.add(rule.name);
       const syntaxDeclaration = (rule.declarations || []).find((declaration) => {
         return declaration.type !== 'whitespace' && declaration.property === 'syntax';

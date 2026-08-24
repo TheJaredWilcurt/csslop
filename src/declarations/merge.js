@@ -23,6 +23,39 @@ import { buildShorthandValue } from './shorthand-values.js';
 const MIXED_IMPORTANT_SHORTHANDS = new Set(['margin', 'padding', 'inset', 'position-try']);
 
 /**
+ * The shorthands that may be built from only some of their longhands, and the
+ * longhands each of them cannot do without. Every listed group has to be
+ * satisfied by at least one of the properties it holds, so `font` needs both a
+ * size and a family, while `background` needs a color or an image.
+ *
+ * @type {{[key: string]: Array}}
+ */
+const PARTIAL_MERGE_REQUIREMENTS = {
+  animation: [['animation-name'], ['animation-duration']],
+  background: [['background-color', 'background-image']],
+  'background-position': [['background-position-x'], ['background-position-y']],
+  'border-image': [['border-image-source']],
+  font: [['font-size'], ['font-family']],
+  mask: [['mask-image']]
+};
+
+/**
+ * Checks whether a rule declares enough of a shorthand's longhands for the
+ * shorthand to be built from the subset it does declare.
+ *
+ * @param  {Array}   requirementGroups   The groups of interchangeable longhands the shorthand requires.
+ * @param  {Set}     declaredProperties  The property names the rule currently declares.
+ * @return {boolean}                     Whether every requirement group is satisfied.
+ */
+function meetsPartialMergeRequirements (requirementGroups, declaredProperties) {
+  return requirementGroups.every((requiredProperties) => {
+    return requiredProperties.some((property) => {
+      return declaredProperties.has(property);
+    });
+  });
+}
+
+/**
  * Determines which longhand properties are present and eligible for merging into a given shorthand. Returns null when the required longhands for the shorthand are not all available.
  *
  * @param  {string}     shorthand           The CSS shorthand property name.
@@ -37,35 +70,9 @@ function getMergeProps (shorthand, longhands, declaredProperties) {
   if (presentLonghands.length === 0) {
     return null;
   }
-  if (shorthand === 'font') {
-    const hasRequiredFontProps = declaredProperties.has('font-size') && declaredProperties.has('font-family');
-    if (hasRequiredFontProps) {
-      return presentLonghands;
-    }
-    return null;
-  }
-  if (shorthand === 'background-position') {
-    const hasBothAxes = declaredProperties.has('background-position-x') && declaredProperties.has('background-position-y');
-    if (hasBothAxes) {
-      return presentLonghands;
-    }
-    return null;
-  }
-  if (shorthand === 'background') {
-    const hasBackgroundProp = declaredProperties.has('background-color') || declaredProperties.has('background-image');
-    if (hasBackgroundProp) {
-      return presentLonghands;
-    }
-    return null;
-  }
-  if (shorthand === 'mask') {
-    if (declaredProperties.has('mask-image')) {
-      return presentLonghands;
-    }
-    return null;
-  }
-  if (shorthand === 'border-image') {
-    if (declaredProperties.has('border-image-source')) {
+  const requirementGroups = PARTIAL_MERGE_REQUIREMENTS[shorthand];
+  if (requirementGroups) {
+    if (meetsPartialMergeRequirements(requirementGroups, declaredProperties)) {
       return presentLonghands;
     }
     return null;
@@ -315,6 +322,7 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
 }
 
 export {
+  canMergeVarValue,
   getMergeProps,
   tryMergeToShorthand
 };

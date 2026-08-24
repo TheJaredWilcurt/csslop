@@ -1,8 +1,41 @@
 /**
- * @file Builds keyed lookups over a rule's declarations, so the shorthand
- * passes can ask which properties a rule sets without rescanning its
- * declarations once per property they are interested in.
+ * @file Builds keyed lookups and normalized views over a rule's declarations,
+ * so the shorthand passes can ask which properties a rule sets, and what each
+ * of them minifies to, without rescanning its declarations once per property
+ * they are interested in.
  */
+
+import { minifyValue } from '../value/minify.js';
+
+/**
+ * @typedef  {object}  DeclarationDescription
+ * @property {object}  declaration             The original declaration object.
+ * @property {number}  index                   The declaration's index within the rule.
+ * @property {string}  property                The declared property name.
+ * @property {string}  text                    The minified `property:value` text.
+ * @property {string}  value                   The minified value, without any `!important`.
+ * @property {boolean} isImportant             Whether the declaration carries `!important`.
+ */
+
+/**
+ * Describes a declaration through its minified value, which is the form the
+ * shorthand passes compare, rewrite, and measure the output length of.
+ *
+ * @param  {object}                 declaration  The CSS declaration object.
+ * @param  {number}                 index        The declaration's index within the rule.
+ * @return {DeclarationDescription}              The normalized view of the declaration.
+ */
+function describeDeclaration (declaration, index) {
+  const minifiedValue = minifyValue(declaration);
+  return {
+    declaration,
+    index,
+    property: declaration.property,
+    text: declaration.property + ':' + minifiedValue,
+    value: minifiedValue.replace('!important', '').trim(),
+    isImportant: minifiedValue.includes('!important')
+  };
+}
 
 /**
  * Indexes the first declaration of each property. The first occurrence is the
@@ -40,5 +73,6 @@ function collectDeclaredProperties (declarations) {
 
 export {
   collectDeclaredProperties,
+  describeDeclaration,
   indexFirstDeclarationByProperty
 };

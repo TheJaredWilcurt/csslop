@@ -2,51 +2,17 @@
  * @file Rewrites longhand declarations that share a CSS-wide keyword into a shorthand carrying that keyword, followed by the longhands that override it.
  */
 
-import { minifyValue } from '../value/minify.js';
-
 import {
   CSS_WIDE_KEYWORDS,
+  expandToLeafProperties,
   getLonghandsOf,
   getOverridesOf,
   shorthandMap
 } from './config.js';
-import { collectDeclaredProperties } from './lookup.js';
-
-/**
- * The leaf longhands each property ultimately sets, computed on first use. The
- * shorthand tables never change, so a property always expands the same way.
- *
- * @type {Map<string, Set<string>>}
- */
-const leafPropertiesByProperty = new Map();
-
-/**
- * Expands a property into the set of leaf longhands it ultimately sets, so that
- * different groupings of the same box, such as `border-width` and
- * `border-top-width`, can be compared for equivalent coverage.
- *
- * @param  {string} property  The property name to expand.
- * @return {Set}              The set of leaf longhand property names.
- */
-function expandToLeafProperties (property) {
-  const cachedLeaves = leafPropertiesByProperty.get(property);
-  if (cachedLeaves) {
-    return cachedLeaves;
-  }
-  const leafProperties = new Set();
-  const longhands = shorthandMap[property];
-  if (!longhands) {
-    leafProperties.add(property);
-  } else {
-    for (const longhand of longhands) {
-      for (const leafProperty of expandToLeafProperties(longhand)) {
-        leafProperties.add(leafProperty);
-      }
-    }
-  }
-  leafPropertiesByProperty.set(property, leafProperties);
-  return leafProperties;
-}
+import {
+  collectDeclaredProperties,
+  describeDeclaration
+} from './lookup.js';
 
 /**
  * Checks whether a group of longhands sets every leaf longhand that the
@@ -71,16 +37,6 @@ function coversEveryLonghandOfShorthand (shorthandName, properties) {
 }
 
 /**
- * @typedef  {object}  LonghandEntry
- * @property {object}  declaration    The original declaration object.
- * @property {number}  index          The declaration's index within the rule.
- * @property {string}  property       The longhand property name.
- * @property {string}  text           The minified `property:value` text.
- * @property {string}  value          The minified value, without any `!important`.
- * @property {boolean} isImportant    Whether the declaration carries `!important`.
- */
-
-/**
  * Collects the declarations of a rule that set one of a shorthand's longhands,
  * in source order.
  *
@@ -95,16 +51,7 @@ function collectLonghandEntries (declarations, shorthandName) {
     if (!declaration.property || !longhands.has(declaration.property)) {
       return;
     }
-    const minifiedValue = minifyValue(declaration);
-    const isImportant = minifiedValue.includes('!important');
-    entries.push({
-      declaration,
-      index,
-      property: declaration.property,
-      text: declaration.property + ':' + minifiedValue,
-      value: minifiedValue.replace('!important', '').trim(),
-      isImportant
-    });
+    entries.push(describeDeclaration(declaration, index));
   });
   return entries;
 }

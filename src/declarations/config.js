@@ -2,6 +2,46 @@
  * @file Defines lookup tables mapping CSS shorthand properties to their constituent longhand properties and override relationships.
  */
 
+/**
+ * The gap decoration rule components that CSS Gaps 1 defines once per
+ * direction, as a `column-rule-*` and a `row-rule-*` longhand.
+ *
+ * @type {Array}
+ */
+const GAP_DECORATION_RULE_COMPONENTS = [
+  'width',
+  'style',
+  'color',
+  'break',
+  'visibility-items',
+  'inset-cap-start',
+  'inset-cap-end',
+  'inset-junction-start',
+  'inset-junction-end'
+];
+
+/**
+ * Builds the bidirectional `rule-*` gap decoration shorthands, each of which
+ * applies a single value to both the column and the row longhand of one gap
+ * decoration component.
+ *
+ * @return {object} A lookup of shorthand name to its column and row longhands.
+ */
+function createBidirectionalGapRuleShorthands () {
+  const shorthands = {};
+  for (const component of GAP_DECORATION_RULE_COMPONENTS) {
+    shorthands['rule-' + component] = ['column-rule-' + component, 'row-rule-' + component];
+  }
+  return shorthands;
+}
+
+/**
+ * The bidirectional gap decoration shorthands, keyed by shorthand name.
+ *
+ * @type {object}
+ */
+const BIDIRECTIONAL_GAP_RULE_SHORTHANDS = createBidirectionalGapRuleShorthands();
+
 const shorthandMap = {
   margin: ['margin-top', 'margin-right', 'margin-bottom', 'margin-left'],
   padding: ['padding-top', 'padding-right', 'padding-bottom', 'padding-left'],
@@ -42,10 +82,13 @@ const shorthandMap = {
   animation: ['animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay', 'animation-iteration-count', 'animation-direction', 'animation-fill-mode', 'animation-play-state'],
   mask: ['mask-image', 'mask-repeat', 'mask-size'],
   'position-try': ['position-try-order', 'position-try-fallbacks'],
-  font: ['font-style', 'font-weight', 'font-size', 'line-height', 'font-family']
+  font: ['font-style', 'font-weight', 'font-size', 'line-height', 'font-family'],
+  marker: ['marker-start', 'marker-mid', 'marker-end'],
+  ...BIDIRECTIONAL_GAP_RULE_SHORTHANDS
 };
 
 const shorthandOverrideMap = {
+  animation: ['animation-timeline', 'animation-range', 'animation-range-start', 'animation-range-end'],
   border: ['border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat'],
   font: ['font-variant', 'font-variant-alternates', 'font-variant-caps', 'font-variant-east-asian', 'font-variant-ligatures', 'font-variant-numeric', 'font-variant-position'],
   mask: ['mask-border', 'mask-border-source', 'mask-border-slice', 'mask-border-width', 'mask-border-outset', 'mask-border-repeat', 'mask-border-mode']
@@ -75,6 +118,19 @@ const EDGE_SHORTHANDS = new Set([
   'border-inline-end',
   'border-block-start',
   'border-block-end'
+]);
+
+/**
+ * Shorthands that apply one value to every longhand they set, such as the SVG
+ * `marker` shorthand and the bidirectional gap decoration rules. They have no
+ * way to express longhands that differ, so a group of longhands only collapses
+ * into them when every longhand already holds the same value.
+ *
+ * @type {Set<string>}
+ */
+const UNIFORM_VALUE_SHORTHANDS = new Set([
+  'marker',
+  ...Object.keys(BIDIRECTIONAL_GAP_RULE_SHORTHANDS)
 ]);
 
 /**
@@ -142,12 +198,50 @@ function getOverridesOf (shorthandName) {
   return OVERRIDES_BY_SHORTHAND.get(shorthandName) || NO_PROPERTIES;
 }
 
+/**
+ * The leaf longhands each property ultimately sets, computed on first use. The
+ * shorthand tables never change, so a property always expands the same way.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const leafPropertiesByProperty = new Map();
+
+/**
+ * Expands a property into the set of leaf longhands it ultimately sets, so that
+ * different groupings of the same box, such as `border-width` and
+ * `border-top-width`, can be compared for equivalent coverage.
+ *
+ * @param  {string} property  The property name to expand.
+ * @return {Set}              The set of leaf longhand property names.
+ */
+function expandToLeafProperties (property) {
+  const cachedLeaves = leafPropertiesByProperty.get(property);
+  if (cachedLeaves) {
+    return cachedLeaves;
+  }
+  const leafProperties = new Set();
+  const longhands = shorthandMap[property];
+  if (!longhands) {
+    leafProperties.add(property);
+  } else {
+    for (const longhand of longhands) {
+      for (const leafProperty of expandToLeafProperties(longhand)) {
+        leafProperties.add(leafProperty);
+      }
+    }
+  }
+  leafPropertiesByProperty.set(property, leafProperties);
+  return leafProperties;
+}
+
 export {
   BORDER_EDGE_PROPERTIES,
   CSS_WIDE_KEYWORDS,
   EDGE_SHORTHANDS,
+  expandToLeafProperties,
   getLonghandsOf,
   getOverridesOf,
   shorthandMap,
-  shorthandOverrideMap
+  shorthandOverrideMap,
+  UNIFORM_VALUE_SHORTHANDS
 };
