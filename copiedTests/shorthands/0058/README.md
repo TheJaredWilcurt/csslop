@@ -1,5 +1,6 @@
-# Padding longhand merge unsafe when var() fallback is unresolvable
+# Preserve animation timeline and range resets
 
-When `var()` fallbacks are themselves `var()` references, the final value cannot
-be statically determined. Merging into shorthand is unsafe because the nested
-variable may resolve to an invalid or multi-value result.
+The animation shorthand resets animation-timeline and animation-range to their
+initial values despite not explicitly expressing them. When merging animation
+longhands into shorthand form, the shorthand must be ordered before any
+animation-timeline or animation-range declarations to preserve the resets.

@@ -1,5 +1,5 @@
-# Shorthand plus !important override for mixed importance
+# Merge equal SVG marker longhands
 
-When one longhand has `!important`, the longhands can still be partially merged
-into a shorthand followed by the important longhand override. The `!important`
-declaration wins over the shorthand's reset of the same property.
+SVG 2 defines the marker shorthand which sets marker-start, marker-mid, and
+marker-end to the same value. When all three longhands are equal, merge into
+a single marker shorthand.
