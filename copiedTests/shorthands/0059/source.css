@@ -1,5 +1,9 @@
 a {
-  border-width: var(--bw, 1px);
-  border-style: var(--bs, solid);
-  border-color: var(--bc, red);
+  padding: 10px;
+  padding-right: 20px;
+}
+
+b {
+  padding: 10000px;
+  padding-right: 200px;
 }

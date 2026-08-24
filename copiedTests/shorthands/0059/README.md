@@ -1,6 +1,4 @@
-# Border longhand merge unsafe even with var() fallback
+# Merge shorthand override when shorter
 
-A valid fallback does not make merging safe. The fallback only triggers when the
-property is undefined. If the property is defined with an invalid value, the
-fallback is ignored and the entire shorthand declaration fails at computed value
-time.
+A longhand following its shorthand can fold back into the shorthand, but only
+when that is shorter than keeping both declarations.

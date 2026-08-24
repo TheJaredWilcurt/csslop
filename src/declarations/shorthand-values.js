@@ -6,6 +6,7 @@ import { collapseShorthandParts } from '../value/shared.js';
 import { splitTopLevelComponents } from '../value/syntax.js';
 
 import { buildBackgroundShorthandValue } from './background.js';
+import { UNIFORM_VALUE_SHORTHANDS } from './config.js';
 
 /**
  * @typedef  {object} ShorthandComponents
@@ -276,6 +277,25 @@ function buildFlexValue ({ valueMap, importantSuffix }) {
 }
 
 /**
+ * Builds the value of a shorthand that applies one value to every longhand it
+ * sets, such as `marker` or the bidirectional gap decoration rules. Such a
+ * shorthand cannot express longhands that differ, so the group only collapses
+ * when every longhand already holds the same value.
+ *
+ * @param  {ShorthandComponents} components  The collected longhand values.
+ * @return {string|null}                     The shorthand value, or null when it cannot be built.
+ */
+function buildUniformValue ({ cleanValues, importantSuffix }) {
+  const isSharedByAll = cleanValues.every((value) => {
+    return value === cleanValues[0];
+  });
+  if (!isSharedByAll) {
+    return null;
+  }
+  return cleanValues[0] + importantSuffix;
+}
+
+/**
  * Determines whether a shorthand takes a single width, style, and color, as
  * `border` and `outline` do.
  *
@@ -364,6 +384,9 @@ const NAMED_SHORTHAND_BUILDERS = {
  * @return {string|null}                        The shorthand value, or null when it cannot be built.
  */
 function buildShorthandValue (shorthandName, components) {
+  if (UNIFORM_VALUE_SHORTHANDS.has(shorthandName)) {
+    return buildUniformValue(components);
+  }
   const namedBuilder = NAMED_SHORTHAND_BUILDERS[shorthandName];
   if (namedBuilder) {
     return namedBuilder(components);

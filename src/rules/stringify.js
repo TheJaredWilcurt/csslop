@@ -17,6 +17,7 @@ import {
   unescapeIdent,
   unescapeSelector
 } from './normalize.js';
+import { resolvePropertyDescriptors } from './property.js';
 import {
   flattenNestingParentIsSelector,
   mergeAdjacentWherePseudoClasses,
@@ -518,32 +519,7 @@ function stringifyRule (rule, context) {
   }
 
   if (rule.type === 'property') {
-    const propertyDeclarations = (rule.declarations || []).filter((declaration) => {
-      return declaration.type === 'declaration' && declaration.property;
-    });
-    const hasSyntaxDescriptor = propertyDeclarations.some((declaration) => {
-      return declaration.property === 'syntax';
-    });
-    const hasInheritsDescriptor = propertyDeclarations.some((declaration) => {
-      return declaration.property === 'inherits';
-    });
-    if (!hasSyntaxDescriptor || !hasInheritsDescriptor) {
-      return '';
-    }
-
-    const syntaxDeclaration = propertyDeclarations.find((declaration) => {
-      return declaration.property === 'syntax';
-    });
-    const syntaxValue = (syntaxDeclaration.value || '').replace(/["']/g, '').trim();
-    const isUniversalSyntax = syntaxValue === '*';
-    const hasInitialValue = propertyDeclarations.some((declaration) => {
-      return declaration.property === 'initial-value';
-    });
-    if (!isUniversalSyntax && !hasInitialValue) {
-      return '';
-    }
-
-    let renderedDeclarations = stringifyDeclarations(rule.declarations || []);
+    const renderedDeclarations = stringifyDeclarations(resolvePropertyDescriptors(rule));
     if (!renderedDeclarations) {
       return '';
     }

@@ -6,6 +6,7 @@ import {
   shorthandMap,
   shorthandOverrideMap
 } from './config.js';
+import { collectDeclaredProperties } from './lookup.js';
 
 /**
  * Pairs of properties where the first must be emitted before the second, because
@@ -15,6 +16,10 @@ import {
  * @type {Array}
  */
 const REQUIRED_PROPERTY_ORDER = [
+  ['animation', 'animation-timeline'],
+  ['animation', 'animation-range'],
+  ['animation', 'animation-range-start'],
+  ['animation', 'animation-range-end'],
   ['border', 'border-image'],
   ['font', 'font-feature-settings'],
   ['font', 'font-variant-ligatures'],
@@ -40,8 +45,16 @@ function orderDeclarations (declarations) {
       return declaration?.property === property;
     });
   };
+  // Most rules declare neither half of any of these pairs, so the properties a
+  // rule does declare are gathered once rather than scanned for per pair.
+  // Reordering the declarations never changes which properties are declared,
+  // so the set stays accurate as the pairs are applied.
+  const declaredProperties = collectDeclaredProperties(ordered);
 
   for (const [property, followingProperty] of REQUIRED_PROPERTY_ORDER) {
+    if (!declaredProperties.has(property) || !declaredProperties.has(followingProperty)) {
+      continue;
+    }
     const fromIndex = findPropertyIndex(property);
     const toIndex = findPropertyIndex(followingProperty);
     if (fromIndex === -1 || toIndex === -1 || fromIndex < toIndex) {

@@ -1,6 +1,7 @@
-# Padding longhand merge unsafe even with var() fallback
+# Merge equal bidirectional gap decoration rules
 
-A valid fallback does not make merging safe. The fallback only triggers when the
-property is undefined. If the property is defined with an invalid value (e.g.
-`--pt: banana`), the fallback is ignored and the entire shorthand declaration
-fails at computed value time.
+CSS Gaps 1 defines the gap decoration shorthands: column-rule, and row-rule
+which set (row|column)-rule-width, (row|column)-rule-style,
+(row|column)-rule-color. The spec also defines the *bidirectional* shorthand
+variants of `rule-width`, `rule-style` and `rule-color`. When column and row
+properties are equal, they can be merged into the bidirectional shorthands.

@@ -12,6 +12,7 @@ import {
   shorthandMap
 } from './config.js';
 import { hoistCssWideKeywordsIntoShorthands } from './css-wide-keywords.js';
+import { foldLonghandOverridesIntoShorthands } from './fold.js';
 import {
   collectDeclaredProperties,
   indexFirstDeclarationByProperty
@@ -396,6 +397,7 @@ function processDeclarations (declarations, context) {
   result = removeLonghandsOverriddenByShorthands(result);
   result = absorbBackgroundLonghandsIntoShorthand(result);
   result = mergeLonghandsIntoShorthands(result, context);
+  result = foldLonghandOverridesIntoShorthands(result, context);
   result = hoistCssWideKeywordsIntoShorthands(result);
   result = collapseBorderTrioWithPerEdgeColor(result);
 

@@ -31,7 +31,7 @@
 * Gemini 3.1 Pro (High Thinking)
 * GPT-5.4 High (Thinking)
 
-These were the latest and greatest models at the time.
+These were the latest and greatest models at the time. Since then I've mostly used the latest Claude version for maintenance.
 
 **AI's used during maintenance:**
 
