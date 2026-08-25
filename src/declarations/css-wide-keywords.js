@@ -13,6 +13,7 @@ import {
   collectDeclaredProperties,
   describeDeclaration
 } from './lookup.js';
+import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
 
 /**
  * Checks whether a group of longhands sets every leaf longhand that the
@@ -153,10 +154,14 @@ function resetsEarlierDeclaration (declarations, shorthandName, insertionIndex) 
  * @param  {Array}      declarations        The declarations of a single rule.
  * @param  {string}     shorthandName       The target shorthand property name.
  * @param  {Set}        declaredProperties  The property names the rule currently declares.
+ * @param  {object}     context             The minification context with the stylesheet's reset properties.
  * @return {Array|null}                     The rewritten declarations, or null when the rewrite does not apply.
  */
-function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredProperties) {
+function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredProperties, context) {
   if (declaredProperties.has(shorthandName)) {
+    return null;
+  }
+  if (resetsPropertyDeclaredElsewhere(shorthandName, declaredProperties, context)) {
     return null;
   }
 
@@ -230,10 +235,11 @@ function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredPr
  * followed by `border-width:2px`, which inherits every border property and then
  * overrides the one that differs.
  *
- * @param  {Array} declarations  The declarations of a single rule.
- * @return {Array}               The declarations, with eligible groups rewritten.
+ * @param  {Array}  declarations  The declarations of a single rule.
+ * @param  {object} context       The minification context with the stylesheet's reset properties.
+ * @return {Array}                The declarations, with eligible groups rewritten.
  */
-function hoistCssWideKeywordsIntoShorthands (declarations) {
+function hoistCssWideKeywordsIntoShorthands (declarations, context) {
   let result = declarations;
   // Every shorthand needs to know which properties the rule declares, so that
   // set is kept alongside the declarations and only rebuilt after a rewrite
@@ -242,7 +248,7 @@ function hoistCssWideKeywordsIntoShorthands (declarations) {
   // Shorthands are visited in declaration order, so the widest shorthand of a
   // family is rewritten before the narrower shorthands it contains.
   for (const shorthandName of Object.keys(shorthandMap)) {
-    const rewritten = rewriteGroupAsKeywordShorthand(result, shorthandName, declaredProperties);
+    const rewritten = rewriteGroupAsKeywordShorthand(result, shorthandName, declaredProperties, context);
     if (rewritten) {
       result = rewritten;
       declaredProperties = collectDeclaredProperties(result);
