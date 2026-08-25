@@ -13,6 +13,7 @@ import {
   createMinifyContext,
   setActiveCharset
 } from './context.js';
+import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
 import {
   analyzePositionTryRules,
   cleanPositionTryRules,
@@ -231,6 +232,10 @@ export const minifyCSS = function (input) {
   const context = createMinifyContext();
 
   if (ast?.stylesheet?.rules) {
+    // Which properties a shorthand may not silently reset is a question about
+    // the whole stylesheet, so it is answered before any rule is rewritten.
+    recordStylesheetResetProperties(ast.stylesheet.rules, context);
+
     const {
       positionTryRules,
       positionTryUsage

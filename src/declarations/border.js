@@ -6,6 +6,8 @@ import { minifyValue } from '../value/minify.js';
 import { splitTopLevelComponents } from '../value/syntax.js';
 
 import { CSS_WIDE_KEYWORDS } from './config.js';
+import { collectDeclaredProperties } from './lookup.js';
+import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
 
 const BORDER_TRIO_PROPERTIES = ['border-width', 'border-style', 'border-color'];
 
@@ -32,10 +34,17 @@ function findLastDeclarationIndex (declarations, property) {
  * by a `border-color` override that restores the per-edge colors. The rewrite is
  * only applied when the resulting pair is shorter than the three longhands.
  *
- * @param  {Array} declarations  The declarations of a single rule.
- * @return {Array}               The declarations, with the trio rewritten when it is shorter.
+ * @param  {Array}  declarations  The declarations of a single rule.
+ * @param  {object} context       The minification context with the stylesheet's reset properties.
+ * @return {Array}                The declarations, with the trio rewritten when it is shorter.
  */
-function collapseBorderTrioWithPerEdgeColor (declarations) {
+function collapseBorderTrioWithPerEdgeColor (declarations, context) {
+  // The `border` shorthand also resets `border-image`, so the trio stays as it
+  // is when another rule of the stylesheet relies on that value.
+  if (resetsPropertyDeclaredElsewhere('border', collectDeclaredProperties(declarations), context)) {
+    return declarations;
+  }
+
   const trioIndexes = BORDER_TRIO_PROPERTIES.map((property) => {
     return findLastDeclarationIndex(declarations, property);
   });

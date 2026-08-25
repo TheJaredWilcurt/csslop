@@ -90,7 +90,7 @@ const shorthandMap = {
 const shorthandOverrideMap = {
   animation: ['animation-timeline', 'animation-range', 'animation-range-start', 'animation-range-end'],
   border: ['border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat'],
-  font: ['font-variant', 'font-variant-alternates', 'font-variant-caps', 'font-variant-east-asian', 'font-variant-ligatures', 'font-variant-numeric', 'font-variant-position'],
+  font: ['font-variant', 'font-variant-alternates', 'font-variant-caps', 'font-variant-east-asian', 'font-variant-ligatures', 'font-variant-numeric', 'font-variant-position', 'font-feature-settings', 'font-kerning', 'font-language-override', 'font-optical-sizing', 'font-size-adjust', 'font-variation-settings'],
   mask: ['mask-border', 'mask-border-source', 'mask-border-slice', 'mask-border-width', 'mask-border-outset', 'mask-border-repeat', 'mask-border-mode']
 };
 

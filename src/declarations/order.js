@@ -9,28 +9,34 @@ import {
 import { collectDeclaredProperties } from './lookup.js';
 
 /**
- * Pairs of properties where the first must be emitted before the second, because
- * the first resets the second and a merged shorthand is appended after the
- * longhands it was built from.
+ * Builds the pairs of properties where the first has to be emitted before the
+ * second, because the first resets the second while a merged shorthand is
+ * appended after the longhands it was built from. Every property a shorthand
+ * resets but cannot express has to be restated after that shorthand, and a
+ * `margin` built from a mixed `!important` group leaves its important longhands
+ * behind for the same reason.
+ *
+ * @return {Array} The property pairs, each as a shorthand followed by the property it resets.
+ */
+function buildRequiredPropertyOrder () {
+  const orderedPairs = [];
+  for (const [shorthandProperty, resetProperties] of Object.entries(shorthandOverrideMap)) {
+    for (const resetProperty of resetProperties) {
+      orderedPairs.push([shorthandProperty, resetProperty]);
+    }
+  }
+  for (const longhandProperty of shorthandMap.margin) {
+    orderedPairs.push(['margin', longhandProperty]);
+  }
+  return orderedPairs;
+}
+
+/**
+ * The property pairs whose relative order the output has to correct.
  *
  * @type {Array}
  */
-const REQUIRED_PROPERTY_ORDER = [
-  ['animation', 'animation-timeline'],
-  ['animation', 'animation-range'],
-  ['animation', 'animation-range-start'],
-  ['animation', 'animation-range-end'],
-  ['border', 'border-image'],
-  ['font', 'font-feature-settings'],
-  ['font', 'font-variant-ligatures'],
-  ['font', 'font-kerning'],
-  ['font', 'font-variation-settings'],
-  ['mask', 'mask-border'],
-  ['margin', 'margin-top'],
-  ['margin', 'margin-right'],
-  ['margin', 'margin-bottom'],
-  ['margin', 'margin-left']
-];
+const REQUIRED_PROPERTY_ORDER = buildRequiredPropertyOrder();
 
 /**
  * Reorders declarations so that shorthands appear before any related longhands they would override, preventing cascade issues in the minified output.

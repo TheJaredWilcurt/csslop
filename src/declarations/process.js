@@ -25,6 +25,7 @@ import {
   getOverriddenLonghands,
   orderDeclarations
 } from './order.js';
+import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
 
 /**
  * Shorthands that keep their non-important longhands in the output, so a mixed
@@ -348,6 +349,12 @@ function mergeLonghandsIntoShorthands (declarations, context) {
       if (declaredProperties.has(shorthand)) {
         continue;
       }
+      // Assembling a shorthand also resets the properties it cannot express, so
+      // a rule only collapses into one when nothing else in the stylesheet
+      // relies on a value that reset would discard.
+      if (resetsPropertyDeclaredElsewhere(shorthand, declaredProperties, context)) {
+        continue;
+      }
 
       const mergeableProperties = getMergeProps(shorthand, longhands, declaredProperties);
       if (!mergeableProperties) {
@@ -398,8 +405,8 @@ function processDeclarations (declarations, context) {
   result = absorbBackgroundLonghandsIntoShorthand(result);
   result = mergeLonghandsIntoShorthands(result, context);
   result = foldLonghandOverridesIntoShorthands(result, context);
-  result = hoistCssWideKeywordsIntoShorthands(result);
-  result = collapseBorderTrioWithPerEdgeColor(result);
+  result = hoistCssWideKeywordsIntoShorthands(result, context);
+  result = collapseBorderTrioWithPerEdgeColor(result, context);
 
   return orderDeclarations(result);
 }
