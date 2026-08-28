@@ -6,7 +6,10 @@ import { minifyValue } from '../value/minify.js';
 import { hasInvalidQuotesCount } from '../value/quotes.js';
 
 import { absorbBackgroundLonghandsIntoShorthand } from './background.js';
-import { collapseBorderTrioWithPerEdgeColor } from './border.js';
+import {
+  collapseBorderTrioWithPerEdgeColor,
+  splitBorderEdgesIntoTrio
+} from './border.js';
 import {
   getLonghandsOf,
   shorthandMap
@@ -406,6 +409,7 @@ function processDeclarations (declarations, context) {
   result = mergeLonghandsIntoShorthands(result, context);
   result = foldLonghandOverridesIntoShorthands(result, context);
   result = hoistCssWideKeywordsIntoShorthands(result, context);
+  result = splitBorderEdgesIntoTrio(result);
   result = collapseBorderTrioWithPerEdgeColor(result, context);
 
   return orderDeclarations(result);

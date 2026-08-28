@@ -144,6 +144,31 @@ function parseAngleToDegrees (angleToken) {
 }
 
 /**
+ * The substitution functions whose result is only known at computed-value time.
+ * Each of them may stand in for any number of components, so a shorthand part
+ * that holds one cannot be counted as the single value it looks like.
+ *
+ * @type {RegExp}
+ */
+const SUBSTITUTION_FUNCTION_PATTERN = /\b(?:var|env|attr|if)\(/i;
+
+/**
+ * Reports whether a shorthand part stands in for an unknown number of
+ * components. `margin: 1px 1px` reduces to `margin: 1px`, but the same
+ * reduction across two `var()` references is unsafe: a custom property that
+ * expands to two values makes the doubled form a valid four-component margin,
+ * while the reduced form is a two-component one.
+ *
+ * @param  {Array}   parts  The shorthand value strings to test.
+ * @return {boolean}        Whether any part substitutes a value of unknown length.
+ */
+function hasSubstitutedParts (parts) {
+  return parts.some((part) => {
+    return SUBSTITUTION_FUNCTION_PATTERN.test(part);
+  });
+}
+
+/**
  * Collapses redundant CSS shorthand parts using the standard box-model
  * reduction rules: 4-value → 3-value → 2-value → 1-value.
  *
@@ -153,6 +178,9 @@ function parseAngleToDegrees (angleToken) {
  * @return {Array}        The same array, mutated with redundant entries removed.
  */
 function collapseShorthandParts (parts) {
+  if (hasSubstitutedParts(parts)) {
+    return parts;
+  }
   if (parts.length === 4 && parts[1] === parts[3]) {
     parts.splice(3, 1);
   }

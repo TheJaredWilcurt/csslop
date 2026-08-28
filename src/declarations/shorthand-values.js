@@ -193,14 +193,27 @@ function buildTextDecorationValue ({ valueMap, importantSuffix }) {
 }
 
 /**
- * Builds a `columns` value, which keeps both components even when they match,
- * because the width and count are not interchangeable.
+ * Builds a `columns` value from its width, count, and height components. The
+ * grammar writes the width and the count next to each other and places the
+ * height behind a `/`. Every one of the three starts out as `auto`, so a
+ * component that holds `auto` states nothing and is left out, and a value whose
+ * components are all `auto` shrinks to a single `auto`.
  *
  * @param  {ShorthandComponents} components  The collected longhand values.
  * @return {string|null}                     The shorthand value, or null when it cannot be built.
  */
-function buildColumnsValue ({ cleanValues, importantSuffix }) {
-  return cleanValues.join(' ') + importantSuffix;
+function buildColumnsValue ({ valueMap, importantSuffix }) {
+  const height = valueMap.get('column-height');
+  const statedParts = ['column-width', 'column-count'].map((property) => {
+    return valueMap.get(property);
+  }).filter((value) => {
+    return value && value !== 'auto';
+  });
+  const inlineSize = statedParts.join(' ') || 'auto';
+  if (height && height !== 'auto') {
+    return inlineSize + '/' + height + importantSuffix;
+  }
+  return inlineSize + importantSuffix;
 }
 
 /**
