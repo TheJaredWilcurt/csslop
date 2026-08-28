@@ -35,6 +35,7 @@ const PARTIAL_MERGE_REQUIREMENTS = {
   background: [['background-color', 'background-image']],
   'background-position': [['background-position-x'], ['background-position-y']],
   'border-image': [['border-image-source']],
+  columns: [['column-width', 'column-count', 'column-height']],
   font: [['font-size'], ['font-family']],
   mask: [['mask-image']]
 };

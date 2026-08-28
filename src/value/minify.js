@@ -84,10 +84,11 @@ const COLOR_TOKEN_PATTERN = new RegExp(
  * the shortest equivalent representation, comparing full hex, shortened hex,
  * and any matching named color keyword.
  *
- * @param  {string} segment  A CSS value segment (outside strings and urls).
- * @return {string}          The segment with all colors shortened to their minimal form.
+ * @param  {string}  segment                      A CSS value segment (outside strings and urls).
+ * @param  {boolean} rewritesEqualLengthSpelling  Whether a spelling of the same length is worth switching to.
+ * @return {string}                               The segment with all colors shortened to their minimal form.
  */
-function shortenColorValues (segment) {
+function shortenColorValues (segment, rewritesEqualLengthSpelling = true) {
   // Match "color-mix(" as a whole word, case-insensitive
   const hasColorMix = /\bcolor-mix\(/i.test(segment);
   return segment.replace(COLOR_TOKEN_PATTERN, (match) => {
@@ -108,19 +109,30 @@ function shortenColorValues (segment) {
     if (!channels) {
       return match;
     }
-    return shortestColor(channels[0], channels[1], channels[2], channels[3]);
+    const shortest = shortestColor(channels[0], channels[1], channels[2], channels[3]);
+    if (!rewritesEqualLengthSpelling && shortest.length >= match.length) {
+      return match;
+    }
+    return shortest;
   });
 }
 
 /**
- * Applies a replacer function only to segments of a CSS value that are outside quoted strings and url() functions, preserving those literal segments unchanged.
- *
- * @param  {string}                   value     The full CSS value string.
- * @param  {function(string): string} replacer  A function called with each non-string, non-url segment, returning the replacement string.
- * @return {string}                             The value with the replacer applied to all eligible segments.
+ * @typedef  {object}  ValueSegment
+ * @property {string}  text          The segment's slice of the value.
+ * @property {boolean} isLiteral     Whether the segment is a quoted string or a url() token.
  */
-function replaceOutsideStringsAndUrls (value, replacer) {
-  let result = '';
+
+/**
+ * Splits a CSS value into literal and syntax segments. A quoted string and a
+ * `url()` token are literals: they hold data rather than CSS syntax, so no pass
+ * may rewrite what is inside them. Everything between the literals is syntax.
+ *
+ * @param  {string} value  The full CSS value string.
+ * @return {Array}         The value's segments, in order.
+ */
+function splitValueSegments (value) {
+  const segments = [];
   let index = 0;
 
   const consumeQuoted = (start) => {
@@ -144,31 +156,36 @@ function replaceOutsideStringsAndUrls (value, replacer) {
     return value.slice(start, start + 4).toLowerCase() === 'url(';
   };
 
+  const consumeUrl = (start) => {
+    let depth = 1;
+    let end = start + 4;
+    while (end < value.length && depth > 0) {
+      if (value[end] === '"' || value[end] === '\'') {
+        end = consumeQuoted(end);
+        continue;
+      }
+      if (value[end] === '(') {
+        depth++;
+      }
+      if (value[end] === ')') {
+        depth--;
+      }
+      end++;
+    }
+    return end;
+  };
+
   while (index < value.length) {
     if (value[index] === '"' || value[index] === '\'') {
       const end = consumeQuoted(index);
-      result += value.slice(index, end);
+      segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
 
     if (startsUrl(index)) {
-      let depth = 1;
-      let end = index + 4;
-      while (end < value.length && depth > 0) {
-        if (value[end] === '"' || value[end] === '\'') {
-          end = consumeQuoted(end);
-          continue;
-        }
-        if (value[end] === '(') {
-          depth++;
-        }
-        if (value[end] === ')') {
-          depth--;
-        }
-        end++;
-      }
-      result += value.slice(index, end);
+      const end = consumeUrl(index);
+      segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
@@ -177,10 +194,40 @@ function replaceOutsideStringsAndUrls (value, replacer) {
     while (index < value.length && value[index] !== '"' && value[index] !== '\'' && !startsUrl(index)) {
       index++;
     }
-    result += replacer(value.slice(start, index));
+    segments.push({ text: value.slice(start, index), isLiteral: false });
   }
 
-  return result;
+  return segments;
+}
+
+/**
+ * Reports whether a segment is a quoted string. Every literal segment is either
+ * a quoted string or a url() token, so anything else is one of the latter.
+ *
+ * @param  {ValueSegment} [segment]  The segment to test, when the value has one there.
+ * @return {boolean}                 Whether the segment is a quoted string.
+ */
+function isQuotedStringSegment (segment) {
+  if (!segment?.isLiteral) {
+    return false;
+  }
+  return segment.text.startsWith('"') || segment.text.startsWith('\'');
+}
+
+/**
+ * Applies a replacer function only to segments of a CSS value that are outside quoted strings and url() functions, preserving those literal segments unchanged.
+ *
+ * @param  {string}                   value     The full CSS value string.
+ * @param  {function(string): string} replacer  A function called with each non-string, non-url segment, returning the replacement string.
+ * @return {string}                             The value with the replacer applied to all eligible segments.
+ */
+function replaceOutsideStringsAndUrls (value, replacer) {
+  return splitValueSegments(value).map((segment) => {
+    if (segment.isLiteral) {
+      return segment.text;
+    }
+    return replacer(segment.text);
+  }).join('');
 }
 
 /**
@@ -211,6 +258,108 @@ function elideSpaceBeforeHexColors (value) {
   return replaceOutsideStringsAndUrls(value, (segment) => {
     // Match whitespace followed by a hex color token of 3 to 8 hex digits
     return segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
+  });
+}
+
+/**
+ * Matches the separator whitespace at the head of a value segment. Whitespace
+ * that precedes a `+` or a `-` is left alone, because a math function requires
+ * those two operators to be surrounded by it.
+ *
+ * @type {RegExp}
+ */
+const LEADING_SEPARATOR_PATTERN = /^\s+(?![+-])/;
+
+/**
+ * Removes the separator whitespace that follows a closing parenthesis. A
+ * parenthesis ends its own token, so the whitespace after one never keeps two
+ * tokens from merging: `url(a.png) 30 round` holds the same tokens as
+ * `url(a.png)30 round`.
+ *
+ * @param  {string} value  The CSS value string.
+ * @return {string}        The value without the redundant separators.
+ */
+function elideSpaceAfterParentheses (value) {
+  const segments = splitValueSegments(value);
+  return segments.map((segment, index) => {
+    if (segment.isLiteral) {
+      return segment.text;
+    }
+    let text = segment.text;
+    const previousSegment = segments[index - 1];
+    // A url() token ends with the parenthesis that closes it, so whitespace at
+    // the head of the segment after one is a separator of the same kind
+    if (previousSegment?.isLiteral && !isQuotedStringSegment(previousSegment)) {
+      text = text.replace(LEADING_SEPARATOR_PATTERN, '');
+    }
+    // Match whitespace that follows a closing parenthesis
+    return text.replace(/\)\s+(?![+-])/g, ')');
+  }).join('');
+}
+
+/**
+ * Removes the separator whitespace that follows a closing quote. A string ends
+ * its own token, so no separator is needed between it and the token that comes
+ * next: `"smcp" 1` holds the same tokens as `"smcp"1`.
+ *
+ * @param  {string} value  The CSS value string.
+ * @return {string}        The value without the redundant separators.
+ */
+function elideSpaceAfterStrings (value) {
+  const segments = splitValueSegments(value);
+  return segments.map((segment, index) => {
+    if (segment.isLiteral || !isQuotedStringSegment(segments[index - 1])) {
+      return segment.text;
+    }
+    return segment.text.replace(LEADING_SEPARATOR_PATTERN, '');
+  }).join('');
+}
+
+/**
+ * Reports whether a value separates top-level entries with commas, the way the
+ * repeatable values of properties such as `font-variation-settings` and
+ * `transition` do. Every literal is skipped, so a comma inside a string or a
+ * url does not count, and the parenthesis depth tells a function's argument
+ * separators apart from the value's own.
+ *
+ * @param  {string}  value  The CSS value string.
+ * @return {boolean}        Whether the value holds more than one comma-separated entry.
+ */
+function hasCommaSeparatedEntries (value) {
+  let depth = 0;
+  for (const segment of splitValueSegments(value)) {
+    if (segment.isLiteral) {
+      continue;
+    }
+    for (const character of segment.text) {
+      if (character === '(') {
+        depth++;
+      }
+      if (character === ')') {
+        depth = Math.max(0, depth - 1);
+      }
+      if (character === ',' && depth === 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Restores the whitespace that a math function requires before a `+` or a `-`
+ * operator. Both operators have to be surrounded by whitespace to be read as
+ * operators rather than as the sign of the term that follows, and the
+ * whitespace before one that trails a closing parenthesis is removed together
+ * with the rest of the parenthesis padding.
+ *
+ * @param  {string} value  The CSS value string with parenthesis padding removed.
+ * @return {string}        The value with the operator separator restored.
+ */
+function restoreSpaceBeforeMathOperators (value) {
+  return replaceOutsideStringsAndUrls(value, (segment) => {
+    // Match a closing parenthesis immediately followed by a `+` or `-` operator
+    return segment.replace(/\)(?=[+-])/g, ') ');
   });
 }
 
@@ -801,15 +950,76 @@ const TIME_PROPERTIES = new Set([
 ]);
 
 /**
+ * Properties whose grammar delimits its own components, either with punctuation
+ * (the `/` and `,` of the `background`, `mask`, and `src` layers) or by taking
+ * nothing but functions (`transform`). Their components stay readable without
+ * the whitespace that follows a closing parenthesis, so that whitespace is left
+ * elided and each of them restores only the separators its grammar still needs.
+ *
+ * @type {Set<string>}
+ */
+const PUNCTUATED_COMPONENT_PROPERTIES = new Set([
+  'background',
+  'mask',
+  'src',
+  'transform'
+]);
+
+/**
+ * Matches one offset of a position: an edge keyword or a numeric distance.
+ *
+ * @type {string}
+ */
+const POSITION_OFFSET_SOURCE = '(?:left|center|right|top|bottom|[+-]?(?:\\d+|\\d*\\.\\d+)(?:%|[a-z]+)?)';
+
+/**
+ * Matches a whole position component, which is one or two of those offsets.
+ *
+ * @type {string}
+ */
+const POSITION_COMPONENT_SOURCE = '(' + POSITION_OFFSET_SOURCE + '(?:\\s+' + POSITION_OFFSET_SOURCE + ')?)';
+
+/**
+ * Matches a close-paren directly followed by a position that no slash follows,
+ * which is the position that needs its separator put back.
+ *
+ * @type {RegExp}
+ */
+const UNSEPARATED_IMAGE_POSITION_PATTERN = new RegExp('\\)' + POSITION_COMPONENT_SOURCE + '(?!\\/)', 'gi');
+
+/**
+ * Matches a close-paren separated from a position that a slash follows, where
+ * the slash already delimits the position from the size behind it.
+ *
+ * @type {RegExp}
+ */
+const SEPARATED_IMAGE_SIZE_POSITION_PATTERN = new RegExp('\\)\\s+' + POSITION_COMPONENT_SOURCE + '(?=\\/)', 'gi');
+
+/**
+ * Restores the separator between an image function and the position that
+ * follows it. Both `background` and `mask` take a `<position> [ / <size> ]`
+ * component after their image, and a bare position only reads as its own
+ * component while whitespace separates it from the image function. A position
+ * that a `/` follows needs no separator, since the slash delimits the pair.
+ *
+ * @param  {string} value  The layered image value, with the parenthesis padding removed.
+ * @return {string}        The value with the position separator restored.
+ */
+function restoreImagePositionSeparator (value) {
+  const separated = value.replace(UNSEPARATED_IMAGE_POSITION_PATTERN, ') $1');
+  return separated.replace(SEPARATED_IMAGE_SIZE_POSITION_PATTERN, ')$1');
+}
+
+/**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
- * @param  {string}  val                    The CSS value string after generic minification.
- * @param  {string}  property               The CSS property name.
- * @param  {boolean} allowsHexSpaceElision  Whether the space preceding a hex color may be removed.
- * @return {string}                         The value with property-specific optimizations applied.
+ * @param  {string}  val                     The CSS value string after generic minification.
+ * @param  {string}  property                The CSS property name.
+ * @param  {boolean} allowsSeparatorElision  Whether redundant separator whitespace may be removed.
+ * @return {string}                          The value with property-specific optimizations applied.
  */
-function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
+function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
   if (property === 'font-weight' && isUnicodeCharset()) {
     // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
@@ -971,16 +1181,19 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
   });
 
   // Shorten all color tokens (second pass after property-specific color evaluations)
-  val = replaceOutsideStringsAndUrls(val, shortenColorValues);
+  val = replaceOutsideStringsAndUrls(val, (segment) => {
+    return shortenColorValues(segment, allowsSeparatorElision);
+  });
 
   // Remove space before hex colors (second pass after color evaluations)
-  if (allowsHexSpaceElision) {
+  if (allowsSeparatorElision) {
     val = elideSpaceBeforeHexColors(val);
   }
-  if (property !== 'transform' && property !== 'background' && property !== 'src') {
+  if (!PUNCTUATED_COMPONENT_PROPERTIES.has(property)) {
     // Restore space after close-paren when followed by an alphanumeric, hash, or hyphen
     val = val.replace(/\)(?=[0-9a-zA-Z#-])/g, ') ');
   }
+  val = restoreSpaceBeforeMathOperators(val);
 
   if (property === 'font') {
     // Split font shorthand on whitespace
@@ -1014,10 +1227,11 @@ function applyPropertyOptimizations (val, property, allowsHexSpaceElision) {
     if (normalized) {
       val = normalized;
     }
-    // Restore the required separator between an image function and a following
-    // background-position when that position is not immediately followed by `/size`.
-    val = val.replace(/\)((?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)(?:\s+(?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?))?)(?!\/)/gi, ') $1');
-    val = val.replace(/\)\s+((?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)(?:\s+(?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?))?)(?=\/)/gi, ')$1');
+    val = restoreImagePositionSeparator(val);
+  }
+
+  if (property === 'mask') {
+    val = restoreImagePositionSeparator(val);
   }
 
   if (property === 'border') {
@@ -1094,7 +1308,7 @@ function computeMinifiedValue (declaration) {
   // Values assembled from already-minified longhands keep the separator spaces
   // between their components, because those spaces delimit the shorthand's
   // parts rather than the authored whitespace of a single written value.
-  const allowsHexSpaceElision = !declaration.isAssembledShorthand;
+  const allowsSeparatorElision = !declaration.isAssembledShorthand;
 
   if (typeof val === 'string') {
     val = val.trim();
@@ -1138,21 +1352,26 @@ function computeMinifiedValue (declaration) {
     }
 
     val = lowercaseHexColors(val);
-    if (allowsHexSpaceElision) {
+    if (allowsSeparatorElision) {
       val = elideSpaceBeforeHexColors(val);
     }
 
     // Convert color functions to hex equivalents
     val = convertColorsToHex(val);
 
-    // Shorten all color tokens (hex and named) to their shortest representation
-    val = replaceOutsideStringsAndUrls(val, shortenColorValues);
+    // Shorten all color tokens (hex and named) to their shortest representation.
+    // An assembled shorthand keeps the whitespace between its components, so a
+    // spelling of the same length saves it nothing and its components keep the
+    // spelling they were written with.
+    val = replaceOutsideStringsAndUrls(val, (segment) => {
+      return shortenColorValues(segment, allowsSeparatorElision);
+    });
 
     // Collapse light-dark() when both normalized branches are identical
     val = simplifyEquivalentLightDarkFunctions(val);
 
     // Property-specific optimizations
-    val = applyPropertyOptimizations(val, declaration.property, allowsHexSpaceElision);
+    val = applyPropertyOptimizations(val, declaration.property, allowsSeparatorElision);
 
     // Minify relative color syntax (identity resolution and whitespace collapsing)
     val = minifyRelativeColorSyntax(val);
@@ -1167,6 +1386,23 @@ function computeMinifiedValue (declaration) {
   // Unicode range optimization: dedup, merge overlapping/adjacent, wildcard compression
   if (declaration.property === 'unicode-range') {
     val = optimizeUnicodeRange(val);
+  }
+
+  // Every earlier pass reads the value with its component separators in place,
+  // so the ones that turned out to be redundant are only dropped at the end.
+  // The properties that punctuate their own components never got them back.
+  const elidesRedundantSeparators = (
+    typeof val === 'string' &&
+    allowsSeparatorElision &&
+    !PUNCTUATED_COMPONENT_PROPERTIES.has(declaration.property)
+  );
+  if (elidesRedundantSeparators) {
+    val = elideSpaceAfterParentheses(val);
+    // A value written as one entry is elided down to its tokens, while a
+    // comma-separated list keeps the whitespace that groups each of its entries.
+    if (!hasCommaSeparatedEntries(val)) {
+      val = elideSpaceAfterStrings(val);
+    }
   }
 
   return val;
