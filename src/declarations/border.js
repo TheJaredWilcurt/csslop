@@ -70,6 +70,26 @@ const INITIAL_BORDER_EDGE_PARTS = {
 };
 
 /**
+ * Builds the `border` value that states a trio whose color differs per edge.
+ * Unlike a shorthand assembled out of whole longhand values, this value is one
+ * the rewrite composes: it takes a single component out of the color list rather
+ * than the `border-color` value as authored. So it is minified as a written
+ * value, which drops the separators CSS does not need between its components
+ * and measures the value at the length it is emitted with.
+ *
+ * @param  {string} width       The `border-width` value.
+ * @param  {string} style       The `border-style` value.
+ * @param  {string} firstColor  The first component of the `border-color` value.
+ * @return {string}             The minified `border` value.
+ */
+function buildBorderShorthandValue (width, style, firstColor) {
+  return minifyValue({
+    property: 'border',
+    value: [width, style, firstColor].join(' ')
+  });
+}
+
+/**
  * Finds the index of the last declaration for a property, which is the one that
  * wins the cascade within a rule.
  *
@@ -149,7 +169,7 @@ function collapseBorderTrioWithPerEdgeColor (declarations, context) {
     return declarations;
   }
 
-  const borderValue = [width, style, colorComponents[0]].join(' ') + importantSuffix;
+  const borderValue = buildBorderShorthandValue(width, style, colorComponents[0]) + importantSuffix;
   const colorValue = color + importantSuffix;
   const rewrittenLength = ('border:' + borderValue + ';border-color:' + colorValue).length;
   const longhandLength = (
@@ -168,8 +188,7 @@ function collapseBorderTrioWithPerEdgeColor (declarations, context) {
       return [
         {
           property: 'border',
-          value: borderValue,
-          isAssembledShorthand: true
+          value: borderValue
         },
         {
           property: 'border-color',
@@ -285,9 +304,11 @@ function buildBorderTrioDeclarations (edgeDeclarations) {
     edgeParts.push(parts);
   }
 
-  // The three parts do not affect one another, so they are written in a fixed
-  // alphabetical order rather than in an order the values would decide.
-  return [...BORDER_TRIO_PROPERTIES].sort().map((property) => {
+  // The three parts do not affect one another, so they are written in the fixed
+  // order the `border` grammar takes them in, rather than in an order the values
+  // would decide. A predictable order repeats across rules, which compresses
+  // better than one that varies.
+  return BORDER_TRIO_PROPERTIES.map((property) => {
     const sideValues = edgeParts.map((parts) => {
       return parts[property];
     });
