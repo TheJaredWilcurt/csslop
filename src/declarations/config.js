@@ -80,7 +80,7 @@ const shorthandMap = {
   'border-block-width': ['border-block-start-width', 'border-block-end-width'],
   transition: ['transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay'],
   animation: ['animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay', 'animation-iteration-count', 'animation-direction', 'animation-fill-mode', 'animation-play-state'],
-  mask: ['mask-image', 'mask-repeat', 'mask-size'],
+  mask: ['mask-image', 'mask-position', 'mask-size', 'mask-repeat'],
   'position-try': ['position-try-order', 'position-try-fallbacks'],
   font: ['font-style', 'font-weight', 'font-size', 'line-height', 'font-family'],
   marker: ['marker-start', 'marker-mid', 'marker-end'],
@@ -92,7 +92,7 @@ const shorthandOverrideMap = {
   columns: ['column-wrap'],
   border: ['border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat'],
   font: ['font-variant', 'font-variant-alternates', 'font-variant-caps', 'font-variant-east-asian', 'font-variant-ligatures', 'font-variant-numeric', 'font-variant-position', 'font-feature-settings', 'font-kerning', 'font-language-override', 'font-optical-sizing', 'font-size-adjust', 'font-variation-settings'],
-  mask: ['mask-border', 'mask-border-source', 'mask-border-slice', 'mask-border-width', 'mask-border-outset', 'mask-border-repeat', 'mask-border-mode', 'mask-position', 'mask-origin', 'mask-clip', 'mask-composite', 'mask-mode']
+  mask: ['mask-border', 'mask-border-source', 'mask-border-slice', 'mask-border-width', 'mask-border-outset', 'mask-border-repeat', 'mask-border-mode', 'mask-origin', 'mask-clip', 'mask-composite', 'mask-mode']
 };
 
 /**

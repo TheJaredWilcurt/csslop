@@ -980,12 +980,31 @@ const POSITION_OFFSET_SOURCE = '(?:left|center|right|top|bottom|[+-]?(?:\\d+|\\d
 const POSITION_COMPONENT_SOURCE = '(' + POSITION_OFFSET_SOURCE + '(?:\\s+' + POSITION_OFFSET_SOURCE + ')?)';
 
 /**
- * Matches a close-paren directly followed by a position that no slash follows,
- * which is the position that needs its separator put back.
+ * Matches everything a `url()` holds up to but not including its own closing
+ * parenthesis. A url is written without nested parentheses, so the first one
+ * that closes it is the end of the token.
+ *
+ * @type {string}
+ */
+const URL_TOKEN_BODY_SOURCE = 'url\\([^()]*';
+
+/**
+ * Matches a close-paren that ends an image function, directly followed by a
+ * position that no slash follows, which is the position that needs its
+ * separator put back. The parenthesis that ends a `url()` is skipped, since
+ * that one closes a token rather than a function.
  *
  * @type {RegExp}
  */
-const UNSEPARATED_IMAGE_POSITION_PATTERN = new RegExp('\\)' + POSITION_COMPONENT_SOURCE + '(?!\\/)', 'gi');
+const UNSEPARATED_FUNCTION_POSITION_PATTERN = new RegExp('(?<!' + URL_TOKEN_BODY_SOURCE + ')\\)' + POSITION_COMPONENT_SOURCE + '(?!\\/)', 'gi');
+
+/**
+ * Matches a `url()` separated from the position that follows it, which is the
+ * separator a url does not need.
+ *
+ * @type {RegExp}
+ */
+const SEPARATED_URL_POSITION_PATTERN = new RegExp('(' + URL_TOKEN_BODY_SOURCE + '\\))\\s+' + POSITION_COMPONENT_SOURCE, 'gi');
 
 /**
  * Matches a close-paren separated from a position that a slash follows, where
@@ -996,18 +1015,21 @@ const UNSEPARATED_IMAGE_POSITION_PATTERN = new RegExp('\\)' + POSITION_COMPONENT
 const SEPARATED_IMAGE_SIZE_POSITION_PATTERN = new RegExp('\\)\\s+' + POSITION_COMPONENT_SOURCE + '(?=\\/)', 'gi');
 
 /**
- * Restores the separator between an image function and the position that
+ * Normalizes the separator between the image of a layer and the position that
  * follows it. Both `background` and `mask` take a `<position> [ / <size> ]`
  * component after their image, and a bare position only reads as its own
- * component while whitespace separates it from the image function. A position
- * that a `/` follows needs no separator, since the slash delimits the pair.
+ * component while whitespace separates it from an image function. Neither a
+ * position that a `/` follows nor one that follows a `url()` needs the
+ * separator, since the slash delimits the pair and a url is consumed whole as a
+ * single token that ends at its own closing parenthesis.
  *
  * @param  {string} value  The layered image value, with the parenthesis padding removed.
- * @return {string}        The value with the position separator restored.
+ * @return {string}        The value with the position separator normalized.
  */
-function restoreImagePositionSeparator (value) {
-  const separated = value.replace(UNSEPARATED_IMAGE_POSITION_PATTERN, ') $1');
-  return separated.replace(SEPARATED_IMAGE_SIZE_POSITION_PATTERN, ')$1');
+function normalizeImagePositionSeparator (value) {
+  const separatedFromFunction = value.replace(UNSEPARATED_FUNCTION_POSITION_PATTERN, ') $1');
+  const joinedToUrl = separatedFromFunction.replace(SEPARATED_URL_POSITION_PATTERN, '$1$2');
+  return joinedToUrl.replace(SEPARATED_IMAGE_SIZE_POSITION_PATTERN, ')$1');
 }
 
 /**
@@ -1227,11 +1249,11 @@ function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
     if (normalized) {
       val = normalized;
     }
-    val = restoreImagePositionSeparator(val);
+    val = normalizeImagePositionSeparator(val);
   }
 
   if (property === 'mask') {
-    val = restoreImagePositionSeparator(val);
+    val = normalizeImagePositionSeparator(val);
   }
 
   if (property === 'border') {
