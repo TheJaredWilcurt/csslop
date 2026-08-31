@@ -7,6 +7,7 @@ import { splitTopLevelComponents } from '../value/syntax.js';
 
 import { buildBackgroundShorthandValue } from './background.js';
 import { UNIFORM_VALUE_SHORTHANDS } from './config.js';
+import { buildLayerPositionAndSize } from './image-layers.js';
 
 /**
  * @typedef  {object} ShorthandComponents
@@ -124,26 +125,33 @@ function buildBackgroundValue ({ valueMap, importantSuffix }) {
 }
 
 /**
- * Builds a `mask` value, attaching the size after the position separator.
+ * Builds a `mask` value. A mask layer follows the same grammar as a background
+ * layer, so the image leads, the size only reads as a size while it sits behind
+ * a `/` that follows the position, and the repeat comes after both of them. A
+ * component holding its initial value is left out, since the shorthand already
+ * resets every longhand it covers back to that value.
  *
  * @param  {ShorthandComponents} components  The collected longhand values.
  * @return {string|null}                     The shorthand value, or null when it cannot be built.
  */
 function buildMaskValue ({ valueMap, importantSuffix }) {
   const image = valueMap.get('mask-image');
-  const repeat = valueMap.get('mask-repeat');
-  const size = valueMap.get('mask-size');
   if (!image) {
     return null;
   }
-  let result = image;
-  if (repeat) {
-    result += ' ' + repeat;
+  const repeat = valueMap.get('mask-repeat');
+  const result = [];
+  if (image !== 'none') {
+    result.push(image);
   }
-  if (size) {
-    result += '/' + size;
+  result.push(...buildLayerPositionAndSize(valueMap.get('mask-position'), valueMap.get('mask-size')));
+  if (repeat && repeat !== 'repeat') {
+    result.push(repeat);
   }
-  return result + importantSuffix;
+  if (!result.length) {
+    return 'none' + importantSuffix;
+  }
+  return result.join(' ') + importantSuffix;
 }
 
 /**

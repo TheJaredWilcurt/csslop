@@ -5,6 +5,7 @@
 import { minifyValue } from '../value/minify.js';
 
 import { shorthandMap } from './config.js';
+import { buildLayerPositionAndSize } from './image-layers.js';
 
 const BACKGROUND_POSITION_KEYWORDS = new Set(['left', 'center', 'right', 'top', 'bottom']);
 const BACKGROUND_REPEAT_KEYWORDS = new Set(['repeat', 'no-repeat', 'repeat-x', 'repeat-y', 'space', 'round']);
@@ -246,16 +247,7 @@ function buildBackgroundShorthandValue (valueMap, importantSuffix) {
   if (image && image !== 'none') {
     result.push(image);
   }
-  if (position && position !== '0 0' && position !== '0% 0%') {
-    result.push(position);
-  }
-  if (size && size !== 'auto') {
-    if (position && position !== '0 0' && position !== '0% 0%') {
-      result.push('/' + size);
-    } else {
-      result.push('0 0/' + size);
-    }
-  }
+  result.push(...buildLayerPositionAndSize(position, size));
   if (repeat && repeat !== 'repeat') {
     result.push(repeat);
   }
