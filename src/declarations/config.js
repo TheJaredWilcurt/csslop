@@ -200,6 +200,93 @@ function getOverridesOf (shorthandName) {
 }
 
 /**
+ * The words a longhand adds to its shorthand's name to say which side, axis,
+ * corner, or alignment dimension of the box that longhand applies to, such as
+ * the `top` of `padding-top` or the `row` of `row-gap`.
+ *
+ * @type {Set<string>}
+ */
+const BOX_PART_WORDS = new Set([
+  'align',
+  'block',
+  'bottom',
+  'column',
+  'end',
+  'inline',
+  'justify',
+  'left',
+  'right',
+  'row',
+  'start',
+  'top',
+  'x',
+  'y'
+]);
+
+/**
+ * Removes each of the shorthand's own words from a longhand's words, leaving
+ * only the words the longhand adds to name the part of the box it covers. Each
+ * shared word is removed once, so the `border` and the `radius` of
+ * `border-radius` leave `top` and `left` behind in `border-top-left-radius`.
+ *
+ * @param  {Array} longhandWords   The hyphen-separated words of the longhand's name.
+ * @param  {Array} shorthandWords  The hyphen-separated words of the shorthand's name.
+ * @return {Array}                 The words the longhand adds on top of the shorthand's.
+ */
+function subtractSharedWords (longhandWords, shorthandWords) {
+  const remainingWords = [...longhandWords];
+  for (const shorthandWord of shorthandWords) {
+    const wordIndex = remainingWords.indexOf(shorthandWord);
+    if (wordIndex !== -1) {
+      remainingWords.splice(wordIndex, 1);
+    }
+  }
+  return remainingWords;
+}
+
+/**
+ * Whether each shorthand takes a positional list of components, computed on
+ * first use, since the shorthand tables never change.
+ *
+ * @type {Map<string, boolean>}
+ */
+const positionalComponentsByShorthand = new Map();
+
+/**
+ * Reports whether a shorthand's value is a positional list of same-typed
+ * components rather than an unordered set of components that its grammar tells
+ * apart by type. A shorthand is positional when its longhands are the very same
+ * property repeated for each part of the box, as `padding` repeats a length for
+ * each side and `gap` repeats one for each axis. Nothing but the order the
+ * components are written in says which part of the box each one lands on, so
+ * the whitespace between them delimits the list. A shorthand such as `border`
+ * or `font`, whose longhands each hold a different kind of value, is not
+ * positional: its grammar reads each component by type, in any order.
+ *
+ * @param  {string}  shorthandName  The CSS property name to test.
+ * @return {boolean}                Whether the shorthand's components are positional.
+ */
+function hasPositionalComponents (shorthandName) {
+  const cachedAnswer = positionalComponentsByShorthand.get(shorthandName);
+  if (cachedAnswer !== undefined) {
+    return cachedAnswer;
+  }
+  const longhands = shorthandMap[shorthandName];
+  let isPositional = false;
+  if (Array.isArray(longhands)) {
+    const shorthandWords = shorthandName.split('-');
+    isPositional = longhands.every((longhand) => {
+      const addedWords = subtractSharedWords(longhand.split('-'), shorthandWords);
+      return Boolean(addedWords.length) && addedWords.every((word) => {
+        return BOX_PART_WORDS.has(word);
+      });
+    });
+  }
+  positionalComponentsByShorthand.set(shorthandName, isPositional);
+  return isPositional;
+}
+
+/**
  * The leaf longhands each property ultimately sets, computed on first use. The
  * shorthand tables never change, so a property always expands the same way.
  *
@@ -242,6 +329,7 @@ export {
   expandToLeafProperties,
   getLonghandsOf,
   getOverridesOf,
+  hasPositionalComponents,
   shorthandMap,
   shorthandOverrideMap,
   UNIFORM_VALUE_SHORTHANDS

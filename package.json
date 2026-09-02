@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "description": "Experimental CSS minification",
   "scripts": {
     "prestart": "node ./scripts/prestart.js",
@@ -27,7 +27,7 @@
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/lang-css": "^6.3.1",
-    "@codemirror/view": "^6.43.9",
+    "@codemirror/view": "^6.43.10",
     "@eslint/js": "^10.0.1",
     "@stylistic/eslint-plugin": "^5.10.0",
     "codemirror": "^6.0.2",
@@ -36,9 +36,9 @@
     "eslint-config-tjw-import-x": "^1.0.1",
     "eslint-config-tjw-jsdoc": "^2.0.1",
     "eslint-plugin-import-x": "^4.17.0",
-    "eslint-plugin-jsdoc": "^64.2.1",
+    "eslint-plugin-jsdoc": "^64.3.4",
     "fflate": "^0.8.3",
-    "globals": "^17.11.0",
+    "globals": "^17.12.0",
     "pretty-ms": "^9.3.1",
     "real-world-css-libraries": "^1.0.8",
     "vite": "^8.2.2"
