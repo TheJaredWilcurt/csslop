@@ -1,5 +1,5 @@
-# border longhands with border-image longhands (collapse both)
+# border-top-color before border-top is dead code
 
-Both border and border-image expressed as longhands. Minifier should collapse
-each group into its respective shorthand, with `border` ordered before
-`border-image` to avoid the reset clobbering border-image.
+`border-top-color: blue` followed by `border-top: 2px solid red` is dead code
+because `border-top` resets `border-top-color`, `border-top-style`, and
+`border-top-width`.

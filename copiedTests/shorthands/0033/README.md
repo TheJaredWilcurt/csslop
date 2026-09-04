@@ -1,3 +1,5 @@
-# Border default width omission
+# Shorthand plus !important override for mixed importance
 
-`medium` is the default border-width value and can be omitted from the `border` shorthand.
+When one longhand has `!important`, the longhands can still be partially merged
+into a shorthand followed by the important longhand override. The `!important`
+declaration wins over the shorthand's reset of the same property.

@@ -1,3 +1,4 @@
 a {
-  border-color: red red red red;
+  position-try-order: normal;
+  position-try-fallbacks: flip-block, --custom;
 }

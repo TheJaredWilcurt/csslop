@@ -1,4 +1,20 @@
 a {
-  mask-border: url(mask.png) 25 round;
-  mask: linear-gradient(#000, #0000);
+  column-rule-color: red;
+  row-rule-color: red;
+}
+b {
+  column-rule-style: solid;
+  row-rule-style: solid;
+}
+c {
+  column-rule-width: 1px;
+  row-rule-width: 1px;
+}
+d {
+  column-rule-break: intersection;
+  row-rule-break: intersection;
+}
+e {
+  column-rule-visibility-items: all;
+  row-rule-visibility-items: all;
 }

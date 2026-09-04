@@ -11,11 +11,13 @@ import {
 } from './custom-properties.js';
 import {
   canUnwrapSupports,
+  normalizeLayerNames,
   normalizeMedia,
   normalizeSupports,
   unescapeIdent,
   unescapeSelector
 } from './normalize.js';
+import { resolvePropertyDescriptors } from './property.js';
 import {
   flattenNestingParentIsSelector,
   mergeAdjacentWherePseudoClasses,
@@ -41,6 +43,42 @@ function stringifyDeclarations (declarations) {
 }
 
 /**
+ * The heading element selectors, which collapse into the `:heading`
+ * pseudo-class when a rule targets every one of them.
+ *
+ * @type {Set<string>}
+ */
+const HEADING_SELECTORS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+
+/**
+ * Matches a complete `@layer` statement, which declares layer names without a
+ * block and ends with the semicolon that separates it from the CSS that follows
+ * it. Layer names are identifiers, so any block, string, or function character
+ * means the string is something other than a lone layer statement.
+ *
+ * @type {RegExp}
+ */
+const LAYER_STATEMENT_PATTERN = /^@layer [^{}();'"]*;$/;
+
+/**
+ * Removes the semicolon of a trailing `@layer` statement, since that semicolon
+ * only exists to separate the statement from whatever comes after it. When the
+ * statement ends a stylesheet or a block, there is nothing left to separate.
+ *
+ * @param  {Array} ruleStrings  The stringified rules, in output order.
+ * @return {Array}              The stringified rules, without the redundant semicolon.
+ */
+function removeRedundantLayerStatementSemicolon (ruleStrings) {
+  const lastIndex = ruleStrings.length - 1;
+  if (lastIndex < 0 || !LAYER_STATEMENT_PATTERN.test(ruleStrings[lastIndex])) {
+    return ruleStrings;
+  }
+  const result = [...ruleStrings];
+  result[lastIndex] = result[lastIndex].slice(0, -1);
+  return result;
+}
+
+/**
  * Recursively stringifies child rules into a concatenated minified CSS string.
  *
  * @param  {Array}  rules    The child AST rule nodes to stringify.
@@ -48,9 +86,10 @@ function stringifyDeclarations (declarations) {
  * @return {string}          The concatenated minified CSS for all child rules.
  */
 function stringifyChildRules (rules, context) {
-  return (rules || []).map((childRule) => {
+  const ruleStrings = (rules || []).map((childRule) => {
     return stringifyRule(childRule, context);
-  }).join('');
+  }).filter(Boolean);
+  return removeRedundantLayerStatementSemicolon(ruleStrings).join('');
 }
 /**
  * Minifies a `@function` prelude (signature) by collapsing whitespace around
@@ -121,12 +160,11 @@ function stringifyAtRule (rule, context) {
 /**
  * Converts a parsed CSS AST rule node into a minified CSS string, dispatching to specialized handlers for each rule type including selectors, `@media`, `@keyframes`, `@layer`, and other at-rules.
  *
- * @param  {object}  rule     The AST rule node to stringify.
- * @param  {object}  context  The minification context with registered custom property data.
- * @param  {boolean} nested   Whether this rule is nested inside another rule, affecting spacing.
- * @return {string}           The minified CSS string for this rule, or an empty string if the rule is empty.
+ * @param  {object} rule     The AST rule node to stringify.
+ * @param  {object} context  The minification context with registered custom property data.
+ * @return {string}          The minified CSS string for this rule, or an empty string if the rule is empty.
  */
-function stringifyRule (rule, context, nested = false) {
+function stringifyRule (rule, context) {
   if (rule.type === 'rule') {
     let declarations = rule.declarations
       ?.filter((declaration) => {
@@ -297,7 +335,7 @@ function stringifyRule (rule, context, nested = false) {
       .join(';');
 
     let renderedNested = nestedRules.map((nestedRule) => {
-      return stringifyRule(nestedRule, context, true);
+      return stringifyRule(nestedRule, context);
     }).join('');
 
     output.push(renderedDeclarations);
@@ -312,11 +350,11 @@ function stringifyRule (rule, context, nested = false) {
 
   if (rule.type === 'media') {
     const normalizedMedia = normalizeMedia(rule.media);
-    // A custom-media reference is a parenthesized dashed-ident like (--modern);
-    // no space is needed after @media when the query begins with such a token.
-    const isCustomMediaReference = normalizedMedia.startsWith('(--');
+    // An opening parenthesis unambiguously starts the first media condition
+    // (including custom-media references like `(--modern)`), so the space after
+    // `@media` is only required when the query begins with an identifier.
     let separator;
-    if ((nested && normalizedMedia.startsWith('(')) || isCustomMediaReference) {
+    if (normalizedMedia.startsWith('(')) {
       separator = '';
     } else {
       separator = ' ';
@@ -331,9 +369,7 @@ function stringifyRule (rule, context, nested = false) {
     const renderedDeclarations = mediaDeclarations.map((declaration) => {
       return [unescapeIdent(declaration.property), ':', minifyValue(declaration)].join('');
     }).join(';');
-    const renderedRules = subRules.map((childRule) => {
-      return stringifyRule(childRule, context, false);
-    }).join('');
+    const renderedRules = stringifyChildRules(subRules, context);
     const children = [renderedDeclarations, renderedRules].filter(Boolean).join('');
     if (!children) {
       return '';
@@ -464,40 +500,16 @@ function stringifyRule (rule, context, nested = false) {
   }
 
   if (rule.type === 'layer') {
+    const layerNames = normalizeLayerNames(rule.layer);
     if (rule.rules && rule.rules.length) {
-      return '@layer ' + (rule.layer || '') + '{' + stringifyChildRules(rule.rules, context) + '}';
+      return '@layer ' + layerNames + '{' + stringifyChildRules(rule.rules, context) + '}';
     } else {
-      return '@layer ' + rule.layer + ';';
+      return '@layer ' + layerNames + ';';
     }
   }
 
   if (rule.type === 'property') {
-    const propertyDeclarations = (rule.declarations || []).filter((declaration) => {
-      return declaration.type === 'declaration' && declaration.property;
-    });
-    const hasSyntaxDescriptor = propertyDeclarations.some((declaration) => {
-      return declaration.property === 'syntax';
-    });
-    const hasInheritsDescriptor = propertyDeclarations.some((declaration) => {
-      return declaration.property === 'inherits';
-    });
-    if (!hasSyntaxDescriptor || !hasInheritsDescriptor) {
-      return '';
-    }
-
-    const syntaxDeclaration = propertyDeclarations.find((declaration) => {
-      return declaration.property === 'syntax';
-    });
-    const syntaxValue = (syntaxDeclaration.value || '').replace(/["']/g, '').trim();
-    const isUniversalSyntax = syntaxValue === '*';
-    const hasInitialValue = propertyDeclarations.some((declaration) => {
-      return declaration.property === 'initial-value';
-    });
-    if (!isUniversalSyntax && !hasInitialValue) {
-      return '';
-    }
-
-    let renderedDeclarations = stringifyDeclarations(rule.declarations || []);
+    const renderedDeclarations = stringifyDeclarations(resolvePropertyDescriptors(rule));
     if (!renderedDeclarations) {
       return '';
     }
@@ -625,4 +637,7 @@ function stringifyRule (rule, context, nested = false) {
   return ''; // Ignore unknown for now
 }
 
-export { stringifyRule };
+export {
+  removeRedundantLayerStatementSemicolon,
+  stringifyRule
+};

@@ -1,3 +1,5 @@
-# Overflow 2-to-1 value collapse
+# border-block-start before border-block is dead code
 
-When overflow-x and overflow-y are the same in a 2-value `overflow`, collapse to a single value.
+`border-block-start: 1px solid blue` followed by `border-block: 2px solid red`
+is dead code because `border-block` resets both `border-block-start` and
+`border-block-end`.

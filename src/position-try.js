@@ -2,6 +2,8 @@
  * @file Handles `@position-try` rule analysis, usage tracking, and dead-rule elimination during CSS minification.
  */
 
+import { registersCustomProperty } from './rules/property.js';
+
 /**
  * Scans top-level rules to register `@property` custom properties in the context and collect `@position-try` rule declarations and initial usage counts.
  *
@@ -14,7 +16,7 @@ function collectRuleMetadata (rules, context) {
   const positionTryUsage = new Map();
 
   for (const rule of rules) {
-    if (rule.type === 'property' && rule.name) {
+    if (rule.type === 'property' && rule.name && registersCustomProperty(rule)) {
       context.registeredCustomProperties.add(rule.name);
       const syntaxDeclaration = (rule.declarations || []).find((declaration) => {
         return declaration.type !== 'whitespace' && declaration.property === 'syntax';
@@ -163,41 +165,9 @@ function filterUnusedPositionTry (rules, positionTryRules, positionTryUsage) {
   });
 }
 
-/**
- * Removes duplicate and redundant UTF-8 `@charset` rules, keeping only the first
- * non-UTF-8 charset declaration and moving it to the top of the document.
- * Per the CSS specification, `@charset` must be the very first thing in a stylesheet.
- *
- * @param  {Array} rules  The top-level AST rule nodes to filter.
- * @return {Array}        A new array of rules with the first non-UTF-8 `@charset` at the start and all others removed.
- */
-function filterRedundantCharsets (rules) {
-  let keptCharset = null;
-
-  const filtered = rules.filter((rule) => {
-    if (rule.type !== 'charset') {
-      return true;
-    }
-    if (!keptCharset) {
-      // Strip surrounding quotes from the charset value for comparison
-      const normalizedCharset = rule.charset?.toLowerCase().replace(/["']/g, '');
-      if (normalizedCharset !== 'utf-8') {
-        keptCharset = rule;
-      }
-    }
-    return false;
-  });
-
-  if (keptCharset) {
-    return [keptCharset, ...filtered];
-  }
-  return filtered;
-}
-
 export {
   analyzePositionTryRules,
   cleanPositionTryRules,
   collectRuleMetadata,
-  filterRedundantCharsets,
   filterUnusedPositionTry
 };

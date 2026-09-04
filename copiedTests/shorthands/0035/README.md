@@ -1,3 +1,6 @@
-# Font shorthand default value omission
+# Border longhand merge safe with @property constraint
 
-`normal` is the default for both font-style and font-weight; both can be omitted from the font shorthand.
+When each custom property has an `@property` rule constraining its syntax,
+invalid values are rejected at parse time and fall back to `initial-value`.
+The variable is guaranteed to produce a single valid component, so shorthand
+merge is safe.

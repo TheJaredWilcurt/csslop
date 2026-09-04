@@ -1,8 +1,11 @@
 a {
-  font-style: italic;
-  font-weight: bold;
-  font-size: 16px;
-  line-height: 1.5;
-  font-family: Arial, sans-serif;
-  font-feature-settings: "smcp" 1;
+  background-color: red;
+  background-image: linear-gradient(red, tan);
+  background-position-x: 100%;
+  background-position-y: 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-size: contain;
+  background-origin: padding-box;
+  background-clip: content-box;
 }

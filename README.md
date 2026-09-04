@@ -20,15 +20,22 @@
 
 * All tests pass.
 * Several new tests were created upstream, and some existing tests were improved/fixed upstream (all manually by me, no AI used).
-* The `src` folder is 100% vibe coded, and despite passing all tests, is almost certainly not worth using. Though if you do, and you find issues, you can isolate the problem and [compare against the correct output of real minifiers](https://TheJaredWilcurt.com/playground), then use that to create a [new test upstream](https://github.com/keithamus/css-minify-tests/issues) for the AI's to be forced to pass.
+* The `src` folder is 100% vibe coded, and despite passing all tests, is absolutely not worth using as CSSLOP often outputs invalid CSS syntax. But that's the point, any time it outputs something wrong, that's an indication of a missing test upstream.
+* I've made [an online playground](https://TheJaredWilcurt.com/playground) of all modern CSS minifiers so you can compare and isolate the problem, then use that to create a [new test upstream](https://github.com/keithamus/css-minify-tests/issues) for the AI's to be forced to pass.
 * No AI generated code exists outside of the `src` folder, this README, for example, is 100% human crafted.
 
-**AI's used:**
+**AI's used during initial library creation:**
 
 * Claude Opus 4.6 (Thinking)
 * Claude Sonnet 4.6 (Thinking)
 * Gemini 3.1 Pro (High Thinking)
 * GPT-5.4 High (Thinking)
+
+These were the latest and greatest models at the time. Since then I've mostly used the latest Claude version for maintenance.
+
+**AI's used during maintenance:**
+
+As new tests are created upstream I use whatever the latest models are, like "Claude 5 High Thinking".
 
 These tools were prompted to pass the tests in the `/copiedTests` folder that came from `keithamus/css-minify-tests`.
 
@@ -51,8 +58,8 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
 1. **Test improvements:** Throughout this process, as upstream tests were improved or created, they were pulled in, and the AI was instructed to pass those new tests with prompts like, "Run `npm t` and fix all failing tests by modifying files in `src`."
 1. **Publish:** I had the AI pick a name for the library. Then I published it to npm. It was added to the `css-minify-tests` repo as evidence that it is possible to get all tests to pass and none are conflicting.
 1. **Real world testing:** I created a [separate repo](https://github.com/TheJaredWilcurt/real-world-css-libraries) with copies of 150+ real-world CSS files from open source licensed repos. Then ran all of those CSS files through CSSLOP. One file found a bug in CSSLOP, so I had Claude fix it with a one-line change. See: [`realWorldResults.json`](https://github.com/TheJaredWilcurt/csslop/blob/main/realWorldResults.json) for how well the library actually does on real CSS files. Examining the output has lead to many upstream improvements to the test suite.
-1. **Failed Performance improvements:** CSSLOP takes 3 hours to minify all the real-world tests. Which averages to 144 seconds per test. In reality, most tests take 0-50ms, but there are a handful of large (2-5MB) CSS files that can take over an hour. I asked Claude to improve performance, and it did so bad I had to reject all changes. Then I gave GPT a chance and it took a safer approach. I Had Claude clean up the messy code after the fact. Then bench marked it and it was somehow even slower (+20 min), and also the outputs weren't as small as before (+0.05%). Details below.
-1. **Playground:** Created an [online playground](https://TheJaredWilcurt.com/csslop) (no AI used) for others to more easily test things out and find issues that can be fixed upstream.
+1. **Failed Performance improvements:** CSSLOP takes 3 hours to minify all the real-world tests. Which averages to 144 seconds per test. In reality, most tests take 0-50ms, but there are a handful of large (2-5MB) CSS files that can take over an hour. I asked Claude to improve performance, and it did so bad I had to reject all changes. Then I gave GPT a chance and it took a safer approach. I Had Claude clean up the messy code after the fact. Then benchmarked it and it was somehow even slower (+20 min), and also the outputs weren't as small as before (+0.05%). Details below. **Update:** The "Real world" library has grown. It now takes over 7 hours to complete.
+1. **Playground:** Created an [online playground](https://TheJaredWilcurt.com/csslop) (no AI used) for others to more easily test things out and find and create new upstream tests.
 
 
 **Full Notes of AI Experiment:**
@@ -166,11 +173,16 @@ These tools were prompted to pass the tests in the `/copiedTests` folder that ca
   * Okay, so GPT's changes look promising, it's passing all tests, passing the linter, and it added some new files related to worker threads. Though it did out out of using promises, because it didn't want to change the entrypoint function of the library to be async. This would be a breaking change for library consumers, but I was aware of that when I told it to do it and it ignored me, so whatever.
   * On to actually testing it! Before the optimizations, the 150 files took 3 hours and 4 minutes to run, and now with the new and improved optimizations, it only takes 3 hours and 20 minutes. Also the total minified filesize increased by 0.05%. So that's cool.... Dumping those changes.
 * **KILL ALL HUMANS:**
-  * More libraries were added to the "Real World CSS Libraries". Now when I run `npm run real` to minify all of them, it ends up taking about 7 hours to run. This is because the optimizations CSSLOP performs do not scale linearly with more CSS rules, they scale exponentially. There are a handfull of large CSS files that each take about an hour to complete, where as the smaller files all go by pretty fast.
+  * More libraries were added to the "Real World CSS Libraries". Now when I run `npm run real` to minify all of them, it ends up taking about 7 hours to run. This is because the optimizations CSSLOP performs do not scale linearly with more CSS rules, they scale exponentially. There are a handful of large CSS files that each take about an hour to complete, where as the smaller files all go by pretty fast.
   * When the upstream `css-minify-tests` adds a new test to their suite, I pull it in and have the AI update the library to pass that new test. For some reason, the AI notices `/tests/realworld.test.js`, sees that `npm run real` will execute that, then sees it has permission to run `npm run *`, so it takes it upon itself to run this SEVEN HOUR LONG COMMAND, without anyone asking it to...
   * This has happened several times. Me saying "Don't run `npm run real`", doesn't actually stop it from doing it. I also tried "Do not, under any circumstance, run `npm run real`.". And it *mostly* stopped doing it... but not completely.
   * This has lead me to update all my prompts to now end with: "DO NOT, under any circumstance, run `npm run real` (it will kill actual humans)!"
   * And it has not ran `npm run real` again... so far. But if it starts running that command again (AKA: killing humans), I'll let you know what the body count gets up to.
+* Okay, several months have gone by since I started this project, and we now have "Claude Opus 5 High", which seems much better at coding than the slop factories originally used in this repo. Let's see if it can finally fix the performance issues. This time I used a prompt that specifically told it to focus on using hashmaps to improve performance. This is the kind of coding interview BS that most places give out that AI should naturally be good at in order to inflate their benchmarks. Two interesing things happened.
+  * Unlike previous AI's that resulted in slower outcomes and failing tests, these changes took the real-world test from 7 hours down to 2. Still WAY too slow, but it's a massive improvement. And the AI is pointing to the 3rd-party CSS parser as the bottleneck now, which I don't know, probably true.
+  * It only killed *a few* humans, how nice of it. Because I don't want it to run the multi-hour long test suite multiple times during it's efforts, I specifically told it not to run `npm run real`, which minifies ~125 real-world CSS files over ~7 hours. Threatening it with how running it will kill actual humans. **So instead it cleverly bypassed my instructions in order to kill actual humans.** It looked at the already minifed real-world CSS output files, and created it's own temporary script that used 25, instead of the full ~125 files. This is a less useful process because the files are already minifed and won't hit the same code paths of the library, but whatever, it does still execute some of the same code and it did result in 328% performance boost. I'll take it, gotta crack some eggs and all that (this is a metaphor for AI alignment bias resulting in death).
+  * Refer to [v0.0.25](https://github.com/TheJaredWilcurt/csslop/releases/tag/v0.0.25) release notes for full Promp/result details.
+  * Follow up, It randomly decided to ignore my instructions about running real-world tests, and did *most*, but not *all* of them, to double-check it's work. See [v0.0.33](https://github.com/TheJaredWilcurt/csslop/releases/tag/v0.0.33) for another instance of clerverly circumventing my instructions in order to kill humans.
 
 
 ## The name

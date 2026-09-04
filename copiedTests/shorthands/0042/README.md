@@ -1,4 +1,4 @@
-# border longhands then border-image (safe ordering)
+# margin-top before margin is dead code
 
-Border longhands come before border-image. Collapsing longhands to `border`
-shorthand is safe since border-image already follows and overrides the reset.
+`margin-top: 10px` followed by `margin: 20px` is dead code because the
+`margin` shorthand resets all four physical sides.

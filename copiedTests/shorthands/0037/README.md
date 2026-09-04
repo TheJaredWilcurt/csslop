@@ -1,3 +1,5 @@
-# Margin with auto values collapse
+# Logical longhands to margin-inline shorthand
 
-`margin: 0 auto 0 auto` collapses to `margin: 0 auto`. The `auto` keyword participates in the same collapsing rules as length values.
+`margin-inline-start: 10px; margin-inline-end: 10px` merges into
+`margin-inline: 10px`. When both logical sides are equal, the two-value form
+collapses to a single value.

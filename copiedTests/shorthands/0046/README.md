@@ -1,5 +1,4 @@
-# font longhands before font-feature-settings (safe ordering)
+# Combine background properties into shorthand
 
-Font longhands come before font-feature-settings. Collapsing longhands to `font`
-shorthand is safe since font-feature-settings already follows and overrides the
-implicit reset.
+The background properties shown in this test can all be combined into a single
+shorthange `background` property.

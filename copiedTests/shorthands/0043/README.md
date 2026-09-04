@@ -1,4 +1,4 @@
-# border shorthand intentionally resets border-image
+# border-top-width before border-width is dead code
 
-Declaring border-image then `border` resets border-image to none. The
-border-image declaration is dead code and can be removed.
+`border-top-width: 1px` followed by `border-width: 2px` is dead code because
+`border-width` resets all four physical border widths.

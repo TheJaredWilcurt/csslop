@@ -3,6 +3,7 @@
  */
 
 import { isUnicodeCharset } from '../context.js';
+import { hasPositionalComponents } from '../declarations/config.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import { evaluateColorMix } from './color-mix.js';
@@ -30,12 +31,14 @@ import {
 } from './relative-colors.js';
 import {
   collapseShorthandParts,
+  convertAbsoluteLengthToPx,
   normalizeScaleComponent,
   parseAlphaString,
   parseAngleToDegrees,
   roundCompactNumber
 } from './shared.js';
 import { findMatchingParenthesis } from './syntax.js';
+import { elideRedundantSeparators } from './tokens.js';
 import { minifyTransformValue } from './transforms.js';
 import { optimizeUnicodeRange } from './unicode-range.js';
 
@@ -59,7 +62,9 @@ const POSITION_AREA_SHORTHANDS = {
  * Regex matching hex color tokens (#rgb, #rgba, #rrggbb, #rrggbbaa) and CSS named
  * color keywords. Hex patterns are ordered longest-first to avoid partial matches.
  * Named colors are sorted longest-first so longer names like `darkslategray` are
- * matched before shorter substrings.
+ * matched before shorter substrings. A named color only counts as a color keyword
+ * when it is a complete identifier, so hyphens on either side disqualify it (this
+ * keeps identifiers such as the custom property name in `var(--grey)` intact).
  *
  * @type {RegExp}
  */
@@ -68,11 +73,11 @@ const COLOR_TOKEN_PATTERN = new RegExp(
   '#[0-9a-fA-F]{6}(?![0-9a-fA-F])|' +
   '#[0-9a-fA-F]{4}(?![0-9a-fA-F])|' +
   '#[0-9a-fA-F]{3}(?![0-9a-fA-F])|' +
-  '\\b(?:' +
+  '(?<![\\w-])(?:' +
   Object.keys(namedColors).sort((a, b) => {
     return b.length - a.length;
   }).join('|') +
-  ')\\b',
+  ')(?![\\w-])',
   'gi'
 );
 
@@ -81,10 +86,11 @@ const COLOR_TOKEN_PATTERN = new RegExp(
  * the shortest equivalent representation, comparing full hex, shortened hex,
  * and any matching named color keyword.
  *
- * @param  {string} segment  A CSS value segment (outside strings and urls).
- * @return {string}          The segment with all colors shortened to their minimal form.
+ * @param  {string}  segment                      A CSS value segment (outside strings and urls).
+ * @param  {boolean} rewritesEqualLengthSpelling  Whether a spelling of the same length is worth switching to.
+ * @return {string}                               The segment with all colors shortened to their minimal form.
  */
-function shortenColorValues (segment) {
+function shortenColorValues (segment, rewritesEqualLengthSpelling = true) {
   // Match "color-mix(" as a whole word, case-insensitive
   const hasColorMix = /\bcolor-mix\(/i.test(segment);
   return segment.replace(COLOR_TOKEN_PATTERN, (match) => {
@@ -105,19 +111,30 @@ function shortenColorValues (segment) {
     if (!channels) {
       return match;
     }
-    return shortestColor(channels[0], channels[1], channels[2], channels[3]);
+    const shortest = shortestColor(channels[0], channels[1], channels[2], channels[3]);
+    if (!rewritesEqualLengthSpelling && shortest.length >= match.length) {
+      return match;
+    }
+    return shortest;
   });
 }
 
 /**
- * Applies a replacer function only to segments of a CSS value that are outside quoted strings and url() functions, preserving those literal segments unchanged.
- *
- * @param  {string}                   value     The full CSS value string.
- * @param  {function(string): string} replacer  A function called with each non-string, non-url segment, returning the replacement string.
- * @return {string}                             The value with the replacer applied to all eligible segments.
+ * @typedef  {object}  ValueSegment
+ * @property {string}  text          The segment's slice of the value.
+ * @property {boolean} isLiteral     Whether the segment is a quoted string or a url() token.
  */
-function replaceOutsideStringsAndUrls (value, replacer) {
-  let result = '';
+
+/**
+ * Splits a CSS value into literal and syntax segments. A quoted string and a
+ * `url()` token are literals: they hold data rather than CSS syntax, so no pass
+ * may rewrite what is inside them. Everything between the literals is syntax.
+ *
+ * @param  {string} value  The full CSS value string.
+ * @return {Array}         The value's segments, in order.
+ */
+function splitValueSegments (value) {
+  const segments = [];
   let index = 0;
 
   const consumeQuoted = (start) => {
@@ -141,31 +158,36 @@ function replaceOutsideStringsAndUrls (value, replacer) {
     return value.slice(start, start + 4).toLowerCase() === 'url(';
   };
 
+  const consumeUrl = (start) => {
+    let depth = 1;
+    let end = start + 4;
+    while (end < value.length && depth > 0) {
+      if (value[end] === '"' || value[end] === '\'') {
+        end = consumeQuoted(end);
+        continue;
+      }
+      if (value[end] === '(') {
+        depth++;
+      }
+      if (value[end] === ')') {
+        depth--;
+      }
+      end++;
+    }
+    return end;
+  };
+
   while (index < value.length) {
     if (value[index] === '"' || value[index] === '\'') {
       const end = consumeQuoted(index);
-      result += value.slice(index, end);
+      segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
 
     if (startsUrl(index)) {
-      let depth = 1;
-      let end = index + 4;
-      while (end < value.length && depth > 0) {
-        if (value[end] === '"' || value[end] === '\'') {
-          end = consumeQuoted(end);
-          continue;
-        }
-        if (value[end] === '(') {
-          depth++;
-        }
-        if (value[end] === ')') {
-          depth--;
-        }
-        end++;
-      }
-      result += value.slice(index, end);
+      const end = consumeUrl(index);
+      segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
@@ -174,10 +196,59 @@ function replaceOutsideStringsAndUrls (value, replacer) {
     while (index < value.length && value[index] !== '"' && value[index] !== '\'' && !startsUrl(index)) {
       index++;
     }
-    result += replacer(value.slice(start, index));
+    segments.push({ text: value.slice(start, index), isLiteral: false });
   }
 
-  return result;
+  return segments;
+}
+
+/**
+ * Applies a replacer function only to segments of a CSS value that are outside quoted strings and url() functions, preserving those literal segments unchanged.
+ *
+ * @param  {string}                   value     The full CSS value string.
+ * @param  {function(string): string} replacer  A function called with each non-string, non-url segment, returning the replacement string.
+ * @return {string}                             The value with the replacer applied to all eligible segments.
+ */
+function replaceOutsideStringsAndUrls (value, replacer) {
+  return splitValueSegments(value).map((segment) => {
+    if (segment.isLiteral) {
+      return segment.text;
+    }
+    return replacer(segment.text);
+  }).join('');
+}
+
+/**
+ * Lowercases every hex color token in a CSS value, since uppercase hex digits
+ * compress worse and are equivalent to their lowercase form.
+ *
+ * @param  {string} value  The CSS value string.
+ * @return {string}        The value with all hex color tokens lowercased.
+ */
+function lowercaseHexColors (value) {
+  return replaceOutsideStringsAndUrls(value, (segment) => {
+    // Match hex color tokens of 3 to 8 hex digits
+    return segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (hexColor) => {
+      return hexColor.toLowerCase();
+    });
+  });
+}
+
+/**
+ * Restores the whitespace that a math function requires before a `+` or a `-`
+ * operator. Both operators have to be surrounded by whitespace to be read as
+ * operators rather than as the sign of the term that follows, and the
+ * whitespace before one that trails a closing parenthesis is removed together
+ * with the rest of the parenthesis padding.
+ *
+ * @param  {string} value  The CSS value string with parenthesis padding removed.
+ * @return {string}        The value with the operator separator restored.
+ */
+function restoreSpaceBeforeMathOperators (value) {
+  return replaceOutsideStringsAndUrls(value, (segment) => {
+    // Match a closing parenthesis immediately followed by a `+` or `-` operator
+    return segment.replace(/\)(?=[+-])/g, ') ');
+  });
 }
 
 /**
@@ -679,14 +750,238 @@ function convertMillisecondsToSeconds (value) {
 }
 
 /**
+ * Matches an absolute CSS length token: an optionally signed number followed by
+ * an absolute length unit. The lookbehind rejects digits that belong to a larger
+ * identifier, such as the custom property name in `var(--size-2in)`, where the
+ * digits and unit do not form a value of their own.
+ *
+ * @type {RegExp}
+ */
+const ABSOLUTE_LENGTH_PATTERN = /(?<![\w#.%-])(-?(?:\d+|\d*\.\d+))(pt|pc|in|cm|mm|q)\b/gi;
+
+/**
+ * The largest difference in pixels that a rounded conversion may introduce and
+ * still count as exact, which allows for binary floating point error without
+ * allowing a visible change to the rendered length.
+ *
+ * @type {number}
+ */
+const PIXEL_ROUNDING_TOLERANCE = 1e-6;
+
+/**
+ * Converts absolute length values (pt, pc, in, cm, mm, Q) to their pixel
+ * equivalent when the conversion is exact and the pixel form is no longer than
+ * the original. Normalizing to px also improves compression by reducing the
+ * number of distinct unit strings in the output.
+ *
+ * @param  {string} value  A CSS value segment, outside strings and urls.
+ * @return {string}        The segment with eligible absolute lengths converted to px.
+ */
+function convertAbsoluteLengthsToPx (value) {
+  return value.replace(ABSOLUTE_LENGTH_PATTERN, (token, amount, unit) => {
+    const pixels = convertAbsoluteLengthToPx(amount, unit);
+    if (pixels === null) {
+      return token;
+    }
+    const converted = roundCompactNumber(pixels) + 'px';
+    const isExact = Math.abs(parseFloat(converted) - pixels) < PIXEL_ROUNDING_TOLERANCE;
+    if (!isExact || converted.length > token.length) {
+      return token;
+    }
+    return converted;
+  });
+}
+
+/**
+ * Properties whose `initial` value is a number the browser resolves, so the
+ * keyword only ever shortens for the two that have a shorter written form.
+ *
+ * @type {Set<string>}
+ */
+const NUMERIC_INITIAL_PROPERTIES = new Set([
+  'opacity',
+  'z-index',
+  'flex-grow',
+  'flex-shrink',
+  'order',
+  'line-height',
+  'zoom'
+]);
+
+/**
+ * Properties whose `initial` value is zero.
+ *
+ * @type {Set<string>}
+ */
+const ZERO_INITIAL_PROPERTIES = new Set(['margin', 'padding']);
+
+/**
+ * Properties whose `initial` value is `auto`.
+ *
+ * @type {Set<string>}
+ */
+const AUTO_INITIAL_PROPERTIES = new Set(['min-width', 'min-height']);
+
+/**
+ * Properties whose value is a time, where a millisecond amount may be worth
+ * rewriting in seconds.
+ *
+ * @type {Set<string>}
+ */
+const TIME_PROPERTIES = new Set([
+  'transition',
+  'transition-duration',
+  'transition-delay',
+  'animation',
+  'animation-duration',
+  'animation-delay'
+]);
+
+/**
+ * Properties whose grammar delimits its own components, either with punctuation
+ * (the `/` and `,` of the `background`, `mask`, and `src` layers) or by taking
+ * nothing but functions (`transform`). Their components stay readable without
+ * the whitespace that follows a closing parenthesis, so that whitespace is left
+ * elided and each of them restores only the separators its grammar still needs.
+ *
+ * @type {Set<string>}
+ */
+const PUNCTUATED_COMPONENT_PROPERTIES = new Set([
+  'background',
+  'mask',
+  'src',
+  'transform'
+]);
+
+/**
+ * Reports whether a property is a custom property. A custom property holds an
+ * arbitrary token stream rather than a typed value, so every one of its tokens,
+ * whitespace included, is part of what it stores.
+ *
+ * @param  {string}  property  The CSS property name.
+ * @return {boolean}           Whether the property is a custom property.
+ */
+function isCustomProperty (property) {
+  return Boolean(property) && property.startsWith('--');
+}
+
+/**
+ * Matches one offset of a position: an edge keyword or a numeric distance.
+ *
+ * @type {string}
+ */
+const POSITION_OFFSET_SOURCE = '(?:left|center|right|top|bottom|[+-]?(?:\\d+|\\d*\\.\\d+)(?:%|[a-z]+)?)';
+
+/**
+ * Matches a whole position component, which is one or two of those offsets.
+ *
+ * @type {string}
+ */
+const POSITION_COMPONENT_SOURCE = '(' + POSITION_OFFSET_SOURCE + '(?:\\s+' + POSITION_OFFSET_SOURCE + ')?)';
+
+/**
+ * Matches everything a `url()` holds up to but not including its own closing
+ * parenthesis. A url is written without nested parentheses, so the first one
+ * that closes it is the end of the token.
+ *
+ * @type {string}
+ */
+const URL_TOKEN_BODY_SOURCE = 'url\\([^()]*';
+
+/**
+ * Matches a close-paren that ends an image function, directly followed by a
+ * position that no slash follows, which is the position that needs its
+ * separator put back. The parenthesis that ends a `url()` is skipped, since
+ * that one closes a token rather than a function.
+ *
+ * @type {RegExp}
+ */
+const UNSEPARATED_FUNCTION_POSITION_PATTERN = new RegExp('(?<!' + URL_TOKEN_BODY_SOURCE + ')\\)' + POSITION_COMPONENT_SOURCE + '(?!\\/)', 'gi');
+
+/**
+ * Matches a `url()` separated from the position that follows it, which is the
+ * separator a url does not need.
+ *
+ * @type {RegExp}
+ */
+const SEPARATED_URL_POSITION_PATTERN = new RegExp('(' + URL_TOKEN_BODY_SOURCE + '\\))\\s+' + POSITION_COMPONENT_SOURCE, 'gi');
+
+/**
+ * Matches a close-paren separated from a position that a slash follows, where
+ * the slash already delimits the position from the size behind it.
+ *
+ * @type {RegExp}
+ */
+const SEPARATED_IMAGE_SIZE_POSITION_PATTERN = new RegExp('\\)\\s+' + POSITION_COMPONENT_SOURCE + '(?=\\/)', 'gi');
+
+/**
+ * Normalizes the separator between the image of a layer and the position that
+ * follows it. Both `background` and `mask` take a `<position> [ / <size> ]`
+ * component after their image, and a bare position only reads as its own
+ * component while whitespace separates it from an image function. Neither a
+ * position that a `/` follows nor one that follows a `url()` needs the
+ * separator, since the slash delimits the pair and a url is consumed whole as a
+ * single token that ends at its own closing parenthesis.
+ *
+ * @param  {string} value  The layered image value, with the parenthesis padding removed.
+ * @return {string}        The value with the position separator normalized.
+ */
+function normalizeImagePositionSeparator (value) {
+  const separatedFromFunction = value.replace(UNSEPARATED_FUNCTION_POSITION_PATTERN, ') $1');
+  const joinedToUrl = separatedFromFunction.replace(SEPARATED_URL_POSITION_PATTERN, '$1$2');
+  return joinedToUrl.replace(SEPARATED_IMAGE_SIZE_POSITION_PATTERN, ')$1');
+}
+
+/**
+ * Matches the keywords that state a border line style.
+ *
+ * @type {string}
+ */
+const BORDER_STYLE_KEYWORD_SOURCE = 'solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none';
+
+/**
+ * Matches the ways a border line width is stated: one of its three keywords, a
+ * length, or a math function that resolves to one.
+ *
+ * @type {string}
+ */
+const BORDER_WIDTH_SOURCE = 'thin|medium|thick|[+-]?(?:\\d+|\\d*\\.\\d+)[a-z]*|(?:calc|min|max|clamp)\\([^()]*\\)';
+
+/**
+ * Matches a `border` value that states its line style in front of its line
+ * width, with the two captured so they can be swapped.
+ *
+ * @type {RegExp}
+ */
+const BORDER_STYLE_BEFORE_WIDTH_PATTERN = new RegExp(
+  '^(' + BORDER_STYLE_KEYWORD_SOURCE + ')\\s+(' + BORDER_WIDTH_SOURCE + ')(?=\\s|$)',
+  'i'
+);
+
+/**
+ * Rewrites a `border` value that leads with its line style into the canonical
+ * width-style-color order. The width has to be recognized before the two are
+ * swapped: `border` states its components in any order, so the component behind
+ * the style may be a color instead, as in `solid #8aadf4 1px`, and that one
+ * belongs behind the width rather than in front of it.
+ *
+ * @param  {string} value  The `border` value.
+ * @return {string}        The value with its width stated before its style.
+ */
+function reorderBorderWidthBeforeStyle (value) {
+  return value.replace(BORDER_STYLE_BEFORE_WIDTH_PATTERN, '$2 $1');
+}
+
+/**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
- * @param  {string} val       The CSS value string after generic minification.
- * @param  {string} property  The CSS property name.
- * @return {string}           The value with property-specific optimizations applied.
+ * @param  {string}  val                     The CSS value string after generic minification.
+ * @param  {string}  property                The CSS property name.
+ * @param  {boolean} allowsSeparatorElision  Whether redundant separator whitespace may be removed.
+ * @return {string}                          The value with property-specific optimizations applied.
  */
-function applyPropertyOptimizations (val, property) {
+function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
   if (property === 'font-weight' && isUnicodeCharset()) {
     // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
@@ -695,15 +990,7 @@ function applyPropertyOptimizations (val, property) {
   }
 
   // Convert ms to s for time-related properties when the seconds form is shorter
-  const isTimeProperty = (
-    property === 'transition' ||
-    property === 'transition-duration' ||
-    property === 'transition-delay' ||
-    property === 'animation' ||
-    property === 'animation-duration' ||
-    property === 'animation-delay'
-  );
-  if (isTimeProperty) {
+  if (TIME_PROPERTIES.has(property)) {
     val = convertMillisecondsToSeconds(val);
   }
 
@@ -745,7 +1032,7 @@ function applyPropertyOptimizations (val, property) {
 
   // Initial values
   if (val === 'initial') {
-    if (['opacity', 'z-index', 'flex-grow', 'flex-shrink', 'order', 'line-height', 'zoom'].includes(property)) {
+    if (NUMERIC_INITIAL_PROPERTIES.has(property)) {
       // Just leaving them or mapping some: opacity: initial -> opacity: 1
       if (property === 'opacity') {
         val = '1';
@@ -754,10 +1041,10 @@ function applyPropertyOptimizations (val, property) {
         val = 'auto';
       }
     }
-    if (['margin', 'padding'].includes(property)) {
+    if (ZERO_INITIAL_PROPERTIES.has(property)) {
       val = '0';
     }
-    if (['min-width', 'min-height'].includes(property)) {
+    if (AUTO_INITIAL_PROPERTIES.has(property)) {
       val = 'auto';
     }
     // background-color: initial should become #0000 (transparent)
@@ -795,10 +1082,8 @@ function applyPropertyOptimizations (val, property) {
     val = convertBackgroundPositionKeywords(val);
   }
 
-  // Check if border value starts with a style keyword, and reorder to canonical width-style-color order
-  if (property === 'border' && /^(?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+/i.test(val)) {
-    // Reorder border shorthand from style-width-color to width-style-color
-    val = val.replace(/^((?:solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none))\s+([^\s]+)\s+(.+)$/i, '$2 $1 $3');
+  if (property === 'border') {
+    val = reorderBorderWidthBeforeStyle(val);
   }
 
   if (property === 'flex-flow') {
@@ -833,11 +1118,10 @@ function applyPropertyOptimizations (val, property) {
     });
   }
 
-  if (property === 'font-size') {
-    // Convert point (pt) font-size values to their pixel (px) equivalent
-    val = val.replace(/^(-?(?:\d+|\d*\.\d+))pt$/i, (match, amount) => {
-      return roundCompactNumber(parseFloat(amount) * (96 / 72)) + 'px';
-    });
+  // Custom properties hold an arbitrary token stream rather than a typed value,
+  // so a unit-like token in one is not necessarily a length.
+  if (!isCustomProperty(property)) {
+    val = replaceOutsideStringsAndUrls(val, convertAbsoluteLengthsToPx);
   }
 
   if (property === 'syntax') {
@@ -856,19 +1140,15 @@ function applyPropertyOptimizations (val, property) {
   });
 
   // Shorten all color tokens (second pass after property-specific color evaluations)
-  val = replaceOutsideStringsAndUrls(val, shortenColorValues);
-
-  // Remove space before hex colors (second pass after color evaluations)
   val = replaceOutsideStringsAndUrls(val, (segment) => {
-    // Preserve space after border style keywords (solid, dashed, etc.) before hex colors
-    segment = segment.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+#([0-9a-fA-F]{3,8})\b/gi, '$1 #$2');
-    // Then remove other spaces before hex colors
-    return segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
+    return shortenColorValues(segment, allowsSeparatorElision);
   });
-  if (property !== 'transform' && property !== 'background' && property !== 'src') {
+
+  if (!PUNCTUATED_COMPONENT_PROPERTIES.has(property)) {
     // Restore space after close-paren when followed by an alphanumeric, hash, or hyphen
     val = val.replace(/\)(?=[0-9a-zA-Z#-])/g, ') ');
   }
+  val = restoreSpaceBeforeMathOperators(val);
 
   if (property === 'font') {
     // Split font shorthand on whitespace
@@ -902,18 +1182,16 @@ function applyPropertyOptimizations (val, property) {
     if (normalized) {
       val = normalized;
     }
-    // Restore the required separator between an image function and a following
-    // background-position when that position is not immediately followed by `/size`.
-    val = val.replace(/\)((?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)(?:\s+(?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?))?)(?!\/)/gi, ') $1');
-    val = val.replace(/\)\s+((?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?)(?:\s+(?:left|center|right|top|bottom|[+-]?(?:\d+|\d*\.\d+)(?:%|[a-z]+)?))?)(?=\/)/gi, ')$1');
+    val = normalizeImagePositionSeparator(val);
+  }
+
+  if (property === 'mask') {
+    val = normalizeImagePositionSeparator(val);
   }
 
   if (property === 'border') {
     // Remove default "medium" border-width keyword
     val = val.replace(/\bmedium\s+/g, '');
-    // Restore missing space between border-style and a 4-digit hex color (with alpha) when they are adjacent
-    // This is needed because solid#0000 could be parsed as solid followed by #000 followed by position 0
-    val = val.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)#([0-9a-fA-F]{4})\b/gi, '$1 #$2');
   }
 
   if (property === 'outline') {
@@ -966,12 +1244,27 @@ function applyPropertyOptimizations (val, property) {
 }
 
 /**
+ * Reports whether a declaration holds a shorthand that was assembled by joining
+ * already-minified longhand values with a separator, and whose grammar reads
+ * those components by their position in the list. Nothing but that separator
+ * says where one component ends and the next begins, so it is kept even where
+ * the two components happen to be tokens that would survive being written
+ * together.
+ *
+ * @param  {object}  declaration  The CSS declaration object with property and value fields.
+ * @return {boolean}              Whether the assembled components keep their separators.
+ */
+function keepsAssembledComponentSeparators (declaration) {
+  return Boolean(declaration.isAssembledShorthand) && hasPositionalComponents(declaration.property);
+}
+
+/**
  * Minifies a CSS declaration's value by applying color conversion, math simplification, shorthand compression, gradient optimization, and other property-specific optimizations.
  *
  * @param  {object} declaration  The CSS declaration object with property and value fields.
  * @return {string}              The minified value string.
  */
-function minifyValue (declaration) {
+function computeMinifiedValue (declaration) {
   if (declaration.property === 'position-area') {
     const shorthand = POSITION_AREA_SHORTHANDS[declaration.value];
     if (shorthand) {
@@ -982,6 +1275,7 @@ function minifyValue (declaration) {
     return 'none';
   }
   let val = declaration.value;
+  const allowsSeparatorElision = !keepsAssembledComponentSeparators(declaration);
 
   if (typeof val === 'string') {
     val = val.trim();
@@ -1024,32 +1318,24 @@ function minifyValue (declaration) {
       val = roundCompactNumber(rawNumber, 4) + rawUnit;
     }
 
-    // Remove space before hex colors
-    val = replaceOutsideStringsAndUrls(val, (segment) => {
-      // Preserve space after border style keywords by using a temporary placeholder
-      segment = segment.replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|hidden|none)\s+#([0-9a-fA-F]{3,8})\b/gi, '$1__BORDER_SPACE__#$2');
-      // Remove other spaces before hex colors
-      segment = segment.replace(/\s+#([0-9a-fA-F]{3,8})\b/gi, '#$1');
-      // Restore the preserved space
-      segment = segment.replace(/__BORDER_SPACE__#/g, ' #');
-      // Lowercase hex color tokens for consistency and shorter output
-      segment = segment.replace(/#([0-9a-fA-F]{3,8})\b/gi, (m) => {
-        return m.toLowerCase();
-      });
-      return segment;
-    });
+    val = lowercaseHexColors(val);
 
     // Convert color functions to hex equivalents
     val = convertColorsToHex(val);
 
-    // Shorten all color tokens (hex and named) to their shortest representation
-    val = replaceOutsideStringsAndUrls(val, shortenColorValues);
+    // Shorten all color tokens (hex and named) to their shortest representation.
+    // A value that keeps the whitespace between its components saves nothing by
+    // switching to a spelling of the same length, so its colors keep the
+    // spelling they were written with.
+    val = replaceOutsideStringsAndUrls(val, (segment) => {
+      return shortenColorValues(segment, allowsSeparatorElision);
+    });
 
     // Collapse light-dark() when both normalized branches are identical
     val = simplifyEquivalentLightDarkFunctions(val);
 
     // Property-specific optimizations
-    val = applyPropertyOptimizations(val, declaration.property);
+    val = applyPropertyOptimizations(val, declaration.property, allowsSeparatorElision);
 
     // Minify relative color syntax (identity resolution and whitespace collapsing)
     val = minifyRelativeColorSyntax(val);
@@ -1066,7 +1352,81 @@ function minifyValue (declaration) {
     val = optimizeUnicodeRange(val);
   }
 
+  // Every earlier pass reads the value with its component separators in place,
+  // so the ones that turned out to be redundant are only dropped at the end.
+  const elidesRedundantSeparators = (
+    typeof val === 'string' &&
+    allowsSeparatorElision &&
+    !isCustomProperty(declaration.property)
+  );
+  if (elidesRedundantSeparators) {
+    // A property that punctuates its own components already had the whitespace
+    // after its closing parentheses taken out, and only the separators its
+    // grammar still needs put back, so those are the ones left alone here.
+    const elidesAfterSelfEndingTokens = !PUNCTUATED_COMPONENT_PROPERTIES.has(declaration.property);
+    val = elideRedundantSeparators(val, elidesAfterSelfEndingTokens);
+  }
+
   return val;
 }
 
-export { minifyValue };
+/**
+ * Memoizes minified values for the current stylesheet. Minification runs many
+ * passes over the same declarations (deduplication, shorthand assembly,
+ * CSS-wide keyword hoisting, stringification), and the result only depends on
+ * the declaration fields that make up the cache key, so each distinct
+ * property/value pair is minified once per stylesheet.
+ *
+ * @type {Map<string, string>}
+ */
+const minifiedValueCache = new Map();
+
+/**
+ * Discards every memoized value. The minifier calls this at the start of each
+ * stylesheet, since the active `@charset` can change how a value minifies and
+ * the cache should not outlive the pass that filled it.
+ */
+function clearMinifiedValueCache () {
+  minifiedValueCache.clear();
+}
+
+/**
+ * Builds the cache key for a declaration from every field the value minifier
+ * reads. A null character cannot appear in a property name or in a parsed CSS
+ * value, so it safely delimits the parts.
+ *
+ * @param  {object} declaration  The CSS declaration object.
+ * @return {string}              The cache key.
+ */
+function createMinifiedValueCacheKey (declaration) {
+  const assembledFlag = declaration.isAssembledShorthand ? '1' : '0';
+  return declaration.property + '\u0000' + assembledFlag + '\u0000' + declaration.value;
+}
+
+/**
+ * Minifies a CSS declaration's value, reusing the memoized result when the same
+ * property and value has already been minified during this pass.
+ *
+ * @param  {object} declaration  The CSS declaration object with property and value fields.
+ * @return {string}              The minified value string.
+ */
+function minifyValue (declaration) {
+  // Only string values have a stable, collision-free key; anything else is rare
+  // enough that minifying it again costs less than encoding its type.
+  if (typeof declaration.value !== 'string') {
+    return computeMinifiedValue(declaration);
+  }
+  const cacheKey = createMinifiedValueCacheKey(declaration);
+  const cachedValue = minifiedValueCache.get(cacheKey);
+  if (cachedValue !== undefined) {
+    return cachedValue;
+  }
+  const minifiedValue = computeMinifiedValue(declaration);
+  minifiedValueCache.set(cacheKey, minifiedValue);
+  return minifiedValue;
+}
+
+export {
+  clearMinifiedValueCache,
+  minifyValue
+};

@@ -1,6 +1,4 @@
-# Border longhand merge unsafe with var()
+# Columns longhand merge, with initial values
 
-Merging `border-width`, `border-style`, `border-color` into `border` shorthand
-is unsafe when values use `var()`. The variables may expand to multi-value
-strings (e.g. `--border-width: 0 0 0 1px`) which are valid in longhands but
-not in the shorthand form.
+`column-width`, `column-height`, and `column-count` can be merged into the
+`columns` shorthand. All properties at their default values can be omitted.

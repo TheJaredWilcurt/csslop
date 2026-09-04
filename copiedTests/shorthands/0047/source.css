@@ -1,4 +1,5 @@
-a {
-  font-variant-numeric: tabular-nums;
-  font: italic 16px/1.5 Arial, sans-serif;
+div {
+  border-color: inherit;
+  border-style: inherit;
+  border-width: 2px;
 }

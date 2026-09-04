@@ -1,3 +1,5 @@
-# Outline shorthand color optimization
+# top/right/bottom/left to inset shorthand
 
-Color values within shorthands like `outline` should still be optimized (#ff0000 -> red).
+`top: 0; right: 0; bottom: 0; left: 0` merges into `inset: 0`. The `inset`
+shorthand sets all four physical inset properties and is shorter when all
+values are equal.

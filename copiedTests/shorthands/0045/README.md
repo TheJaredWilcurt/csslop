@@ -1,5 +1,4 @@
-# font shorthand must not clobber font-variant-ligatures (reorder required)
+# inset-block-start before inset-block is dead code
 
-font-variant-ligatures is declared before font longhands. A minifier collapsing
-the longhands to `font` must reorder it before `font-variant-ligatures`, since
-`font` resets font-variant-ligatures to its initial value (`normal`).
+`inset-block-start: 10px` followed by `inset-block: 20px` is dead code because
+`inset-block` resets both `inset-block-start` and `inset-block-end`.

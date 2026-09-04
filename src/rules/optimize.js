@@ -2,9 +2,16 @@
  * @file Optimizes CSS rule structures by merging selectors, deduplicating keyframes, nesting flat rules, and consolidating `@media` and `@layer` blocks.
  */
 
+import {
+  expandToLeafProperties,
+  getOverridesOf
+} from '../declarations/config.js';
 import { escapeRegexString } from '../utilities.js';
 
-import { normalizeMedia } from './normalize.js';
+import {
+  normalizeLayerNames,
+  normalizeMedia
+} from './normalize.js';
 
 /**
  * Expands rules that contain only nested sub-rules into flat rules with combined selectors, enabling further merging when the combined selectors already exist elsewhere.
@@ -101,6 +108,35 @@ function expandPureNestedRules (rules) {
 }
 
 /**
+ * Builds a reusable matcher that expresses child selectors as nested selectors
+ * relative to one parent. The combinator pattern is compiled once per parent so
+ * that testing many children against the same parent does not rebuild it.
+ *
+ * @param  {string}                          parentSelector  The parent selector string.
+ * @return {function(string): (string|null)}                 A matcher returning the nested selector, or null when the child cannot be nested.
+ */
+function createNestedSelectorMatcher (parentSelector) {
+  const parent = parentSelector.trim();
+  // Match a child selector that starts with the parent followed by a combinator (>, +, ~)
+  const combinatorPattern = new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$');
+
+  return (childSelector) => {
+    const child = childSelector.trim();
+    if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
+      return '&' + child.slice(parent.length);
+    }
+    if (child.startsWith(parent + ' ')) {
+      return child.slice(parent.length + 1);
+    }
+    const combinatorMatch = child.match(combinatorPattern);
+    if (combinatorMatch) {
+      return combinatorMatch[1] + combinatorMatch[2];
+    }
+    return null;
+  };
+}
+
+/**
  * Attempts to express a child selector as a nested selector relative to a parent, returning the nested form or null if nesting is not possible.
  *
  * @param  {string}      parentSel  The parent selector string.
@@ -108,22 +144,7 @@ function expandPureNestedRules (rules) {
  * @return {string|null}            The nested selector using & syntax, or null if the child cannot be nested under the parent.
  */
 function tryNestSelector (parentSel, childSel) {
-  const parent = parentSel.trim();
-  const child = childSel.trim();
-  if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
-    return '&' + child.slice(parent.length);
-  }
-  if (child.startsWith(parent + ' ')) {
-    return child.slice(parent.length + 1);
-  }
-  // Match child selector that starts with the parent followed by a combinator (>, +, ~)
-  const combinatorMatch = child.match(
-    new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$')
-  );
-  if (combinatorMatch) {
-    return combinatorMatch[1] + combinatorMatch[2];
-  }
-  return null;
+  return createNestedSelectorMatcher(parentSel)(childSel);
 }
 
 /**
@@ -171,6 +192,87 @@ function removeEmptyRules (rules) {
 }
 
 /**
+ * Determines whether a character is CSS whitespace.
+ *
+ * @param  {string}  character  A single character from a selector.
+ * @return {boolean}            Whether the character is whitespace.
+ */
+function isSelectorWhitespace (character) {
+  // Match a single whitespace character
+  return (/\s/).test(character);
+}
+
+/**
+ * Collects every prefix of a child selector that could act as its nesting
+ * parent. A parent always ends immediately before a pseudo-class colon, a
+ * descendant whitespace run, or the whitespace run leading into a combinator,
+ * so only those few positions can start a nestable remainder. Enumerating them
+ * turns "which earlier rule can host this one" into a set of key lookups
+ * instead of a comparison against every preceding rule.
+ *
+ * @param  {string} childSelector  The trimmed child selector.
+ * @return {Set}                   The candidate parent selector strings.
+ */
+function collectCandidateParentSelectors (childSelector) {
+  const candidates = new Set();
+  for (let index = 1; index < childSelector.length; index++) {
+    const character = childSelector[index];
+    if (character === ':' || isSelectorWhitespace(character)) {
+      candidates.add(childSelector.slice(0, index));
+      continue;
+    }
+    if (character !== '>' && character !== '+' && character !== '~') {
+      continue;
+    }
+    // A combinator may be separated from its parent by whitespace, which
+    // belongs to neither side, so the parent ends where that run begins.
+    let boundary = index;
+    while (boundary > 0 && isSelectorWhitespace(childSelector[boundary - 1])) {
+      boundary--;
+    }
+    if (boundary > 0) {
+      candidates.add(childSelector.slice(0, boundary));
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Finds the most recently emitted rule that can host a child selector as a
+ * nested rule, matching the behaviour of scanning backwards through the emitted
+ * rules but only visiting the handful of rules whose selector is a viable
+ * parent prefix.
+ *
+ * @param  {Array}       emittedRules     The rules emitted so far.
+ * @param  {Map}         indexBySelector  Map of each emitted single-selector rule's selector to its index.
+ * @param  {string}      childSelector    The trimmed child selector to nest.
+ * @return {object|null}                  The `parentIndex` and `nestedSelector`, or null when nothing can host the child.
+ */
+function findNestingParent (emittedRules, indexBySelector, childSelector) {
+  const parentIndexes = [];
+  for (const candidateParent of collectCandidateParentSelectors(childSelector)) {
+    const parentIndex = indexBySelector.get(candidateParent);
+    if (parentIndex !== undefined) {
+      parentIndexes.push(parentIndex);
+    }
+  }
+  // The nearest preceding parent wins, exactly as a backwards scan would.
+  parentIndexes.sort((first, second) => {
+    return second - first;
+  });
+  for (const parentIndex of parentIndexes) {
+    const nestedSelector = tryNestSelector(emittedRules[parentIndex].selectors[0], childSelector);
+    if (nestedSelector !== null) {
+      return {
+        nestedSelector,
+        parentIndex
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Groups flat CSS rules into nested structures where a child selector can be expressed relative to a preceding parent, reducing output size through CSS nesting.
  *
  * @param  {Array} rules  The flat AST rule nodes to nest.
@@ -178,29 +280,22 @@ function removeEmptyRules (rules) {
  */
 function nestFlatRules (rules) {
   const result = [];
+  const indexBySelector = new Map();
   for (const rule of rules) {
     if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
       result.push(rule);
       continue;
     }
     const childSelector = rule.selectors[0].trim();
-    let wasNested = false;
-    for (let j = result.length - 1; j >= 0; j--) {
-      const parentRule = result[j];
-      if (parentRule.type !== 'rule' || parentRule.selectors?.length !== 1) {
-        continue;
-      }
-      const nestedSelector = tryNestSelector(parentRule.selectors[0], childSelector);
-      if (nestedSelector !== null) {
-        parentRule.declarations = parentRule.declarations || [];
-        parentRule.declarations.push({ ...rule, selectors: [nestedSelector] });
-        wasNested = true;
-        break;
-      }
+    const nesting = findNestingParent(result, indexBySelector, childSelector);
+    if (nesting) {
+      const parentRule = result[nesting.parentIndex];
+      parentRule.declarations = parentRule.declarations || [];
+      parentRule.declarations.push({ ...rule, selectors: [nesting.nestedSelector] });
+      continue;
     }
-    if (!wasNested) {
-      result.push(rule);
-    }
+    indexBySelector.set(childSelector, result.length);
+    result.push(rule);
   }
   for (const rule of result) {
     if (rule.type === 'rule' && rule.declarations) {
@@ -274,6 +369,7 @@ function factorCommonParents (rules) {
       continue;
     }
     // Collect the run of consecutive rules that can all nest under the candidate.
+    const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
     const run = [];
     const nestedForms = [];
     let lookahead = index;
@@ -282,7 +378,7 @@ function factorCommonParents (rules) {
       if (sibling.type !== 'rule' || sibling.selectors?.length !== 1) {
         break;
       }
-      const nestedSelector = tryNestSelector(candidateParent, sibling.selectors[0]);
+      const nestedSelector = matchNestedSelector(sibling.selectors[0]);
       if (nestedSelector === null) {
         break;
       }
@@ -631,6 +727,53 @@ function maxSelectorSpecificity (selectorList) {
 }
 
 /**
+ * Returns the strongest specificity a rule can match with, which is the highest
+ * of its individual selectors.
+ *
+ * @param  {Array} selectors  The rule's selector strings.
+ * @return {Array}            The [ids, classes, types] specificity tuple.
+ */
+function maximumRuleSpecificity (selectors) {
+  return maxSelectorSpecificity((selectors || []).join(','));
+}
+
+/**
+ * Returns the weakest specificity a rule's declarations are applied with. Every
+ * selector of a top-level rule applies the same declarations under its own
+ * specificity, so the weakest selector decides whether another rule is able to
+ * override the rule as a whole.
+ *
+ * @param  {Array} selectors  The rule's selector strings.
+ * @return {Array}            The [ids, classes, types] specificity tuple.
+ */
+function minimumRuleSpecificity (selectors) {
+  let minimum = null;
+  for (const selector of splitSelectorListTopLevel((selectors || []).join(','))) {
+    const specificity = computeSpecificity(selector);
+    if (!minimum || compareSpecificity(specificity, minimum) < 0) {
+      minimum = specificity;
+    }
+  }
+  return minimum || [0, 0, 0];
+}
+
+/**
+ * Adds two specificity tuples together, which is how a nested selector combines
+ * with the parent selector it only ever matches through.
+ *
+ * @param  {Array} first   The first [ids, classes, types] tuple.
+ * @param  {Array} second  The second [ids, classes, types] tuple.
+ * @return {Array}         The summed specificity tuple.
+ */
+function addSpecificity (first, second) {
+  return [
+    first[0] + second[0],
+    first[1] + second[1],
+    first[2] + second[2]
+  ];
+}
+
+/**
  * Builds a normalized signature of a rule's declaration body, or null when the
  * rule contains anything other than plain declarations (e.g. nested rules).
  *
@@ -736,41 +879,411 @@ function mergeIdenticalNestedRules (rules) {
 }
 
 /**
- * Merges rules with identical normalized selectors by combining their declarations. Non-rule entries (like `@media`) break the merge window.
+ * The property that rewrites every other standard property, and so conflicts
+ * with any declaration it is ordered against.
+ *
+ * @type {string}
+ */
+const RESET_ALL_PROPERTY = 'all';
+
+/**
+ * Index key standing for "declares anything at all", used to order a rule that
+ * sets `all` against every other declaration.
+ *
+ * @type {symbol}
+ */
+const ANY_PROPERTY = Symbol('any property');
+
+/**
+ * The leaf properties each declared property can write to, computed on first
+ * use. The shorthand tables never change, so a property always expands the same
+ * way.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const overridablePropertiesByProperty = new Map();
+
+/**
+ * Expands a declared property into every leaf longhand it can write to,
+ * including the extras a shorthand resets beyond its own longhands. Two
+ * declarations can only override one another when these sets intersect, which
+ * is what makes `margin` conflict with `margin-top` but not with `color`.
+ *
+ * @param  {string} property  The declared property name.
+ * @return {Set}              The leaf property names the declaration writes to.
+ */
+function expandToOverridableProperties (property) {
+  const cachedProperties = overridablePropertiesByProperty.get(property);
+  if (cachedProperties) {
+    return cachedProperties;
+  }
+  const overridableProperties = new Set(expandToLeafProperties(property));
+  for (const resetProperty of getOverridesOf(property)) {
+    for (const leafProperty of expandToLeafProperties(resetProperty)) {
+      overridableProperties.add(leafProperty);
+    }
+  }
+  overridablePropertiesByProperty.set(property, overridableProperties);
+  return overridableProperties;
+}
+
+/**
+ * Whether a property name is a custom property, which shorthands and `all`
+ * never reset.
+ *
+ * @param  {string}  property  The leaf property name.
+ * @return {boolean}           True when the property is a custom property.
+ */
+function isCustomProperty (property) {
+  return property.startsWith('--');
+}
+
+/**
+ * @typedef  {object}  RuleWriteProfile
+ * @property {Map}     specificityByProperty   The strongest specificity each leaf property is written with.
+ * @property {Array}   weakestSpecificity      The weakest specificity the rule's declarations are applied with.
+ * @property {Array}   strongestSpecificity    The strongest specificity anything in the rule is written with.
+ * @property {boolean} writesStandardProperty  Whether the rule writes any property other than a custom property.
+ */
+
+/**
+ * Notes in a profile that a leaf property is written with a specificity,
+ * keeping only the strongest specificity seen for it.
+ *
+ * @param {RuleWriteProfile} profile      The profile to extend.
+ * @param {string}           property     The leaf property name.
+ * @param {Array}            specificity  The specificity the property is written with.
+ */
+function addWrittenProperty (profile, property, specificity) {
+  const strongestSoFar = profile.specificityByProperty.get(property);
+  if (!strongestSoFar || compareSpecificity(specificity, strongestSoFar) > 0) {
+    profile.specificityByProperty.set(property, specificity);
+  }
+  if (compareSpecificity(specificity, profile.strongestSpecificity) > 0) {
+    profile.strongestSpecificity = specificity;
+  }
+  profile.writesStandardProperty = profile.writesStandardProperty || !isCustomProperty(property);
+}
+
+/**
+ * Adds every leaf property a rule's declarations write to into a profile,
+ * descending into nested rules, whose declarations only ever match through the
+ * parent and so carry the specificity of both selectors.
+ *
+ * @param {RuleWriteProfile} profile      The profile to extend.
+ * @param {object}           rule         The AST rule node to read declarations from.
+ * @param {Array}            specificity  The specificity the rule's own declarations apply with.
+ */
+function addWrittenProperties (profile, rule, specificity) {
+  for (const declaration of rule.declarations || []) {
+    if (declaration.type === 'rule') {
+      const nestedSpecificity = addSpecificity(specificity, maximumRuleSpecificity(declaration.selectors));
+      addWrittenProperties(profile, declaration, nestedSpecificity);
+    } else if (declaration.type === 'declaration' && declaration.property) {
+      for (const leafProperty of expandToOverridableProperties(declaration.property)) {
+        addWrittenProperty(profile, leafProperty, specificity);
+      }
+    }
+  }
+}
+
+/**
+ * Summarizes which properties a rule writes to and how strongly, which is
+ * everything the cascade needs to know about a rule to decide whether it may be
+ * reordered against another one.
+ *
+ * @param  {object}           rule  The AST rule node.
+ * @return {RuleWriteProfile}       The rule's write profile.
+ */
+function buildRuleWriteProfile (rule) {
+  const profile = {
+    specificityByProperty: new Map(),
+    weakestSpecificity: minimumRuleSpecificity(rule.selectors),
+    strongestSpecificity: [0, 0, 0],
+    writesStandardProperty: false
+  };
+  addWrittenProperties(profile, rule, maximumRuleSpecificity(rule.selectors));
+  return profile;
+}
+
+/**
+ * Folds one rule's writes into another's profile, which is how a profile stays
+ * current after a merge appends declarations to a rule. Both rules share the
+ * same selectors, so the absorbed writes keep their recorded specificity.
+ *
+ * @param {RuleWriteProfile} profile         The profile of the rule that grew.
+ * @param {RuleWriteProfile} absorbedWrites  The profile of the rule whose declarations were appended.
+ */
+function absorbWriteProfile (profile, absorbedWrites) {
+  for (const [property, specificity] of absorbedWrites.specificityByProperty) {
+    addWrittenProperty(profile, property, specificity);
+  }
+}
+
+/**
+ * Tracks which properties each rule writes to and where it sits, so that a
+ * merge can ask whether anything after a position could override the
+ * declarations it wants to move, instead of rescanning the stylesheet once per
+ * merge.
+ *
+ * Entries for a property are appended in increasing position order, and each
+ * new entry discards the earlier ones it dominates, since a declaration that is
+ * both later and at least as specific blocks everything a weaker, earlier one
+ * would. What remains is a list whose specificity strictly decreases as
+ * position grows, so the first entry past a queried position is also the
+ * strongest one past it.
+ *
+ * @return {object} An index exposing `recordRule` and `blocksRelocation`.
+ */
+function createOverrideIndex () {
+  const entriesByProperty = new Map();
+  const profileByRule = new Map();
+
+  /**
+   * Records that a property is written at a position with a given specificity.
+   *
+   * @param {string|symbol} property     The leaf property name, or an index key.
+   * @param {number}        position     The slot the writing rule occupies.
+   * @param {Array}         specificity  The specificity the declaration applies with.
+   */
+  function addEntry (property, position, specificity) {
+    let entries = entriesByProperty.get(property);
+    if (!entries) {
+      entries = [];
+      entriesByProperty.set(property, entries);
+    }
+    while (entries.length && compareSpecificity(entries[entries.length - 1].specificity, specificity) <= 0) {
+      entries.pop();
+    }
+    entries.push({ position, specificity });
+  }
+
+  /**
+   * Whether some rule after a position writes to a property with at least a
+   * given specificity, and could therefore win the cascade against it.
+   *
+   * @param  {string|symbol} property     The leaf property name, or an index key.
+   * @param  {number}        position     The position to search after.
+   * @param  {Array}         specificity  The specificity to compare against.
+   * @return {boolean}                    True when a later rule could override the property.
+   */
+  function hasStrongerEntryAfter (property, position, specificity) {
+    const entries = entriesByProperty.get(property);
+    if (!entries) {
+      return false;
+    }
+    let low = 0;
+    let high = entries.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (entries[middle].position > position) {
+        high = middle;
+      } else {
+        low = middle + 1;
+      }
+    }
+    if (low === entries.length) {
+      return false;
+    }
+    return compareSpecificity(entries[low].specificity, specificity) >= 0;
+  }
+
+  /**
+   * Returns a rule's write profile, building it the first time it is needed.
+   * Rules only ever grow here, by absorbing another rule's declarations, so a
+   * profile stays valid for as long as the merge pass runs.
+   *
+   * @param  {object}           rule  The AST rule node.
+   * @return {RuleWriteProfile}       The rule's write profile.
+   */
+  function getWriteProfile (rule) {
+    let profile = profileByRule.get(rule);
+    if (!profile) {
+      profile = buildRuleWriteProfile(rule);
+      profileByRule.set(rule, profile);
+    }
+    return profile;
+  }
+
+  /**
+   * Records every property a rule writes to at the position it occupies.
+   *
+   * @param {object} rule      The AST rule node.
+   * @param {number} position  The slot the rule occupies.
+   */
+  function recordRule (rule, position) {
+    const profile = getWriteProfile(rule);
+    if (!profile.specificityByProperty.size) {
+      return;
+    }
+    for (const [property, specificity] of profile.specificityByProperty) {
+      addEntry(property, position, specificity);
+    }
+    addEntry(ANY_PROPERTY, position, profile.strongestSpecificity);
+  }
+
+  /**
+   * Folds a rule's writes into the rule that just absorbed its declarations, so
+   * the grown rule is treated as writing to both sets of properties.
+   *
+   * @param {object} rule          The rule that grew.
+   * @param {object} absorbedRule  The rule whose declarations were appended to it.
+   */
+  function absorbRule (rule, absorbedRule) {
+    absorbWriteProfile(getWriteProfile(rule), getWriteProfile(absorbedRule));
+  }
+
+  /**
+   * Whether moving a rule's declarations past everything recorded after a
+   * position would change which declaration wins the cascade. Only a rule that
+   * is strictly less specific is guaranteed to lose either way, so anything of
+   * equal or greater specificity that writes to the same properties blocks the
+   * move.
+   *
+   * @param  {object}  movingRule     The rule whose declarations would relocate.
+   * @param  {number}  afterPosition  The position the declarations would move across.
+   * @return {boolean}                True when the relocation is unsafe.
+   */
+  function blocksRelocation (movingRule, afterPosition) {
+    const profile = getWriteProfile(movingRule);
+    const specificity = profile.weakestSpecificity;
+    for (const property of profile.specificityByProperty.keys()) {
+      if (hasStrongerEntryAfter(property, afterPosition, specificity)) {
+        return true;
+      }
+    }
+    if (profile.writesStandardProperty && hasStrongerEntryAfter(RESET_ALL_PROPERTY, afterPosition, specificity)) {
+      return true;
+    }
+    return (
+      profile.specificityByProperty.has(RESET_ALL_PROPERTY) &&
+      hasStrongerEntryAfter(ANY_PROPERTY, afterPosition, specificity)
+    );
+  }
+
+  return {
+    absorbRule,
+    blocksRelocation,
+    recordRule
+  };
+}
+
+/**
+ * Builds the key two rules must share to be considered the same selector.
+ *
+ * @param  {object} rule  The AST rule node.
+ * @return {string}       The normalized, order independent selector key.
+ */
+function buildSelectorKey (rule) {
+  if (!rule.selectors) {
+    return '';
+  }
+  return rule.selectors
+    .map((selector) => {
+      return normalizeSelector(selector);
+    })
+    .sort()
+    .join(',');
+}
+
+/**
+ * Placement for a merged rule whose combined declarations belong where the
+ * later of the two rules was, because the earlier declarations moved down.
+ *
+ * @type {string}
+ */
+const MERGE_AT_LATER_RULE = 'later';
+
+/**
+ * Placement for a merged rule whose combined declarations belong where the
+ * earlier of the two rules was, because the later declarations moved up.
+ *
+ * @type {string}
+ */
+const MERGE_AT_EARLIER_RULE = 'earlier';
+
+/**
+ * Decides where two rules with the same selector can be combined. Merging them
+ * always makes one set of declarations cross whatever separates the two rules,
+ * which can flip a conflict the crossing declarations used to win or lose, so
+ * the merged rule goes wherever the set that moved keeps its old standing.
+ * Nothing separates adjacent rules, so those always merge.
+ *
+ * @param  {object}      overrideIndex    The index of what each position writes to.
+ * @param  {object}      earlierRule      The first of the two rules with this selector.
+ * @param  {object}      laterRule        The second of the two rules with this selector.
+ * @param  {number}      earlierPosition  The slot the earlier rule occupies.
+ * @param  {number}      laterPosition    The slot the later rule would occupy.
+ * @return {string|null}                  Where to place the merged rule, or null when merging is unsafe.
+ */
+function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPosition, laterPosition) {
+  const rulesAreAdjacent = earlierPosition === laterPosition - 1;
+  if (rulesAreAdjacent || !overrideIndex.blocksRelocation(earlierRule, earlierPosition)) {
+    return MERGE_AT_LATER_RULE;
+  }
+  if (!overrideIndex.blocksRelocation(laterRule, earlierPosition)) {
+    return MERGE_AT_EARLIER_RULE;
+  }
+  return null;
+}
+
+/**
+ * Merges rules with identical normalized selectors by combining their declarations, as long as `chooseMergePlacement` finds a spot for the combined rule that the cascade reads the same way. Non-rule entries (like `@media`) break the merge window.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
  * @return {Array}        A new array of rules with same-selector rules combined.
  */
 function mergeSelectorRules (rules) {
-  let result = [];
-  let selectorMap = new Map();
+  // A rule merged at the later of the two positions moves to the end of the
+  // output. Its old slot is emptied instead of spliced out so that every
+  // recorded position stays valid, and the position map locates that slot
+  // without searching the output.
+  const slots = [];
+  const positionByRule = new Map();
+  const selectorMap = new Map();
+  const overrideIndex = createOverrideIndex();
   for (const rule of rules) {
-    if (rule.type === 'rule') {
-      const selectorKey = rule.selectors ?
-        rule.selectors.map((selector) => {
-          return normalizeSelector(selector);
-        }).sort().join(',') :
-        '';
-      if (selectorKey && selectorMap.has(selectorKey)) {
-        const existingRule = selectorMap.get(selectorKey);
+    if (rule.type === 'whitespace') {
+      continue;
+    }
+    if (rule.type !== 'rule') {
+      slots.push(rule);
+      selectorMap.clear();
+      positionByRule.clear();
+      continue;
+    }
+    const selectorKey = buildSelectorKey(rule);
+    const existingRule = selectorKey && selectorMap.get(selectorKey);
+    if (existingRule) {
+      const existingPosition = positionByRule.get(existingRule);
+      const mergedPosition = slots.length;
+      const placement = chooseMergePlacement(overrideIndex, existingRule, rule, existingPosition, mergedPosition);
+      if (placement) {
         existingRule.declarations.push(...(rule.declarations || []));
-        result = result.filter((candidate) => {
-          return candidate !== existingRule;
-        });
-        result.push(existingRule);
-      } else {
-        selectorMap.set(selectorKey, rule);
-        result.push(rule);
-      }
-    } else {
-      if (rule.type === 'whitespace') {
+        overrideIndex.absorbRule(existingRule, rule);
+        if (placement === MERGE_AT_LATER_RULE) {
+          slots[existingPosition] = null;
+          positionByRule.set(existingRule, mergedPosition);
+          slots.push(existingRule);
+          overrideIndex.recordRule(existingRule, mergedPosition);
+        } else {
+          // The merged declarations now live at the earlier slot, but they are
+          // recorded at the later one, since the index is only ever appended
+          // to. Reading them as later than they are can only hold back a
+          // further merge, never allow an unsafe one.
+          overrideIndex.recordRule(rule, mergedPosition);
+        }
         continue;
       }
-      result.push(rule);
-      selectorMap.clear();
     }
+    selectorMap.set(selectorKey, rule);
+    positionByRule.set(rule, slots.length);
+    overrideIndex.recordRule(rule, slots.length);
+    slots.push(rule);
   }
-  return result;
+  return slots.filter((slot) => {
+    return slot !== null;
+  });
 }
 
 /**
@@ -786,7 +1299,7 @@ function mergeLayerRules (rules, mergeSelectorRules) {
   const result = [];
   for (const rule of rules) {
     if (rule.type === 'layer') {
-      const layerName = rule.layer || '';
+      const layerName = normalizeLayerNames(rule.layer);
       if (rule.rules && rule.rules.length > 0) {
         if (layerName && layerBlockMap.has(layerName)) {
           layerBlockMap.get(layerName).rules.push(...rule.rules);
@@ -833,6 +1346,61 @@ function normalizeSelector (selector) {
 }
 
 /**
+ * Indexes, for every normalized selector in the stylesheet, the last rule that
+ * declares each property under it. Comparing that index against a rule's own
+ * position answers "is this selector's property overridden later" in constant
+ * time, instead of rescanning and renormalizing every following rule.
+ *
+ * @param  {Array} rules  The flat list of AST rule nodes.
+ * @return {Map}          Map of normalized selector to a map of property name to its last declaring rule index.
+ */
+function indexLastDeclaringRuleBySelector (rules) {
+  const lastRuleIndexBySelector = new Map();
+  rules.forEach((rule, ruleIndex) => {
+    if (rule.type !== 'rule' || !rule.selectors) {
+      return;
+    }
+    const declaredProperties = (rule.declarations || []).filter((declaration) => {
+      return declaration.type === 'declaration';
+    }).map((declaration) => {
+      return declaration.property;
+    });
+    if (declaredProperties.length === 0) {
+      return;
+    }
+    for (const selector of rule.selectors) {
+      const normalizedSelector = normalizeSelector(selector);
+      let lastRuleIndexByProperty = lastRuleIndexBySelector.get(normalizedSelector);
+      if (!lastRuleIndexByProperty) {
+        lastRuleIndexByProperty = new Map();
+        lastRuleIndexBySelector.set(normalizedSelector, lastRuleIndexByProperty);
+      }
+      for (const property of declaredProperties) {
+        lastRuleIndexByProperty.set(property, ruleIndex);
+      }
+    }
+  });
+  return lastRuleIndexBySelector;
+}
+
+/**
+ * Checks whether a given selector has a specific property overridden
+ * by any later rule in the stylesheet. A property is considered
+ * overridden if a subsequent rule contains that selector (as its only
+ * selector or among its selectors) and declares the same property.
+ *
+ * @param  {Map}     lastRuleIndexBySelector  The index built by `indexLastDeclaringRuleBySelector`.
+ * @param  {number}  startIndex               The index of the current rule (search starts after this).
+ * @param  {string}  selector                 The normalized selector to check.
+ * @param  {string}  property                 The CSS property name to check.
+ * @return {boolean}                          True if a later rule overrides this selector+property.
+ */
+function isSelectorPropertyOverriddenLater (lastRuleIndexBySelector, startIndex, selector, property) {
+  const lastRuleIndex = lastRuleIndexBySelector.get(selector)?.get(property);
+  return lastRuleIndex !== undefined && lastRuleIndex > startIndex;
+}
+
+/**
  * Removes properties from multi-selector rules when every selector in
  * the rule has that property overridden by a later rule. For example,
  * if `h1,h2{color:red}` is followed by `h1{color:blue}` and
@@ -844,6 +1412,10 @@ function normalizeSelector (selector) {
  * @return {Array}        The rules with overridden multi-selector properties removed.
  */
 function removeOverriddenMultiSelectorProperties (rules) {
+  // Only rules that follow the one being pruned are ever consulted, and pruning
+  // never adds a declaration, so a single index built up front stays accurate.
+  const lastRuleIndexBySelector = indexLastDeclaringRuleBySelector(rules);
+
   for (let ruleIndex = 0; ruleIndex < rules.length; ruleIndex++) {
     const rule = rules[ruleIndex];
     if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
@@ -863,7 +1435,7 @@ function removeOverriddenMultiSelectorProperties (rules) {
     for (const declaration of declarations) {
       const property = declaration.property;
       const allSelectorsOverridden = normalizedSelectors.every((selector) => {
-        return isSelectorPropertyOverriddenLater(rules, ruleIndex, selector, property);
+        return isSelectorPropertyOverriddenLater(lastRuleIndexBySelector, ruleIndex, selector, property);
       });
       if (allSelectorsOverridden) {
         propertiesToRemove.add(property);
@@ -880,41 +1452,6 @@ function removeOverriddenMultiSelectorProperties (rules) {
     }
   }
   return rules;
-}
-
-/**
- * Checks whether a given selector has a specific property overridden
- * by any later rule in the stylesheet. A property is considered
- * overridden if a subsequent rule contains that selector (as its only
- * selector or among its selectors) and declares the same property.
- *
- * @param  {Array}   rules       The full list of AST rule nodes.
- * @param  {number}  startIndex  The index of the current rule (search starts after this).
- * @param  {string}  selector    The normalized selector to check.
- * @param  {string}  property    The CSS property name to check.
- * @return {boolean}             True if a later rule overrides this selector+property.
- */
-function isSelectorPropertyOverriddenLater (rules, startIndex, selector, property) {
-  for (let laterIndex = startIndex + 1; laterIndex < rules.length; laterIndex++) {
-    const laterRule = rules[laterIndex];
-    if (laterRule.type !== 'rule' || !laterRule.selectors) {
-      continue;
-    }
-    const laterSelectors = laterRule.selectors.map(normalizeSelector);
-    if (!laterSelectors.includes(selector)) {
-      continue;
-    }
-    const laterDeclarations = (laterRule.declarations || []).filter((declaration) => {
-      return declaration.type === 'declaration';
-    });
-    const hasOverride = laterDeclarations.some((declaration) => {
-      return declaration.property === property;
-    });
-    if (hasOverride) {
-      return true;
-    }
-  }
-  return false;
 }
 
 export {

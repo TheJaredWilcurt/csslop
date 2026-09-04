@@ -1,5 +1,6 @@
-# mask shorthand must not clobber mask-border (reorder required)
+# Border shorthand with two border-color values
 
-`mask-border` is declared before mask longhands. A minifier collapsing the
-longhands to `mask` must reorder it before `mask-border`, since `mask` resets
-mask-border to its initial value.
+If you have a singular `border-width` and `border-style`, with two
+`border-color`s, then you can create a border short hand using the first
+available color, then override the border-color and it will still be shorter
+than keeping each properties separate.

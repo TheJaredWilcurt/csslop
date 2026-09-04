@@ -1,3 +1,4 @@
-# Animation longhand merge
+# Longhand before shorthand is dead code
 
-All 8 animation longhands merge into `animation` shorthand. Default values (ease, 0s delay, 1 iteration, normal direction, none fill, running) are omitted.
+`font-weight: bold` followed by `font: 14px serif` is dead code because the
+`font` shorthand resets `font-weight` to `normal`. The longhand can be removed.

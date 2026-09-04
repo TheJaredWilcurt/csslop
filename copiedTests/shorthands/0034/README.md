@@ -1,3 +1,5 @@
-# Background shorthand default omission
+# Padding longhand merge safe with @property constraint
 
-Default background-position (0% 0%), background-repeat (repeat), and background-attachment (scroll) can be omitted from the `background` shorthand.
+When each custom property has an `@property` rule constraining its syntax to
+`<length>`, the value is guaranteed valid at parse time. Invalid values are
+rejected and fall back to `initial-value`, so shorthand merge is safe.

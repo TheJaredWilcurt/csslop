@@ -1,5 +1,4 @@
-# Remove `:is` after de-duping selectors
+# Remove duplicate scrollbar-gutter
 
-Repeated selectors in a `:is()` can be removed. If all selectors have the same
-level of specificity, and are known to be browser-safe, the `:is()` can
-be removed too.
+If multiple `scrollbar-gutter`s are applied in the same rule, the last one will
+be used and the earlier declarations will be ignored.

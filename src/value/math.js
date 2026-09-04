@@ -11,6 +11,21 @@ import {
 } from './shared.js';
 
 /**
+ * The units a folded calc() expression leads with, in the order they are
+ * written. Every other unit follows them alphabetically.
+ *
+ * @type {Array}
+ */
+const PREFERRED_UNIT_ORDER = ['%', '', 'px'];
+
+/**
+ * The same leading units, for excluding them from the alphabetical remainder.
+ *
+ * @type {Set<string>}
+ */
+const PREFERRED_UNITS = new Set(PREFERRED_UNIT_ORDER);
+
+/**
  * Attempts to simplify a calc() expression by combining like-unit terms and evaluating pure arithmetic, returning the simplified string or null if folding is not possible.
  *
  * @param  {string}      expression  The expression inside calc() to attempt folding.
@@ -89,8 +104,8 @@ function tryFoldCalcExpression (expression) {
     totals.set(unit, (totals.get(unit) || 0) + number);
   }
 
-  const orderedUnits = ['%', '', 'px', ...[...totals.keys()].filter((unit) => {
-    return !['%', '', 'px'].includes(unit);
+  const orderedUnits = [...PREFERRED_UNIT_ORDER, ...[...totals.keys()].filter((unit) => {
+    return !PREFERRED_UNITS.has(unit);
   }).sort()];
   const outputTerms = [];
 

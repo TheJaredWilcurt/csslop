@@ -5,15 +5,19 @@
 import { parse } from '@node-projects/css-parser';
 
 import {
+  detectCharset,
+  filterRedundantCharsets
+} from './charset.js';
+import {
   clearActiveCharset,
   createMinifyContext,
   setActiveCharset
 } from './context.js';
+import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
 import {
   analyzePositionTryRules,
   cleanPositionTryRules,
   collectRuleMetadata,
-  filterRedundantCharsets,
   filterUnusedPositionTry
 } from './position-try.js';
 import {
@@ -34,8 +38,14 @@ import {
   removeEmptyRules,
   removeOverriddenMultiSelectorProperties
 } from './rules/optimize.js';
-import { stringifyRule } from './rules/stringify.js';
-import { minifyValue } from './value/minify.js';
+import {
+  removeRedundantLayerStatementSemicolon,
+  stringifyRule
+} from './rules/stringify.js';
+import {
+  clearMinifiedValueCache,
+  minifyValue
+} from './value/minify.js';
 
 /**
  * Splits a minified CSS selector list at top-level commas, respecting
@@ -170,19 +180,24 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
 }
 
 /**
- * Extracts the first `@charset` value from raw CSS text before parsing.
- * Scans for `@charset` followed by a quoted string and semicolon.
+ * Prepares the module-level state a single minification pass relies on: the
+ * active charset, and an empty value cache, since a value memoized under a
+ * different charset may no longer minify the same way.
  *
- * @param  {string} css  The raw CSS string to scan.
- * @return {string}      The first charset value (with quotes), or empty string if none found.
+ * @param {string} charset  The `@charset` value detected in the source.
  */
-function detectCharset (css) {
-  // Match @charset followed by a quoted value and semicolon
-  const match = css.match(/@charset\s+(["'][^"']+["'])\s*;/i);
-  if (match) {
-    return match[1];
-  }
-  return '';
+function beginMinificationPass (charset) {
+  setActiveCharset(charset);
+  clearMinifiedValueCache();
+}
+
+/**
+ * Releases the module-level state a minification pass built up, so a cache
+ * filled by a large stylesheet is not retained until the next pass runs.
+ */
+function endMinificationPass () {
+  clearActiveCharset();
+  clearMinifiedValueCache();
 }
 
 /**
@@ -202,7 +217,7 @@ export const minifyCSS = function (input) {
   const output = [];
 
   const detectedCharset = detectCharset(source);
-  setActiveCharset(detectedCharset);
+  beginMinificationPass(detectedCharset);
 
   try {
     ast = parse(
@@ -210,13 +225,17 @@ export const minifyCSS = function (input) {
       { preserveFormatting: true, silent: true }
     );
   } catch {
-    clearActiveCharset();
+    endMinificationPass();
     return source;
   }
 
   const context = createMinifyContext();
 
   if (ast?.stylesheet?.rules) {
+    // Which properties a shorthand may not silently reset is a question about
+    // the whole stylesheet, so it is answered before any rule is rewritten.
+    recordStylesheetResetProperties(ast.stylesheet.rules, context);
+
     const {
       positionTryRules,
       positionTryUsage
@@ -256,12 +275,12 @@ export const minifyCSS = function (input) {
       output.push(stringifyRule(rule, context));
     }
 
-    const mergedOutput = mergeAdjacentRulesWithIdenticalBodies(output);
+    const mergedOutput = removeRedundantLayerStatementSemicolon(mergeAdjacentRulesWithIdenticalBodies(output));
 
-    clearActiveCharset();
+    endMinificationPass();
     return restoreEscapeSequences(mergedOutput.join(''));
   }
 
-  clearActiveCharset();
+  endMinificationPass();
   return source;
 };

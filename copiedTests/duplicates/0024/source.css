@@ -1,6 +1,5 @@
-:is(div, span, div, span) {
-  color: red;
-}
-:is(.bar, .foo, .bar, .foo) {
-  color: tan;
+p {
+  scrollbar-gutter: auto;
+  scrollbar-gutter: stable;
+  scrollbar-gutter: stable both-edges;
 }

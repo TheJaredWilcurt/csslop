@@ -1,5 +1,5 @@
-# border shorthand must not clobber border-image (reorder required)
+# padding-inline-start before padding-inline is dead code
 
-border-image is declared before border longhands. A minifier collapsing the
-longhands to `border` must reorder it before `border-image`, since `border`
-resets border-image to its initial value.
+`padding-inline-start: 10px` followed by `padding-inline: 20px` is dead code
+because `padding-inline` resets both `padding-inline-start` and
+`padding-inline-end`.

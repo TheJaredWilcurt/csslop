@@ -1,4 +1,6 @@
 a {
-  font-weight: bold;
-  font: 14px serif;
+  border-top: 1px solid red;
+  border-right: 2px dotted blue;
+  border-bottom: 1px solid red;
+  border-left: 2px dotted blue;
 }

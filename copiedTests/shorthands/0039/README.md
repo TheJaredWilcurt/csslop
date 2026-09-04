@@ -1,3 +1,4 @@
-# Gap 2-to-1 value collapse
+# border-top before border is dead code
 
-When row-gap and column-gap are the same in a 2-value `gap`, collapse to a single value.
+`border-top: 1px solid blue` followed by `border: 2px solid red` is dead code
+because the `border` shorthand resets all sides including `border-top`.

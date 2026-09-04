@@ -1,4 +1,7 @@
-# mask shorthand intentionally resets mask-border
+# Merge equal bidirectional gap decoration rules
 
-Declaring `mask-border` then `mask` resets `mask-border` to its initial value.
-The `mask-border` declaration is therefore dead code that can be removed.
+CSS Gaps 1 defines the gap decoration shorthands: column-rule, and row-rule
+which set (row|column)-rule-width, (row|column)-rule-style,
+(row|column)-rule-color. The spec also defines the *bidirectional* shorthand
+variants of `rule-width`, `rule-style` and `rule-color`. When column and row
+properties are equal, they can be merged into the bidirectional shorthands.
