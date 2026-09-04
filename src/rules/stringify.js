@@ -43,14 +43,6 @@ function stringifyDeclarations (declarations) {
 }
 
 /**
- * The heading element selectors, which collapse into the `:heading`
- * pseudo-class when a rule targets every one of them.
- *
- * @type {Set<string>}
- */
-const HEADING_SELECTORS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-
-/**
  * Matches a complete `@layer` statement, which declares layer names without a
  * block and ends with the semicolon that separates it from the CSS that follows
  * it. Layer names are identifiers, so any block, string, or function character
@@ -272,16 +264,6 @@ function stringifyRule (rule, context) {
       }
       uniqueSelectors = uniqueSelectors.flatMap(processIsSelector);
       uniqueSelectors = [...new Set(uniqueSelectors)];
-      const isAllHeadings = (
-        rule.selectors.length === HEADING_SELECTORS.size &&
-        uniqueSelectors.length === HEADING_SELECTORS.size &&
-        uniqueSelectors.every((selector) => {
-          return HEADING_SELECTORS.has(selector);
-        })
-      );
-      if (isAllHeadings) {
-        uniqueSelectors = [':heading'];
-      }
       output.push(uniqueSelectors.join(','));
     }
     output.push('{');
