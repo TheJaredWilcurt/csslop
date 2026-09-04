@@ -43,14 +43,6 @@ function stringifyDeclarations (declarations) {
 }
 
 /**
- * The heading element selectors, which collapse into the `:heading`
- * pseudo-class when a rule targets every one of them.
- *
- * @type {Set<string>}
- */
-const HEADING_SELECTORS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
-
-/**
  * Matches a complete `@layer` statement, which declares layer names without a
  * block and ends with the semicolon that separates it from the CSS that follows
  * it. Layer names are identifiers, so any block, string, or function character
