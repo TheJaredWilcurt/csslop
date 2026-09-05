@@ -36,6 +36,7 @@ import {
   mergeSelectorRules,
   nestFlatRules,
   removeEmptyRules,
+  removeFullyOverriddenSelectors,
   removeOverriddenMultiSelectorProperties
 } from './rules/optimize.js';
 import {
@@ -263,7 +264,8 @@ export const minifyCSS = function (input) {
 
     const mergedRules = mergeSelectorRules(ast.stylesheet.rules);
     const overrideCleanedRules = removeOverriddenMultiSelectorProperties(mergedRules);
-    const preCleanedRules = removeEmptyRules(overrideCleanedRules);
+    const selectorPrunedRules = removeFullyOverriddenSelectors(overrideCleanedRules);
+    const preCleanedRules = removeEmptyRules(selectorPrunedRules);
     const declarationMergedRules = mergeByDeclarations(preCleanedRules);
     const nestedRules = nestFlatRules(declarationMergedRules);
     const nonEmptyRules = removeEmptyRules(nestedRules);

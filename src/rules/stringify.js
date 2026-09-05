@@ -262,7 +262,10 @@ function stringifyRule (rule, context) {
       if (isNestingParent) {
         uniqueSelectors = uniqueSelectors.flatMap(flattenNestingParentIsSelector);
       }
-      uniqueSelectors = uniqueSelectors.flatMap(processIsSelector);
+      const hasSiblingSelectors = uniqueSelectors.length > 1;
+      uniqueSelectors = uniqueSelectors.flatMap((selector) => {
+        return processIsSelector(selector, hasSiblingSelectors);
+      });
       uniqueSelectors = [...new Set(uniqueSelectors)];
       output.push(uniqueSelectors.join(','));
     }
