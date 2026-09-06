@@ -68,6 +68,15 @@ function expandPureNestedRules (rules) {
         canExpand = false;
         break;
       }
+      // A child written as a comma-separated selector list, such as `.b,.c`,
+      // repeats the parent in front of every item when expanded (`.a .b,.a .c`),
+      // while the nested form states the parent once. Expanding is always
+      // longer, and leaving the rule nested keeps one pass from expanding what
+      // the next pass would then keep, so the output stays idempotent.
+      if (nestedRule.selectors.length > 1) {
+        canExpand = false;
+        break;
+      }
       const combinedSelectors = [];
       for (const parentSelector of rule.selectors) {
         for (const childSelector of nestedRule.selectors) {

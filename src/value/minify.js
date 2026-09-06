@@ -3,7 +3,6 @@
  */
 
 import { isUnicodeCharset } from '../context.js';
-import { hasPositionalComponents } from '../declarations/config.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import { evaluateColorMix } from './color-mix.js';
@@ -261,8 +260,12 @@ function restoreSpaceBeforeMathOperators (value) {
 function formatUrlPath (path) {
   // Parentheses and quote characters are invalid inside an unquoted url() token
   const hasQuoteForcingCharacters = /[()"']/.test(path);
-  // Count spaces so escaping them can be compared against keeping the quotes
-  const spaceCount = (path.match(/ /g) || []).length;
+  // An escaped space is already the shortest representation of a space, so it
+  // is counted apart from unescaped ones to keep from being escaped twice
+  const escapedSpaceCount = (path.match(/\\ /g) || []).length;
+  // A space only needs escaping when no escaping backslash precedes it
+  const unescapedSpaceCount = (path.match(/(?<!\\) /g) || []).length;
+  const spaceCount = escapedSpaceCount + unescapedSpaceCount;
 
   if (hasQuoteForcingCharacters || spaceCount >= 2) {
     // Escape any embedded double quotes so the double-quoted wrapper stays valid
@@ -270,8 +273,12 @@ function formatUrlPath (path) {
   }
 
   if (spaceCount === 1) {
-    // A lone space is one byte shorter to escape than to wrap the value in quotes
-    return path.replace(/ /g, '\\ ');
+    // A lone space is one byte shorter to escape than to wrap the value in
+    // quotes, and one that arrived already escaped stays exactly as it is
+    if (!unescapedSpaceCount) {
+      return path;
+    }
+    return path.replace(/(?<!\\) /g, '\\ ');
   }
 
   return path;
@@ -976,12 +983,11 @@ function reorderBorderWidthBeforeStyle (value) {
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
- * @param  {string}  val                     The CSS value string after generic minification.
- * @param  {string}  property                The CSS property name.
- * @param  {boolean} allowsSeparatorElision  Whether redundant separator whitespace may be removed.
- * @return {string}                          The value with property-specific optimizations applied.
+ * @param  {string} val       The CSS value string after generic minification.
+ * @param  {string} property  The CSS property name.
+ * @return {string}           The value with property-specific optimizations applied.
  */
-function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
+function applyPropertyOptimizations (val, property) {
   if (property === 'font-weight' && isUnicodeCharset()) {
     // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
@@ -1023,8 +1029,11 @@ function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
     val = val.replace(/\s+0px/g, ' ');
     // Remove leading zero-pixel value
     val = val.replace(/^0px\s*/, '');
-    // Remove trailing zero
-    val = val.replace(/\s+0$/, '');
+    // Remove an explicit zero basis: a trailing zero is only a basis when grow
+    // and shrink precede it, and the shorthand already reads an unwritten basis
+    // as 0. In `0 0` the trailing zero is the shrink, which the shorthand
+    // defaults to 1 instead, so dropping it would size the element differently.
+    val = val.replace(/^(\S+\s+\S+)\s+0$/, '$1');
     // Remove standalone zero-pixel value
     val = val.replace(/^0px$/, '');
     val = val.trim();
@@ -1141,7 +1150,7 @@ function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
 
   // Shorten all color tokens (second pass after property-specific color evaluations)
   val = replaceOutsideStringsAndUrls(val, (segment) => {
-    return shortenColorValues(segment, allowsSeparatorElision);
+    return shortenColorValues(segment);
   });
 
   if (!PUNCTUATED_COMPONENT_PROPERTIES.has(property)) {
@@ -1244,21 +1253,6 @@ function applyPropertyOptimizations (val, property, allowsSeparatorElision) {
 }
 
 /**
- * Reports whether a declaration holds a shorthand that was assembled by joining
- * already-minified longhand values with a separator, and whose grammar reads
- * those components by their position in the list. Nothing but that separator
- * says where one component ends and the next begins, so it is kept even where
- * the two components happen to be tokens that would survive being written
- * together.
- *
- * @param  {object}  declaration  The CSS declaration object with property and value fields.
- * @return {boolean}              Whether the assembled components keep their separators.
- */
-function keepsAssembledComponentSeparators (declaration) {
-  return Boolean(declaration.isAssembledShorthand) && hasPositionalComponents(declaration.property);
-}
-
-/**
  * Minifies a CSS declaration's value by applying color conversion, math simplification, shorthand compression, gradient optimization, and other property-specific optimizations.
  *
  * @param  {object} declaration  The CSS declaration object with property and value fields.
@@ -1275,7 +1269,6 @@ function computeMinifiedValue (declaration) {
     return 'none';
   }
   let val = declaration.value;
-  const allowsSeparatorElision = !keepsAssembledComponentSeparators(declaration);
 
   if (typeof val === 'string') {
     val = val.trim();
@@ -1323,19 +1316,16 @@ function computeMinifiedValue (declaration) {
     // Convert color functions to hex equivalents
     val = convertColorsToHex(val);
 
-    // Shorten all color tokens (hex and named) to their shortest representation.
-    // A value that keeps the whitespace between its components saves nothing by
-    // switching to a spelling of the same length, so its colors keep the
-    // spelling they were written with.
+    // Shorten all color tokens (hex and named) to their shortest representation
     val = replaceOutsideStringsAndUrls(val, (segment) => {
-      return shortenColorValues(segment, allowsSeparatorElision);
+      return shortenColorValues(segment);
     });
 
     // Collapse light-dark() when both normalized branches are identical
     val = simplifyEquivalentLightDarkFunctions(val);
 
     // Property-specific optimizations
-    val = applyPropertyOptimizations(val, declaration.property, allowsSeparatorElision);
+    val = applyPropertyOptimizations(val, declaration.property);
 
     // Minify relative color syntax (identity resolution and whitespace collapsing)
     val = minifyRelativeColorSyntax(val);
@@ -1356,7 +1346,6 @@ function computeMinifiedValue (declaration) {
   // so the ones that turned out to be redundant are only dropped at the end.
   const elidesRedundantSeparators = (
     typeof val === 'string' &&
-    allowsSeparatorElision &&
     !isCustomProperty(declaration.property)
   );
   if (elidesRedundantSeparators) {

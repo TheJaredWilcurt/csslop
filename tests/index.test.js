@@ -62,6 +62,7 @@ function runAllTests (allTests) {
       source
     } = test;
     const actual = minifyCSS(source);
+    const rerun = minifyCSS(actual);
     folders[folder].total++;
     if (actual === expected) {
       pass++;
@@ -72,8 +73,21 @@ function runAllTests (allTests) {
         id: '/copiedTests/' + testFolder + '/' + testNumber,
         description,
         source,
-        expected, 
+        expected,
         actual
+      });
+    }
+    if (actual !== rerun) {
+      folders.idempotency.fail++;
+      fail++;
+      console.log({
+        id: '/copiedTests/' + testFolder + '/' + testNumber,
+        description: 'This test has failed idempotency. ' +
+          'It\'s minified output should not change if minified again.',
+        source,
+        expected,
+        actual,
+        rerun
       });
     }
   }
