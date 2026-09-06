@@ -299,9 +299,7 @@ Two different cases:
 1. `npm run bump`
 1. `git add -A && git commit -m "Fix newly added tests" && git push`
 1. Merge the code into `main` on GitHub
-1. Do a new release on GitHub
-1. `git checkout main && git pull origin main && git pull`
-1. `npm run publish`
+1. Do a new release on GitHub, this will also release to npm
 
 
 ## Code Organization prompt:
