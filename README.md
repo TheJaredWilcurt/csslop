@@ -285,8 +285,9 @@ Two different cases:
 ## Updating tests
 
 1. All test changes must occur [upstream](https://github.com/keithamus/css-minify-tests), be written by a human, and be merged in to the `css-minify-tests` repo.
-1. After that, delete the `package-lock.json` and `node_modules` folder.
-1. Then run `npm i && npm run copy` to download the latest tests and copy them to this repo.
+1. Clone down a copy of that repo next to the cloned copy of this one (sibling folders)
+1. Make sure the `css-minify-tests` clone is on the `main` branch and up-to-date (`git pull origin main`)
+1. Then run `npm run copy` in the CSSLOP repo to copy the test from `css-minify-tests` to the `copiedTests` folder in this repo.
 1. `git add -A && git commit -m "Updated tests"`
 1. Then run `npm t` to see if any tests fail
 1. If they fail, give an AI this prompt:
