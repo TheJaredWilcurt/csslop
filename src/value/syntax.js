@@ -29,6 +29,13 @@ function findMatchingParenthesis (value, openParenIndex) {
       continue;
     }
 
+    // An escaped character is data rather than a delimiter, even outside a
+    // quoted string, as in the `\)` of an unquoted url()
+    if (character === '\\') {
+      index += 2;
+      continue;
+    }
+
     if (character === '"' || character === '\'') {
       activeQuote = character;
       index++;

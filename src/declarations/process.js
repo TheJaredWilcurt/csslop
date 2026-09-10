@@ -97,7 +97,8 @@ function keepDeclaration (survivors, declaration) {
   } else {
     survivors.positionsByProperty.set(declaration.property, [position]);
   }
-  if (declaration.property.startsWith('-')) {
+  // Custom properties (`--*`) are named by their author, not vendor-prefixed
+  if (declaration.property.startsWith('-') && !declaration.property.startsWith('--')) {
     survivors.vendorPrefixedPositions.push(position);
   }
 }
@@ -137,19 +138,39 @@ function findLastPositionOfProperty (survivors, property) {
 }
 
 /**
- * Finds the surviving vendor-prefixed declaration that last set the prefixed
- * form of a property, such as `-webkit-transform` for `transform`. Only the
- * prefixed declarations are visited, rather than every survivor.
+ * Finds the surviving vendor-prefixed declarations that set a prefixed form of
+ * a property, such as `-webkit-transform` for `transform`, including legacy
+ * spellings like `-webkit-box-flex` for `flex`. Only the prefixed declarations
+ * are visited, rather than every survivor.
  *
  * @param  {object} survivors  The surviving-declaration bookkeeping.
  * @param  {string} property   The unprefixed property name.
- * @return {number}            The position of the matching declaration, or -1 when absent.
+ * @return {Array}             The positions of the matching declarations, in source order.
  */
-function findLastVendorPrefixedPosition (survivors, property) {
-  for (let entry = survivors.vendorPrefixedPositions.length - 1; entry >= 0; entry--) {
-    const position = survivors.vendorPrefixedPositions[entry];
-    if (survivors.slots[position].property.endsWith(property)) {
-      return position;
+function findVendorPrefixedPositions (survivors, property) {
+  return survivors.vendorPrefixedPositions.filter((position) => {
+    return survivors.slots[position].property.endsWith(property);
+  });
+}
+
+/**
+ * Finds the surviving declaration that last set the unprefixed property a
+ * vendor-prefixed declaration spells in prefixed form, such as `transform`
+ * for `-moz-transform`.
+ *
+ * @param  {object} survivors     The surviving-declaration bookkeeping.
+ * @param  {string} propertyName  The vendor-prefixed property name.
+ * @return {number}               The position of the matching declaration, or -1 when absent.
+ */
+function findUnprefixedTwinPosition (survivors, propertyName) {
+  for (const [property, positions] of survivors.positionsByProperty) {
+    const isUnprefixedTwin = (
+      !property.startsWith('-') &&
+      positions.length &&
+      propertyName.endsWith(property)
+    );
+    if (isUnprefixedTwin) {
+      return positions[positions.length - 1];
     }
   }
   return -1;
@@ -183,15 +204,24 @@ function deduplicateDeclarations (declarations) {
 
     const minifiedValue = minifyValue(declaration);
 
-    const previousPosition = findLastPositionOfProperty(survivors, propertyName);
-
-    // An unprefixed property with the same value also replaces its prefixed form
-    let prefixedPosition = -1;
-    if (!propertyName.startsWith('-')) {
-      prefixedPosition = findLastVendorPrefixedPosition(survivors, propertyName);
+    // A vendor-prefixed property that repeats the value of its unprefixed
+    // form is dead code for browsers that read the unprefixed one
+    if (propertyName.startsWith('-') && !propertyName.startsWith('--')) {
+      const twinPosition = findUnprefixedTwinPosition(survivors, propertyName);
+      if (twinPosition !== -1 && minifyValue(survivors.slots[twinPosition]) === minifiedValue) {
+        continue;
+      }
     }
 
-    if (prefixedPosition !== -1) {
+    const previousPosition = findLastPositionOfProperty(survivors, propertyName);
+
+    // An unprefixed property with the same value also replaces every prefixed form of it
+    let prefixedPositions = [];
+    if (!propertyName.startsWith('-')) {
+      prefixedPositions = findVendorPrefixedPositions(survivors, propertyName);
+    }
+
+    for (const prefixedPosition of prefixedPositions) {
       const prefixedValue = minifyValue(survivors.slots[prefixedPosition]);
       if (minifiedValue === prefixedValue) {
         dropDeclaration(survivors, prefixedPosition);

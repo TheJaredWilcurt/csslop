@@ -11,6 +11,79 @@ import {
 } from './shared.js';
 
 /**
+ * Characters that start a token able to sit directly against a value that
+ * precedes them, so no whitespace is needed to keep the two tokens apart:
+ * whitespace already separates, and openers like `#`, `!`, or any bracket or
+ * punctuation mark their own token's start. Mirrors the tokenizer's notion of
+ * tokens marking their own start, with `/` on top since it delimits a size
+ * from a position in layered shorthands.
+ *
+ * @type {Set<string>}
+ */
+const SELF_DELIMITING_FOLLOWERS = new Set([
+  ' ',
+  '\t',
+  '\n',
+  '\r',
+  '\f',
+  '#',
+  '!',
+  '"',
+  '\'',
+  '(',
+  ')',
+  '[',
+  ']',
+  '{',
+  '}',
+  ',',
+  ':',
+  ';',
+  '/'
+]);
+
+/**
+ * Reports whether a math function's replacement glues itself to the character
+ * following the matched function, merging two values into one token. A
+ * replacement that keeps its function form ends with a parenthesis, which
+ * closes itself; only a bare resolved value needs the whitespace that the
+ * parenthesis padding removal took away.
+ *
+ * @param  {string}  replacement         The string the math function resolved to.
+ * @param  {string}  followingCharacter  The character directly after the matched function.
+ * @return {boolean}                     Whether a separating space must be restored.
+ */
+function mergesWithFollowingCharacter (replacement, followingCharacter) {
+  if (replacement.endsWith(')') || !followingCharacter) {
+    return false;
+  }
+  return !SELF_DELIMITING_FOLLOWERS.has(followingCharacter);
+}
+
+/**
+ * Wraps a math-function replacer so a function that dissolves into a bare
+ * value does not lose the whitespace separating it from the value behind it.
+ * The values were once told apart by where the function's parentheses sat, so
+ * when the parentheses go, the separator has to stay.
+ *
+ * @param  {function(string, ...(string|number|undefined)): string} replacer  The replacement callback for `String.prototype.replace`.
+ * @return {function(string, ...(string|number|undefined)): string}           A replacer that keeps the trailing separator intact.
+ */
+function keepSeparatorAfterDissolvedFunction (replacer) {
+  return (match, ...rest) => {
+    const replacement = replacer(match, ...rest);
+    // A replace callback's trailing arguments are the match offset and the full string
+    const fullText = rest[rest.length - 1];
+    const matchOffset = rest[rest.length - 2];
+    const followingCharacter = fullText[matchOffset + match.length];
+    if (mergesWithFollowingCharacter(replacement, followingCharacter)) {
+      return replacement + ' ';
+    }
+    return replacement;
+  };
+}
+
+/**
  * The units a folded calc() expression leads with, in the order they are
  * written. Every other unit follows them alphabetically.
  *
@@ -153,30 +226,30 @@ function normalizeMathFunctions (value, property, originalValue = '') {
   let result = value;
 
   // Unwrap calc(1 / (1 / x)) → x (double-reciprocal identity)
-  result = result.replace(/calc\(\s*1\s*\/\s*\(\s*1\s*\/\s*([^()]+)\s*\)\s*\)/gi, (match, inner) => {
+  result = result.replace(/calc\(\s*1\s*\/\s*\(\s*1\s*\/\s*([^()]+)\s*\)\s*\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
     return inner.trim();
-  });
+  }));
   // Flatten calc(calc(a) ± b) → calc(a ± b)
-  result = result.replace(/calc\(\s*calc\(([^()]+)\)\s*([+-])\s*([^()]+)\s*\)/gi, (match, inner, operator, tail) => {
+  result = result.replace(/calc\(\s*calc\(([^()]+)\)\s*([+-])\s*([^()]+)\s*\)/gi, keepSeparatorAfterDissolvedFunction((match, inner, operator, tail) => {
     return 'calc(' + inner + ' ' + operator + ' ' + tail + ')';
-  });
+  }));
   // Unwrap calc(calc(x)) → calc(x)
-  result = result.replace(/calc\(\s*calc\(([^()]+)\)\s*\)/gi, (match, inner) => {
+  result = result.replace(/calc\(\s*calc\(([^()]+)\)\s*\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
     return 'calc(' + inner + ')';
-  });
+  }));
 
   // Simplify min()/max() expressions using @csstools/css-calc
-  result = result.replace(/\b(min|max)\(([^()]+)\)/gi, (match) => {
+  result = result.replace(/\b(min|max)\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match) => {
     try {
       const simplified = calc(match);
       return typeof simplified === 'string' ? simplified : match;
     } catch {
       return match;
     }
-  });
+  }));
 
   // Simplify calc() expressions using constant folding and @csstools/css-calc
-  result = result.replace(/calc\(([^()]+)\)/gi, (match, inner) => {
+  result = result.replace(/calc\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
     // Collapse whitespace inside calc expression
     const compactInner = inner.replace(/\s+/g, ' ').trim();
     // Preserve percent-times-number expressions (e.g. 50%*2 or 2*50%) — just strip inner spaces
@@ -208,7 +281,7 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     } catch {
       return match;
     }
-  });
+  }));
 
   // When calc() folded to an absolute-length unit (pt, pc, in, cm, mm, q), convert to pixels
   if (originalValue.includes('calc(') && /^-?(?:\d+|\d*\.\d+)(pt|pc|in|cm|mm|q)$/i.test(result)) {

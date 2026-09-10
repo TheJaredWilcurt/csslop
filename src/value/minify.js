@@ -165,6 +165,11 @@ function splitValueSegments (value) {
         end = consumeQuoted(end);
         continue;
       }
+      // An escaped character is url data, never the parenthesis that ends it
+      if (value[end] === '\\') {
+        end += 2;
+        continue;
+      }
       if (value[end] === '(') {
         depth++;
       }
@@ -251,37 +256,41 @@ function restoreSpaceBeforeMathOperators (value) {
 }
 
 /**
+ * Escapes the characters an unquoted url() token cannot hold, so the path can
+ * drop its quotes. A backslash already escaping a character is left alone, so
+ * a path that arrived escaped is never escaped a second time.
+ *
+ * @param  {string} path  The url path, without surrounding quotes.
+ * @return {string}       The path with every bare space and parenthesis escaped.
+ */
+function escapeUrlPathCharacters (path) {
+  // Match each space and parenthesis that no escaping backslash precedes
+  return path.replace(/(?<!\\)([ ()])/g, '\\$1');
+}
+
+/**
  * Chooses the shortest valid representation for the path inside a `url(...)`
- * token, weighing an unquoted form, an escaped single space, and a quoted form.
+ * token, weighing an unquoted form — its spaces and parentheses escaped —
+ * against a quoted form. Quotation marks can only ever appear in the quoted
+ * form, so a path holding one always keeps its wrapper.
  *
  * @param  {string} path  The resolved url path, without surrounding quotes.
  * @return {string}       The shortest valid url() content string.
  */
 function formatUrlPath (path) {
-  // Parentheses and quote characters are invalid inside an unquoted url() token
-  const hasQuoteForcingCharacters = /[()"']/.test(path);
-  // An escaped space is already the shortest representation of a space, so it
-  // is counted apart from unescaped ones to keep from being escaped twice
-  const escapedSpaceCount = (path.match(/\\ /g) || []).length;
-  // A space only needs escaping when no escaping backslash precedes it
-  const unescapedSpaceCount = (path.match(/(?<!\\) /g) || []).length;
-  const spaceCount = escapedSpaceCount + unescapedSpaceCount;
-
-  if (hasQuoteForcingCharacters || spaceCount >= 2) {
-    // Escape any embedded double quotes so the double-quoted wrapper stays valid
-    return '"' + path.replace(/"/g, '\\"') + '"';
+  // Escape any embedded double quotes so the double-quoted wrapper stays valid
+  const quotedForm = '"' + path.replace(/"/g, '\\"') + '"';
+  // Match a quotation mark, which an unquoted url() token cannot hold
+  if (/["']/.test(path)) {
+    return quotedForm;
   }
-
-  if (spaceCount === 1) {
-    // A lone space is one byte shorter to escape than to wrap the value in
-    // quotes, and one that arrived already escaped stays exactly as it is
-    if (!unescapedSpaceCount) {
-      return path;
-    }
-    return path.replace(/(?<!\\) /g, '\\ ');
+  const unquotedForm = escapeUrlPathCharacters(path);
+  // Each escaped character costs one backslash, so dropping the two quotation
+  // marks pays off whenever at most one character needs escaping
+  if (unquotedForm.length < quotedForm.length) {
+    return unquotedForm;
   }
-
-  return path;
+  return quotedForm;
 }
 
 /**
