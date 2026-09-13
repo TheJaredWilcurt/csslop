@@ -2,8 +2,6 @@
  * @file CSS minification entry point.
  */
 
-import { parse } from '@node-projects/css-parser';
-
 import {
   detectCharset,
   filterRedundantCharsets
@@ -14,6 +12,7 @@ import {
   setActiveCharset
 } from './context.js';
 import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
+import { parse } from './parser/index.js';
 import {
   analyzePositionTryRules,
   cleanPositionTryRules,
