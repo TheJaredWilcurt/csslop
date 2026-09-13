@@ -1,3 +1,6 @@
+/**
+ * @file Real world test for idempotency.
+ */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -7,6 +10,9 @@ const __dirname = import.meta.dirname;
 
 const fileName = 'zotero-dark-theme-v0.0.0.css';
 
+/**
+ * Runs the idempotency test.
+ */
 function run () {
   const node_modules = join(__dirname, '..', 'node_modules');
   const realWorld = join(node_modules, 'real-world-css-libraries');
@@ -22,7 +28,7 @@ function run () {
       'Failed idempotency for': filePath,
       'Original File': file,
       'First Run': first,
-      'Rerun': second
+      Rerun: second
     };
     console.log(JSON.stringify(log, null, 2));
   } else {
