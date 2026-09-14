@@ -839,6 +839,23 @@ const ZERO_INITIAL_PROPERTIES = new Set(['margin', 'padding']);
 const AUTO_INITIAL_PROPERTIES = new Set(['min-width', 'min-height']);
 
 /**
+ * Properties whose initial value is a single keyword longer than the global
+ * `initial` keyword itself. Only longhands no shorthand ever assembles are
+ * listed, because the shorthand builders reconstruct their value from the
+ * actual longhand keywords, and a CSS-wide keyword such as `initial` is only
+ * valid as a declaration's entire value.
+ *
+ * @type {Map<string, string>}
+ */
+const LENGTHY_INITIAL_KEYWORDS = new Map([
+  ['border-collapse', 'separate'],
+  ['box-sizing', 'content-box'],
+  ['mask-origin', 'padding-box'],
+  ['vertical-align', 'baseline'],
+  ['writing-mode', 'horizontal-tb']
+]);
+
+/**
  * Properties whose value is a time, where a millisecond amount may be worth
  * rewriting in seconds.
  *
@@ -989,6 +1006,36 @@ function reorderBorderWidthBeforeStyle (value) {
 }
 
 /**
+ * Rewrites a value that spells out the property's initial keyword to the
+ * shorter global `initial` keyword. Both are equivalent, but `initial` is
+ * shorter than these particular keywords and, being a global value repeated
+ * across properties, gives gzip more opportunities to deduplicate it.
+ *
+ * @param  {string} value     The minified CSS value.
+ * @param  {string} property  The CSS property name.
+ * @return {string}           The value with its initial keyword shortened to `initial` when that saves bytes.
+ */
+function shortenInitialValueKeyword (value, property) {
+  // Custom properties hold an arbitrary token stream that JavaScript can read
+  // back, so their keywords are left exactly as written.
+  if (isCustomProperty(property)) {
+    return value;
+  }
+  const initialKeyword = LENGTHY_INITIAL_KEYWORDS.get(property);
+  if (!initialKeyword || 'initial'.length >= initialKeyword.length) {
+    return value;
+  }
+  // A trailing `!important` rides along inside the value, so the keyword
+  // comparison and the rewrite only concern what sits in front of it.
+  const isImportant = value.endsWith('!important');
+  const keyword = isImportant ? value.slice(0, value.length - '!important'.length) : value;
+  if (keyword.toLowerCase() !== initialKeyword) {
+    return value;
+  }
+  return 'initial' + (isImportant ? '!important' : '');
+}
+
+/**
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
@@ -1070,6 +1117,10 @@ function applyPropertyOptimizations (val, property) {
       val = '#0000';
     }
   }
+
+  // A keyword spelling the property's own initial value is shorter as the
+  // global keyword (box-sizing: content-box -> box-sizing: initial)
+  val = shortenInitialValueKeyword(val, property);
 
   if (property === 'background' && val === 'none') {
     val = '0 0';
