@@ -14,12 +14,81 @@ import {
 } from './normalize.js';
 
 /**
+ * Reports whether an entry of a rule's body is itself a nested rule rather
+ * than a plain declaration.
+ *
+ * @param  {object}  entry  An entry of a rule's declaration list.
+ * @return {boolean}        True when the entry is a nested rule.
+ */
+function isNestedRule (entry) {
+  return entry.type === 'rule';
+}
+
+/**
+ * Expands the rules nested inside each rule's body, so a chain of wrappers
+ * collapses from the inside out and the outermost wrapper is then judged
+ * against an already flattened child. A rule's body holds the same kinds of
+ * entries a stylesheet does, so the body is expanded by the same rules, and
+ * the plain declarations it also holds pass through untouched.
+ *
+ * @param  {Array} rules  The AST rule nodes whose bodies may hold nested rules.
+ * @return {Array}        The rules, each with its body expanded.
+ */
+function expandNestedRuleBodies (rules) {
+  return rules.map((rule) => {
+    if (rule.type !== 'rule' || !(rule.declarations || []).some(isNestedRule)) {
+      return rule;
+    }
+    return {
+      ...rule,
+      declarations: expandPureNestedRules(rule.declarations)
+    };
+  });
+}
+
+/**
+ * Reports whether a nested child selector still means the same thing once it
+ * is written out in full under its parent.
+ *
+ * @param  {string}  childSelector  The selector of a rule nested inside another.
+ * @return {boolean}                True when the child can be written as a flat selector.
+ */
+function canFlattenChildSelector (childSelector) {
+  const child = childSelector.trim();
+  if (!child) {
+    return false;
+  }
+  // A `&` anywhere but the very start puts the parent where flattening cannot:
+  // `.b &` means the parent follows the child rather than leading it
+  return !child.slice(1).includes('&');
+}
+
+/**
+ * Writes a nested child selector out in full, as the selector it stands for
+ * when read through its parent.
+ *
+ * @param  {string} parentSelector  The selector of the rule the child is nested in.
+ * @param  {string} childSelector   The selector of the nested child rule.
+ * @return {string}                 The flat selector the nested pair stands for.
+ */
+function combineNestedSelector (parentSelector, childSelector) {
+  const parent = parentSelector.trim();
+  const child = childSelector.trim();
+  // A leading `&` names the parent itself, so it is what the parent replaces
+  if (child.startsWith('&')) {
+    return parent + child.slice(1);
+  }
+  return parent + ' ' + child;
+}
+
+/**
  * Expands rules that contain only nested sub-rules into flat rules with combined selectors, enabling further merging when the combined selectors already exist elsewhere.
  *
- * @param  {Array} rules  The AST rule nodes to process.
- * @return {Array}        A new array of rules with pure-nested rules expanded.
+ * @param  {Array} inputRules  The AST rule nodes to process.
+ * @return {Array}             A new array of rules with pure-nested rules expanded.
  */
-function expandPureNestedRules (rules) {
+function expandPureNestedRules (inputRules) {
+  const rules = expandNestedRuleBodies(inputRules);
   const flatSelectors = new Set();
   for (const rule of rules) {
     if (rule.type !== 'rule' || !rule.selectors?.length) {
@@ -77,16 +146,14 @@ function expandPureNestedRules (rules) {
         canExpand = false;
         break;
       }
+      if (!nestedRule.selectors.every(canFlattenChildSelector)) {
+        canExpand = false;
+        break;
+      }
       const combinedSelectors = [];
       for (const parentSelector of rule.selectors) {
         for (const childSelector of nestedRule.selectors) {
-          const trimmedChild = childSelector.trim();
-          let combinedSelector;
-          if (trimmedChild.startsWith('&')) {
-            combinedSelector = trimmedChild.replace(/^&/, parentSelector.trim());
-          } else {
-            combinedSelector = parentSelector.trim() + ' ' + trimmedChild;
-          }
+          const combinedSelector = combineNestedSelector(parentSelector, childSelector);
           combinedSelectors.push(combinedSelector);
           if (flatSelectors.has(combinedSelector)) {
             anyMatch = true;

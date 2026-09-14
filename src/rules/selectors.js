@@ -118,10 +118,11 @@ function findMatchingCloseParenthesis (text, openIndex) {
 /**
  * Finds the next occurrence of a pseudo-class function token (e.g. `:is(`)
  * that sits at the top level of a selector, outside any quoted string or
- * attribute selector.
+ * attribute selector. Pseudo-class names are case-insensitive, so the token is
+ * matched without regard to case and must be given in lowercase.
  *
  * @param  {string} text          The selector string to scan.
- * @param  {string} functionCall  The function token to find, including its opening parenthesis.
+ * @param  {string} functionCall  The lowercase function token to find, including its opening parenthesis.
  * @param  {number} start         The index to start scanning from.
  * @return {number}               The index of the next top-level occurrence, or -1 if none remains.
  */
@@ -141,7 +142,13 @@ function findNextFunctionCallOutsideStrings (text, functionCall, start) {
       index += 2;
       continue;
     }
-    if (text.startsWith(functionCall, index)) {
+    // The token's first character is compared before its whole length is read,
+    // so only the few positions that could start it are lowercased
+    const startsToken = (
+      character === functionCall[0] &&
+      text.slice(index, index + functionCall.length).toLowerCase() === functionCall
+    );
+    if (startsToken) {
       return index;
     }
     index++;
@@ -876,6 +883,8 @@ function flattenNestingParentIsSelector (selector) {
   return parts;
 }
 export {
+  findMatchingCloseParenthesis,
+  findNextFunctionCallOutsideStrings,
   flattenNestingParentIsSelector,
   mergeAdjacentWherePseudoClasses,
   processIsSelector,

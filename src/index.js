@@ -24,6 +24,7 @@ import {
   preprocessDeclarationBlocks,
   restoreEscapeSequences
 } from './preprocess.js';
+import { combineLanguageSelectors } from './rules/lang.js';
 import {
   deduplicateKeyframes,
   expandPureNestedRules,
@@ -82,7 +83,8 @@ function splitSelectorList (selectorList) {
 
 /**
  * Deduplicates a minified CSS selector list string by splitting at top-level
- * commas, removing duplicate selectors, and rejoining with commas.
+ * commas, removing duplicate selectors, combining the selectors that differ
+ * only in language-code, and rejoining with commas.
  *
  * @param  {string} selectorList  The comma-separated selector list string.
  * @return {string}               The deduplicated selector list string.
@@ -97,7 +99,7 @@ function deduplicateSelectorList (selectorList) {
     seen.add(selector);
     return true;
   });
-  return unique.join(',');
+  return combineLanguageSelectors(unique).join(',');
 }
 
 /**

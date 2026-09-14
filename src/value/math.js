@@ -84,6 +84,188 @@ function keepSeparatorAfterDissolvedFunction (replacer) {
 }
 
 /**
+ * The functions whose arguments are a math expression, where `*` and `/` are
+ * arithmetic operators rather than characters of some other syntax.
+ *
+ * @type {Set<string>}
+ */
+const MATH_FUNCTION_NAMES = new Set([
+  'abs',
+  'calc',
+  'clamp',
+  'hypot',
+  'max',
+  'min',
+  'mod',
+  'rem',
+  'round',
+  'sign'
+]);
+
+/**
+ * Matches a single character that may appear in a CSS function name.
+ *
+ * @type {RegExp}
+ */
+const FUNCTION_NAME_CHARACTER = /[a-zA-Z-]/;
+
+/**
+ * Finds where the function name that ends at an opening parenthesis begins.
+ *
+ * @param  {string} value      The CSS value string being scanned.
+ * @param  {number} openIndex  The index of the opening parenthesis.
+ * @return {number}            The index of the function name's first character.
+ */
+function findFunctionNameStart (value, openIndex) {
+  let index = openIndex;
+  while (index > 0 && FUNCTION_NAME_CHARACTER.test(value[index - 1])) {
+    index--;
+  }
+  return index;
+}
+
+/**
+ * Finds the parenthesis closing the one at the given index.
+ *
+ * @param  {string} value      The CSS value string being scanned.
+ * @param  {number} openIndex  The index of the opening parenthesis.
+ * @return {number}            The index of the matching closing parenthesis, or -1 when it never closes.
+ */
+function findClosingParenthesis (value, openIndex) {
+  let depth = 0;
+  for (let index = openIndex; index < value.length; index++) {
+    if (value[index] === '(') {
+      depth++;
+    } else if (value[index] === ')') {
+      depth--;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
+ * Rewrites the contents of every math function in a value, leaving the rest of
+ * the value untouched. A `*` only means multiplication inside these functions,
+ * so an arithmetic rewrite may only reach the text between their parentheses.
+ * The whole of a math function is handed over at once, so a math function
+ * nested in another is rewritten as part of its parent.
+ *
+ * @param  {function(string): string} rewriteExpression  Receives a math function's contents and returns its replacement.
+ * @param  {string}                   value              The CSS value string to rewrite.
+ * @return {string}                                      The value with every math function's contents rewritten.
+ */
+function rewriteMathFunctionContents (rewriteExpression, value) {
+  let result = '';
+  let index = 0;
+  while (index < value.length) {
+    const openIndex = value.indexOf('(', index);
+    if (openIndex === -1) {
+      break;
+    }
+    const functionName = value.slice(findFunctionNameStart(value, openIndex), openIndex).toLowerCase();
+    const closeIndex = findClosingParenthesis(value, openIndex);
+    if (!MATH_FUNCTION_NAMES.has(functionName) || closeIndex === -1) {
+      result += value.slice(index, openIndex + 1);
+      index = openIndex + 1;
+      continue;
+    }
+    result += value.slice(index, openIndex + 1);
+    result += rewriteExpression(value.slice(openIndex + 1, closeIndex));
+    index = closeIndex;
+  }
+  return result + value.slice(index);
+}
+
+/**
+ * Matches a multiplication by a decimal below one, capturing the digits after
+ * its decimal point and the unit written on it. The trailing lookahead keeps
+ * the match away from numbers that only begin this way, such as the exponent
+ * of `.5e3` or a unit name that is still being read.
+ *
+ * @type {RegExp}
+ */
+const FRACTIONAL_MULTIPLIER = /\s*\*\s*0*\.(\d+)([a-z%]*)(?![\w.%(])/gi;
+
+/**
+ * The most decimal places a fraction may be built from while the power of ten
+ * it needs is still exactly representable as an integer.
+ *
+ * @type {number}
+ */
+const MAXIMUM_FRACTION_DIGITS = 15;
+
+/**
+ * Computes the greatest common divisor of two non-negative integers, which is
+ * what a fraction has to be divided by to be stated in lowest terms.
+ *
+ * @param  {number} first   The first integer.
+ * @param  {number} second  The second integer.
+ * @return {number}         The greatest common divisor of both integers.
+ */
+function greatestCommonDivisor (first, second) {
+  let dividend = first;
+  let divisor = second;
+  while (divisor) {
+    const remainder = dividend % divisor;
+    dividend = divisor;
+    divisor = remainder;
+  }
+  return dividend;
+}
+
+/**
+ * Converts the digits behind a decimal point into the whole number that
+ * dividing by scales a value exactly as multiplying by that decimal does.
+ * The digits `25` (of `.25`) state the fraction 25/100, which reduces to 1/4,
+ * so the divisor is `4`. A fraction that does not reduce to a numerator of one
+ * cannot be stated as a single division, and so has no divisor to give.
+ *
+ * @param  {string}      fractionDigits  The digits written after the decimal point.
+ * @return {number|null}                 The equivalent whole number divisor, or null when there is none.
+ */
+function reciprocalOfDecimalFraction (fractionDigits) {
+  if (fractionDigits.length > MAXIMUM_FRACTION_DIGITS) {
+    return null;
+  }
+  const numerator = Number(fractionDigits);
+  const denominator = 10 ** fractionDigits.length;
+  const commonFactor = greatestCommonDivisor(numerator, denominator);
+  if (numerator / commonFactor !== 1) {
+    return null;
+  }
+  return denominator / commonFactor;
+}
+
+/**
+ * Rewrites a multiplication by a decimal below one as a division by the whole
+ * number that decimal is the reciprocal of, which is never longer to write and
+ * usually shorter (`calc(var(--x)*.25)` → `calc(var(--x)/4)`). A unit written
+ * on the multiplier moves onto the divisor, since only how the operand is
+ * stated changes.
+ *
+ * @param  {string} expression  The contents of a math function.
+ * @return {string}             The expression with reciprocal multipliers stated as divisions.
+ */
+function convertReciprocalMultiplicationToDivision (expression) {
+  return expression.replace(FRACTIONAL_MULTIPLIER, (match, fractionDigits, unit) => {
+    const divisor = reciprocalOfDecimalFraction(fractionDigits);
+    if (divisor === null) {
+      return match;
+    }
+    const division = '/' + divisor + unit;
+    // Compared against the shortest the multiplication could have been written
+    const multiplication = '*.' + fractionDigits + unit;
+    if (division.length > multiplication.length) {
+      return match;
+    }
+    return division;
+  });
+}
+
+/**
  * The units a folded calc() expression leads with, in the order they are
  * written. Every other unit follows them alphabetically.
  *
@@ -223,7 +405,7 @@ function tryFoldCalcExpression (expression) {
  * @return {string}                The value with math functions simplified where possible.
  */
 function normalizeMathFunctions (value, property, originalValue = '') {
-  let result = value;
+  let result = rewriteMathFunctionContents(convertReciprocalMultiplicationToDivision, value);
 
   // Unwrap calc(1 / (1 / x)) → x (double-reciprocal identity)
   result = result.replace(/calc\(\s*1\s*\/\s*\(\s*1\s*\/\s*([^()]+)\s*\)\s*\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
