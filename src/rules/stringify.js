@@ -10,6 +10,10 @@ import {
   processCustomPropertyComments
 } from './custom-properties.js';
 import {
+  combineLanguageSelectors,
+  minifyLanguageSelector
+} from './lang.js';
+import {
   canUnwrapSupports,
   normalizeLayerNames,
   normalizeMedia,
@@ -251,6 +255,7 @@ function stringifyRule (rule, context) {
         // Remove redundant leading "& " nesting selector
         minified = minified.replace(/^& /, '');
         minified = mergeAdjacentWherePseudoClasses(minified);
+        minified = minifyLanguageSelector(minified);
         return minified;
       });
       // When this rule is a nesting parent, its whole selector list is treated
@@ -267,6 +272,7 @@ function stringifyRule (rule, context) {
         return processIsSelector(selector, hasSiblingSelectors);
       });
       uniqueSelectors = [...new Set(uniqueSelectors)];
+      uniqueSelectors = combineLanguageSelectors(uniqueSelectors);
       output.push(uniqueSelectors.join(','));
     }
     output.push('{');
