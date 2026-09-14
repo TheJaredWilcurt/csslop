@@ -3,7 +3,7 @@
  */
 
 import { processDeclarations } from '../declarations/process.js';
-import { minifyValue } from '../value/minify.js';
+import { minifyValueForOutput } from '../value/minify.js';
 
 import {
   collapseCustomPropertyWhitespace,
@@ -41,7 +41,7 @@ function stringifyDeclarations (declarations) {
       return declaration.type !== 'whitespace' && declaration.type !== 'comment' && declaration.property;
     })
     .map((declaration) => {
-      return [declaration.property, ':', minifyValue(declaration)].join('');
+      return [declaration.property, ':', minifyValueForOutput(declaration)].join('');
     })
     .join(';');
 }
@@ -301,7 +301,7 @@ function stringifyRule (rule, context) {
         if (property.startsWith('--')) {
           const syntax = context.registeredCustomPropertySyntax.get(property);
           if (syntax === '"<color>"') {
-            value = minifyValue(declaration);
+            value = minifyValueForOutput(declaration);
           } else {
             const rawValue = declaration.rawValue || declaration.value || '';
             const commentProcessedValue = processCustomPropertyComments(rawValue);
@@ -329,7 +329,7 @@ function stringifyRule (rule, context) {
             }
           }
         } else {
-          value = minifyValue(declaration);
+          value = minifyValueForOutput(declaration);
         }
         return [property, ':', value].join('');
       })
@@ -368,7 +368,7 @@ function stringifyRule (rule, context) {
       return item.type !== 'declaration';
     });
     const renderedDeclarations = mediaDeclarations.map((declaration) => {
-      return [unescapeIdent(declaration.property), ':', minifyValue(declaration)].join('');
+      return [unescapeIdent(declaration.property), ':', minifyValueForOutput(declaration)].join('');
     }).join(';');
     const renderedRules = stringifyChildRules(subRules, context);
     const children = [renderedDeclarations, renderedRules].filter(Boolean).join('');
@@ -446,7 +446,7 @@ function stringifyRule (rule, context) {
             return declaration.type !== 'whitespace' && declaration.type !== 'comment';
           })
           ?.map((declaration) => {
-            return [declaration.property, ':', minifyValue(declaration)].join('');
+            return [declaration.property, ':', minifyValueForOutput(declaration)].join('');
           })
           .join(';') || '';
         output.push(renderedKeyframeDeclarations);
@@ -564,7 +564,7 @@ function stringifyRule (rule, context) {
               return innerDeclaration.type !== 'whitespace' && innerDeclaration.property;
             })
             .map((innerDeclaration) => {
-              return [unescapeIdent(innerDeclaration.property), ':', minifyValue(innerDeclaration)].join('');
+              return [unescapeIdent(innerDeclaration.property), ':', minifyValueForOutput(innerDeclaration)].join('');
             })
             .join(';');
           if (innerDeclarations) {
@@ -573,7 +573,7 @@ function stringifyRule (rule, context) {
           return [];
         }
         if (declaration.property) {
-          return [[unescapeIdent(declaration.property), ':', minifyValue(declaration)].join('')];
+          return [[unescapeIdent(declaration.property), ':', minifyValueForOutput(declaration)].join('')];
         }
         return [];
       });
