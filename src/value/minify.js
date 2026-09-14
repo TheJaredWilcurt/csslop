@@ -839,6 +839,26 @@ const ZERO_INITIAL_PROPERTIES = new Set(['margin', 'padding']);
 const AUTO_INITIAL_PROPERTIES = new Set(['min-width', 'min-height']);
 
 /**
+ * Properties whose initial value is a single keyword longer than the global
+ * `initial` keyword itself. These replacements are applied when serializing
+ * declarations, because shorthand builders reconstruct their value from the
+ * actual longhand keywords, and a CSS-wide keyword such as `initial` is only
+ * valid as a declaration's entire value.
+ *
+ * @type {Map<string, string>}
+ */
+const LENGTHY_INITIAL_KEYWORDS = new Map([
+  ['background-clip', 'border-box'],
+  ['background-origin', 'padding-box'],
+  ['border-collapse', 'separate'],
+  ['box-sizing', 'content-box'],
+  ['mask-clip', 'border-box'],
+  ['mask-origin', 'border-box'],
+  ['vertical-align', 'baseline'],
+  ['writing-mode', 'horizontal-tb']
+]);
+
+/**
  * Properties whose value is a time, where a millisecond amount may be worth
  * rewriting in seconds.
  *
@@ -986,6 +1006,39 @@ const BORDER_STYLE_BEFORE_WIDTH_PATTERN = new RegExp(
  */
 function reorderBorderWidthBeforeStyle (value) {
   return value.replace(BORDER_STYLE_BEFORE_WIDTH_PATTERN, '$2 $1');
+}
+
+/**
+ * Minifies a declaration's value for output, rewriting its initial keyword to
+ * the shorter global `initial` keyword after shorthand assembly. Both are
+ * equivalent, but `initial` is shorter than these particular keywords and,
+ * being repeated across properties, gives gzip more opportunities to deduplicate it.
+ *
+ * @param  {object} declaration  The CSS declaration object with property and value fields.
+ * @return {string}              The minified value with its initial keyword shortened to `initial` when that saves bytes.
+ */
+function minifyValueForOutput (declaration) {
+  const value = minifyValue(declaration);
+  const property = declaration.property;
+  // Custom properties hold an arbitrary token stream that JavaScript can read
+  // back, so their keywords are left exactly as written.
+  if (isCustomProperty(property)) {
+    return value;
+  }
+  // A keyword spelling the property's own initial value is shorter as the
+  // global keyword (box-sizing: content-box -> box-sizing: initial)
+  const initialKeyword = LENGTHY_INITIAL_KEYWORDS.get(property?.toLowerCase());
+  if (!initialKeyword || 'initial'.length >= initialKeyword.length) {
+    return value;
+  }
+  // A trailing `!important` rides along inside the value, so the keyword
+  // comparison and the rewrite only concern what sits in front of it.
+  const isImportant = value.endsWith('!important');
+  const keyword = isImportant ? value.slice(0, value.length - '!important'.length) : value;
+  if (keyword.toLowerCase() !== initialKeyword) {
+    return value;
+  }
+  return 'initial' + (isImportant ? '!important' : '');
 }
 
 /**
@@ -1426,5 +1479,6 @@ function minifyValue (declaration) {
 
 export {
   clearMinifiedValueCache,
-  minifyValue
+  minifyValue,
+  minifyValueForOutput
 };

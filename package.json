@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.37",
+  "version": "0.0.38",
   "description": "Experimental CSS minification",
   "scripts": {
     "prestart": "node ./scripts/prestart.js",
@@ -14,6 +14,7 @@
     "copy": "node ./scripts/copyTests.js",
     "test": "node ./tests/index.test.js",
     "real": "node ./tests/realworld.test.js",
+    "idem": "node ./tests/idempotency.test.js",
     "lint": "eslint *.js scripts src tests --fix",
     "fix": "npm run lint",
     "bump": "npx --yes -- @jsdevtools/version-bump-prompt patch && npm i",
@@ -21,7 +22,7 @@
     "proto": "proto pin node latest --resolve --tool-native && proto pin npm latest --resolve --tool-native && git status"
   },
   "dependencies": {
-    "@csstools/css-calc": "^3.3.0",
+    "@csstools/css-calc": "^3.4.0",
     "@node-projects/css-parser": "^5.2.0"
   },
   "devDependencies": {
@@ -36,7 +37,7 @@
     "eslint-config-tjw-import-x": "^1.0.1",
     "eslint-config-tjw-jsdoc": "^2.0.1",
     "eslint-plugin-import-x": "^4.17.0",
-    "eslint-plugin-jsdoc": "^64.3.9",
+    "eslint-plugin-jsdoc": "^64.3.10",
     "fflate": "^0.8.3",
     "globals": "^17.12.0",
     "pretty-ms": "^9.3.1",
