@@ -39,12 +39,21 @@ import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
 const MIXED_IMPORTANT_SHORTHANDS = new Set(['margin', 'padding', 'inset']);
 
 /**
- * Functions and syntaxes that older browsers do not understand, so an earlier
- * declaration using only classic syntax is kept as a fallback for them.
+ * Functions and syntaxes that an older browser fails to parse, which makes it
+ * discard the whole declaration and use the preceding one for that property
+ * instead. An earlier declaration in front of one of these is therefore an
+ * intentional fallback rather than a redundant duplicate.
+ *
+ * `var()` is deliberately absent. A custom property is substituted at
+ * computed-value time, long after the declaration has been parsed and has
+ * already won the cascade, so the declaration in front of it is never reached.
+ * That holds even when the referenced custom property was never defined: the
+ * property then resolves to its inherited or initial value rather than to the
+ * primitive value written above it.
  *
  * @type {Array}
  */
-const MODERN_SYNTAX_MARKERS = ['calc(', 'env(', 'var(', '-webkit-'];
+const PARSE_TIME_FALLBACK_MARKERS = ['calc(', 'env(', '-webkit-'];
 
 /**
  * Determines whether a value relies on syntax that older browsers cannot parse,
@@ -52,10 +61,10 @@ const MODERN_SYNTAX_MARKERS = ['calc(', 'env(', 'var(', '-webkit-'];
  * fallback rather than a redundant duplicate.
  *
  * @param  {string}  value  The minified CSS value string.
- * @return {boolean}        Whether the value uses modern syntax.
+ * @return {boolean}        Whether the value needs an earlier declaration kept behind it.
  */
-function usesModernSyntax (value) {
-  return MODERN_SYNTAX_MARKERS.some((marker) => {
+function needsParseTimeFallback (value) {
+  return PARSE_TIME_FALLBACK_MARKERS.some((marker) => {
     return value.includes(marker);
   });
 }
@@ -235,8 +244,8 @@ function deduplicateDeclarations (declarations) {
         continue;
       }
 
-      // Fallbacks for custom variables or older browser functions should be kept
-      if (usesModernSyntax(minifiedValue) && !usesModernSyntax(previousValue)) {
+      // Fallbacks for functions older browsers cannot parse should be kept
+      if (needsParseTimeFallback(minifiedValue) && !needsParseTimeFallback(previousValue)) {
         keepDeclaration(survivors, declaration);
         continue;
       }

@@ -49,6 +49,85 @@ function unescapeSelector (selector) {
 }
 
 /**
+ * Matches a single whitespace character.
+ *
+ * @type {RegExp}
+ */
+const WHITESPACE_CHARACTER = /\s/;
+
+/**
+ * Collapses every run of whitespace in a selector down to the single space a
+ * descendant combinator is written with, and trims the ends. Whitespace held
+ * inside a quoted string, or written as an escape, is copied through untouched:
+ * there it is part of the value being matched rather than a combinator.
+ *
+ * @param  {string} selector  The raw selector string.
+ * @return {string}           The selector with its combinator whitespace normalized.
+ */
+function normalizeSelectorWhitespace (selector) {
+  let normalized = '';
+  let quoteDelimiter = '';
+  let index = 0;
+  while (index < selector.length) {
+    const character = selector[index];
+    if (quoteDelimiter) {
+      if (character === '\\') {
+        normalized += selector.slice(index, index + 2);
+        index += 2;
+        continue;
+      }
+      if (character === quoteDelimiter) {
+        quoteDelimiter = '';
+      }
+      normalized += character;
+      index++;
+      continue;
+    }
+    if (character === '"' || character === '\'') {
+      quoteDelimiter = character;
+      normalized += character;
+      index++;
+      continue;
+    }
+    if (character === '\\') {
+      normalized += selector.slice(index, index + 2);
+      index += 2;
+      continue;
+    }
+    if (WHITESPACE_CHARACTER.test(character)) {
+      normalized += ' ';
+      while (index < selector.length && WHITESPACE_CHARACTER.test(selector[index])) {
+        index++;
+      }
+      continue;
+    }
+    normalized += character;
+    index++;
+  }
+  return normalized.trim();
+}
+
+/**
+ * Rewrites every selector in a stylesheet into its whitespace-normalized form,
+ * descending into nested rules and the bodies of at-rules. Running this before
+ * any rule is rewritten means each later pass compares, nests, and prints
+ * selectors that are already written the one canonical way, so a selector that
+ * happens to be spaced out in the source cannot leak that spacing into a
+ * selector the minifier builds from it.
+ *
+ * @param {Array} rules  The AST rule nodes to normalize.
+ */
+function normalizeRuleSelectors (rules) {
+  for (const rule of rules || []) {
+    if (rule?.selectors?.length) {
+      rule.selectors = rule.selectors.map(normalizeSelectorWhitespace);
+    }
+    normalizeRuleSelectors(rule?.rules);
+    normalizeRuleSelectors(rule?.declarations);
+  }
+}
+
+/**
  * Normalizes a `@layer` cascade layer name list by trimming it and removing the
  * optional whitespace that may surround the commas separating the layer names.
  *
@@ -126,6 +205,7 @@ export {
   canUnwrapSupports,
   normalizeLayerNames,
   normalizeMedia,
+  normalizeRuleSelectors,
   normalizeSupports,
   unescapeIdent,
   unescapeSelector
