@@ -21,6 +21,7 @@ import getRealWorldCSS from 'real-world-css-libraries';
 
 import { minifyCSS } from '../index.js';
 
+const verbose = process.argv[2];
 const realTimeStart = Date.now();
 const __dirname = import.meta.dirname;
 const minifiedPath = join(__dirname, 'minified');
@@ -29,7 +30,7 @@ const reportPath = join(__dirname, '..', 'realWorldResults.json');
 /**
  * Runs all real world tests, reports outcome to console and saves to JSON.
  */
-function runAndReportRealWorldTests () {
+function runAndReportRealWorldTests (verbose) {
   function deleteOldMinifiedFiles (libraries) {
     const libraryNames = libraries.map((library) => {
       return library.fileName;
@@ -83,14 +84,16 @@ function runAndReportRealWorldTests () {
   function runRealWorldTests (libraries) {
     function runOneTest ({ i, libraries, padding }) {
       const library = libraries[i];
-      console.log(
-        '\n' +
-        library.name.padEnd(padding) +
-        ' - ' +
-        library.source.length +
-        ' - ' +
-        ((i + 1) + '/' + libraries.length)
-      );
+      if (verbose) {
+        console.log(
+          '\n' +
+          library.name.padEnd(padding) +
+          ' - ' +
+          library.source.length +
+          ' - ' +
+          ((i + 1) + '/' + libraries.length)
+        );
+      }
       const start = Date.now();
       const output = minifyCSS(library.source);
       const duration = Date.now() - start;
@@ -103,12 +106,14 @@ function runAndReportRealWorldTests () {
     function logOneTest ({ duration, library, output, padding }) {
       const percent = Math.round((output.length / library.source.length) * 100);
       const difference = library.source.length - output.length;
-      console.log(
-        ((duration / 1000) + 's').padEnd(padding) +
-        ' - ' +
-        output.length +
-        ' (-' + difference + ', ' + percent + '%)'
-      );
+      if (verbose) {
+        console.log(
+          ((duration / 1000) + 's').padEnd(padding) +
+          ' - ' +
+          output.length +
+          ' (-' + difference + ', ' + percent + '%)'
+        );
+      }
       return { percent };
     }
 
@@ -179,4 +184,4 @@ function runAndReportRealWorldTests () {
   reportRealWorldTests(mutatedLibraries);
 }
 
-runAndReportRealWorldTests();
+runAndReportRealWorldTests(verbose);
