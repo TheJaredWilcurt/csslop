@@ -26,6 +26,7 @@ import {
   restoreEscapeSequences
 } from './preprocess.js';
 import { combineLanguageSelectors } from './rules/lang.js';
+import { normalizeRuleSelectors } from './rules/normalize.js';
 import {
   deduplicateKeyframes,
   expandPureNestedRules,
@@ -235,6 +236,10 @@ export const minifyCSS = function (input) {
   const context = createMinifyContext();
 
   if (ast?.stylesheet?.rules) {
+    // Every later pass reads selectors, so they are written the one canonical
+    // way before any of them runs.
+    normalizeRuleSelectors(ast.stylesheet.rules);
+
     // Which properties a shorthand may not silently reset is a question about
     // the whole stylesheet, so it is answered before any rule is rewritten.
     recordStylesheetResetProperties(ast.stylesheet.rules, context);
@@ -271,7 +276,10 @@ export const minifyCSS = function (input) {
     const declarationMergedRules = mergeByDeclarations(preCleanedRules);
     const nestedRules = nestFlatRules(declarationMergedRules);
     const nonEmptyRules = removeEmptyRules(nestedRules);
-    const factoredRules = factorCommonParents(nonEmptyRules);
+    // Nesting is what reveals that two rules style the same thing: until their
+    // descendants have moved inside them, the rules only share a declaration.
+    const nestingMergedRules = mergeByDeclarations(nonEmptyRules);
+    const factoredRules = factorCommonParents(nestingMergedRules);
     const nestedFinalRules = nestFlatRules(factoredRules);
     const finalRules = mergeIdenticalNestedRules(nestedFinalRules);
 

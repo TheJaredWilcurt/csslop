@@ -562,6 +562,170 @@ function deduplicateSelectors (selectors) {
 }
 
 /**
+ * The rule body entries that style nothing themselves, and so have no say in
+ * whether one rule's body is carried by another's.
+ *
+ * @type {Set<string>}
+ */
+const UNSTYLED_BODY_ENTRY_TYPES = new Set(['whitespace', 'comment']);
+
+/**
+ * Splits a rule body into the declarations it sets directly and the blocks
+ * nested inside it, leaving out the entries that style nothing.
+ *
+ * @param  {Array}  declarations  The rule body entries.
+ * @return {object}               The body's `plainDeclarations` and `nestedBlocks`.
+ */
+function partitionRuleBody (declarations) {
+  const plainDeclarations = [];
+  const nestedBlocks = [];
+  for (const entry of declarations || []) {
+    if (UNSTYLED_BODY_ENTRY_TYPES.has(entry.type)) {
+      continue;
+    }
+    if (entry.property) {
+      plainDeclarations.push(entry);
+    } else {
+      nestedBlocks.push(entry);
+    }
+  }
+  return {
+    nestedBlocks,
+    plainDeclarations
+  };
+}
+
+/**
+ * Describes a block nested inside a rule precisely enough to tell whether two
+ * rules nest the very same thing. Only plain nested rules can be described: an
+ * at-rule nested in a rule carries a prelude that decides when its body applies,
+ * so it is reported as indescribable rather than guessed at.
+ *
+ * @param  {object}      block  A block nested inside a rule body.
+ * @return {string|null}        The signature, or null when the block cannot be described.
+ */
+function nestedBlockSignature (block) {
+  if (block.type !== 'rule' || !block.selectors?.length) {
+    return null;
+  }
+  const {
+    nestedBlocks,
+    plainDeclarations
+  } = partitionRuleBody(block.declarations);
+  const declarationParts = plainDeclarations.map((declaration) => {
+    return declaration.property + ':' + (declaration.value || '').trim();
+  });
+  const nestedParts = nestedBlocksSignature(nestedBlocks);
+  if (nestedParts === null) {
+    return null;
+  }
+  const selectors = block.selectors.map(normalizeSelector).join(',');
+  return selectors + '{' + declarationParts.join(';') + nestedParts + '}';
+}
+
+/**
+ * Describes every block nested in a rule body as one comparable string, in the
+ * order the blocks are written, since that order decides which of them wins a
+ * conflict.
+ *
+ * @param  {Array}       nestedBlocks  The blocks nested in a rule body.
+ * @return {string|null}               The combined signature, or null when any block cannot be described.
+ */
+function nestedBlocksSignature (nestedBlocks) {
+  let combined = '';
+  for (const block of nestedBlocks) {
+    const signature = nestedBlockSignature(block);
+    if (signature === null) {
+      return null;
+    }
+    combined += signature;
+  }
+  return combined;
+}
+
+/**
+ * Reports whether a rule that nests blocks may take on further selectors. A
+ * nested selector resolves against its parent's whole selector list as `:is()`,
+ * which matches with the specificity of the strongest selector in that list, so
+ * the list may only grow while every selector in it weighs the same.
+ *
+ * @param  {Array}   selectors  The selector list the merged rule would carry.
+ * @return {boolean}            Whether the nested blocks keep their current weight.
+ */
+function selectorsShareSpecificity (selectors) {
+  const strongest = maximumRuleSpecificity(selectors);
+  const weakest = minimumRuleSpecificity(selectors);
+  return compareSpecificity(strongest, weakest) === 0;
+}
+
+/**
+ * Combines an earlier rule with the rule that follows it when everything the
+ * earlier one styles is restated by the later one, so the earlier selector can
+ * simply join the later rule's shared part and the remainder stays behind in a
+ * rule of its own.
+ *
+ * Both rules have to nest the same blocks. A block nested in only one of them
+ * would either be lost or start matching the other rule's selector, neither of
+ * which the two rules said.
+ *
+ * @param  {object}     previousRule  The rule immediately in front of `rule`.
+ * @param  {object}     rule          The rule being folded into its predecessor.
+ * @return {Array|null}               The rules that replace the pair, or null when they cannot be combined.
+ */
+function mergeRuleIntoPredecessor (previousRule, rule) {
+  const isMergeableRulePair = (
+    previousRule?.type === 'rule' &&
+    previousRule.selectors?.length &&
+    rule.type === 'rule' &&
+    rule.selectors?.length
+  );
+  if (!isMergeableRulePair) {
+    return null;
+  }
+  const previousBody = partitionRuleBody(previousRule.declarations);
+  const currentBody = partitionRuleBody(rule.declarations);
+  if (!previousBody.plainDeclarations.length || !currentBody.plainDeclarations.length) {
+    return null;
+  }
+  const previousNesting = nestedBlocksSignature(previousBody.nestedBlocks);
+  const currentNesting = nestedBlocksSignature(currentBody.nestedBlocks);
+  if (previousNesting === null || previousNesting !== currentNesting) {
+    return null;
+  }
+  const currentValueByProperty = new Map(
+    currentBody.plainDeclarations.map((declaration) => {
+      return [declaration.property, (declaration.value || '').trim()];
+    })
+  );
+  const previousIsRestated = previousBody.plainDeclarations.every((declaration) => {
+    return currentValueByProperty.get(declaration.property) === (declaration.value || '').trim();
+  });
+  // `all` rewrites every other property, so the later rule restating a value is
+  // no promise that it applies the same way once `all` has run.
+  const currentResetsEverything = currentValueByProperty.has('all');
+  if (!previousIsRestated || currentResetsEverything) {
+    return null;
+  }
+  const combinedSelectors = deduplicateSelectors([...previousRule.selectors, ...rule.selectors]);
+  if (previousBody.nestedBlocks.length && !selectorsShareSpecificity(combinedSelectors)) {
+    return null;
+  }
+  const restatedProperties = new Set(
+    previousBody.plainDeclarations.map((declaration) => {
+      return declaration.property;
+    })
+  );
+  const remainingDeclarations = currentBody.plainDeclarations.filter((declaration) => {
+    return !restatedProperties.has(declaration.property);
+  });
+  const merged = [{ ...previousRule, selectors: combinedSelectors }];
+  if (remainingDeclarations.length) {
+    merged.push({ ...rule, declarations: remainingDeclarations });
+  }
+  return merged;
+}
+
+/**
  * Merges consecutive rules whose declarations are a subset of the following rule, combining their selectors and splitting out any extra declarations.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
@@ -570,48 +734,11 @@ function deduplicateSelectors (selectors) {
 function mergeByDeclarations (rules) {
   const result = [];
   for (const rule of rules) {
-    if (rule.type !== 'rule' || !rule.selectors?.length) {
-      result.push(rule);
+    const merged = mergeRuleIntoPredecessor(result[result.length - 1], rule);
+    if (merged) {
+      result.pop();
+      result.push(...merged);
       continue;
-    }
-    const previousRule = result[result.length - 1];
-    if (previousRule && previousRule.type === 'rule' && previousRule.selectors?.length) {
-      const previousDeclarations = (previousRule.declarations || []).filter((declaration) => {
-        return declaration.type !== 'whitespace' && declaration.property;
-      });
-      const currentDeclarations = (rule.declarations || []).filter((declaration) => {
-        return declaration.type !== 'whitespace' && declaration.property;
-      });
-      if (previousDeclarations.length > 0 && currentDeclarations.length > 0) {
-        const currentDeclarationMap = new Map(
-          currentDeclarations.map((declaration) => {
-            return [declaration.property, (declaration.value || '').trim()];
-          })
-        );
-        const previousIsSubset = previousDeclarations.every((declaration) => {
-          return currentDeclarationMap.get(declaration.property) === (declaration.value || '').trim();
-        });
-        const currentHasAllProperty = currentDeclarations.some((declaration) => {
-          return declaration.property === 'all';
-        });
-        if (previousIsSubset && !currentHasAllProperty) {
-          const commonProperties = new Set(
-            previousDeclarations.map((declaration) => {
-              return declaration.property;
-            })
-          );
-          const currentOnlyDeclarations = currentDeclarations.filter((declaration) => {
-            return !commonProperties.has(declaration.property);
-          });
-          result.pop();
-          const combinedSelectors = deduplicateSelectors([...previousRule.selectors, ...rule.selectors]);
-          result.push({ ...previousRule, selectors: combinedSelectors });
-          if (currentOnlyDeclarations.length > 0) {
-            result.push({ ...rule, declarations: currentOnlyDeclarations });
-          }
-          continue;
-        }
-      }
     }
     result.push(rule);
   }
