@@ -81,43 +81,34 @@ function runAndReportRealWorldTests () {
   }
 
   function runRealWorldTests (libraries) {
-    function runOneTest ({ fileAlreadyExists, i, libraries, outputFile, padding }) {
+    function runOneTest ({ i, libraries, padding }) {
       const library = libraries[i];
-      let output;
-      let duration;
-      if (fileAlreadyExists) {
-        output = String(readFileSync(outputFile)).trim();
-        duration = library.duration;
-      } else {
-        console.log(
-          '\n' +
-          library.name.padEnd(padding) +
-          ' - ' +
-          library.source.length +
-          ' - ' +
-          ((i + 1) + '/' + libraries.length)
-        );
-        const start = Date.now();
-        output = minifyCSS(library.source);
-        duration = Date.now() - start;
-      }
+      console.log(
+        '\n' +
+        library.name.padEnd(padding) +
+        ' - ' +
+        library.source.length +
+        ' - ' +
+        ((i + 1) + '/' + libraries.length)
+      );
+      const start = Date.now();
+      const output = minifyCSS(library.source);
+      const duration = Date.now() - start;
       return {
         output,
         duration
       };
     }
 
-    function logOneTest ({ duration, fileAlreadyExists, library, output, padding }) {
+    function logOneTest ({ duration, library, output, padding }) {
       const percent = Math.round((output.length / library.source.length) * 100);
-      if (!fileAlreadyExists) {
-        const difference = library.source.length - output.length;
-        console.log(
-          ((duration / 1000) + 's').padEnd(padding) +
-          ' - ' +
-          output.length +
-          ' (-' + difference + ', ' + percent + '%)'
-        );
-      }
+      const difference = library.source.length - output.length;
+      console.log(
+        ((duration / 1000) + 's').padEnd(padding) +
+        ' - ' +
+        output.length +
+        ' (-' + difference + ', ' + percent + '%)'
+      );
       return { percent };
     }
 
@@ -126,24 +117,9 @@ function runAndReportRealWorldTests () {
 
     for (let i = 0; i < libraries.length; i++) {
       const library = libraries[i];
-      const outputFile = join(minifiedPath, library.fileName);
-      const fileAlreadyExists = existsSync(outputFile);
 
-      const { output, duration } = runOneTest({
-        fileAlreadyExists,
-        i,
-        libraries,
-        outputFile,
-        padding
-      });
-
-      const { percent } = logOneTest({
-        fileAlreadyExists,
-        duration,
-        library,
-        output,
-        padding
-      });
+      const { output, duration } = runOneTest({ i, libraries, padding });
+      const { percent } = logOneTest({ duration, library, output, padding });
 
       library.duration = duration;
       library.inputSize = library.source.length;
