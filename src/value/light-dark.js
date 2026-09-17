@@ -2,7 +2,12 @@
  * @file Simplifies CSS light-dark functions whose light and dark values are equivalent.
  */
 
-import { findMatchingParenthesis } from './syntax.js';
+import {
+  findMatchingParenthesis,
+  skipQuotedString,
+  splitTopLevelCommaList,
+  startsUrlToken
+} from '../parser/source-search.js';
 
 /**
  * Determines whether a character can appear inside a CSS identifier.
@@ -36,75 +41,6 @@ function startsLightDarkFunction (value, index) {
 }
 
 /**
- * Splits a CSS function argument list at top-level commas while respecting
- * nested parentheses and quoted strings.
- *
- * @param  {string} argumentString  The raw content between function parentheses.
- * @return {Array}                  The top-level argument strings.
- */
-function splitTopLevelFunctionArguments (argumentString) {
-  const argumentsList = [];
-  let currentArgument = '';
-  let depth = 0;
-  let index = 0;
-  let activeQuote = '';
-
-  while (index < argumentString.length) {
-    const character = argumentString[index];
-    if (activeQuote) {
-      currentArgument += character;
-      if (character === '\\') {
-        if (index + 1 < argumentString.length) {
-          currentArgument += argumentString[index + 1];
-          index += 2;
-          continue;
-        }
-      } else if (character === activeQuote) {
-        activeQuote = '';
-      }
-      index++;
-      continue;
-    }
-
-    if (character === '"' || character === '\'') {
-      activeQuote = character;
-      currentArgument += character;
-      index++;
-      continue;
-    }
-
-    if (character === '(') {
-      depth++;
-      currentArgument += character;
-      index++;
-      continue;
-    }
-
-    if (character === ')') {
-      if (depth > 0) {
-        depth--;
-      }
-      currentArgument += character;
-      index++;
-      continue;
-    }
-
-    if (character === ',' && depth === 0) {
-      argumentsList.push(currentArgument.trim());
-      currentArgument = '';
-      index++;
-      continue;
-    }
-
-    currentArgument += character;
-    index++;
-  }
-
-  argumentsList.push(currentArgument.trim());
-  return argumentsList;
-}
-
-/**
  * Simplifies `light-dark(a,b)` to `a` when both top-level arguments are identical
  * after prior minification has normalized them.
  *
@@ -115,36 +51,15 @@ function simplifyEquivalentLightDarkFunctions (value) {
   let result = '';
   let index = 0;
 
-  const consumeQuoted = (start) => {
-    const quote = value[start];
-    let end = start + 1;
-    while (end < value.length) {
-      if (value[end] === '\\') {
-        end += 2;
-        continue;
-      }
-      if (value[end] === quote) {
-        end++;
-        break;
-      }
-      end++;
-    }
-    return end;
-  };
-
-  const startsUrl = (start) => {
-    return value.slice(start, start + 4).toLowerCase() === 'url(';
-  };
-
   while (index < value.length) {
     if (value[index] === '"' || value[index] === '\'') {
-      const end = consumeQuoted(index);
+      const end = skipQuotedString(value, index);
       result += value.slice(index, end);
       index = end;
       continue;
     }
 
-    if (startsUrl(index)) {
+    if (startsUrlToken(value, index)) {
       const end = findMatchingParenthesis(value, index + 3);
       if (end === -1) {
         result += value.slice(index);
@@ -164,7 +79,7 @@ function simplifyEquivalentLightDarkFunctions (value) {
       }
 
       const argumentString = value.slice(openParenIndex + 1, closingParenIndex);
-      const argumentsList = splitTopLevelFunctionArguments(argumentString);
+      const argumentsList = splitTopLevelCommaList(argumentString);
       if (argumentsList.length === 2) {
         const firstArgument = simplifyEquivalentLightDarkFunctions(argumentsList[0]);
         const secondArgument = simplifyEquivalentLightDarkFunctions(argumentsList[1]);

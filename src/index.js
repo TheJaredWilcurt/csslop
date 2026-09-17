@@ -2,8 +2,6 @@
  * @file CSS minification entry point.
  */
 
-import { parse } from '@node-projects/css-parser';
-
 import {
   detectCharset,
   filterRedundantCharsets
@@ -14,18 +12,17 @@ import {
   setActiveCharset
 } from './context.js';
 import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
+import { parse } from './parser/index.js';
+import { splitTopLevelCommaList } from './parser/source-search.js';
 import {
   analyzePositionTryRules,
   cleanPositionTryRules,
   collectRuleMetadata,
   filterUnusedPositionTry
 } from './position-try.js';
-import {
-  neutralizeEscapeSequences,
-  preprocessDeclarationBlocks,
-  restoreEscapeSequences
-} from './preprocess.js';
+import { preprocessDeclarationBlocks } from './preprocess.js';
 import { combineLanguageSelectors } from './rules/lang.js';
+import { normalizeRuleSelectors } from './rules/normalize.js';
 import {
   deduplicateKeyframes,
   expandPureNestedRules,
@@ -50,39 +47,6 @@ import {
 } from './value/minify.js';
 
 /**
- * Splits a minified CSS selector list at top-level commas, respecting
- * parenthesized and bracketed groups so that commas inside pseudo-class
- * arguments like `:is(a, b)` are not treated as selector separators.
- *
- * @param  {string} selectorList  The comma-separated selector list string.
- * @return {Array}                An array of individual selector strings.
- */
-function splitSelectorList (selectorList) {
-  const selectors = [];
-  let current = '';
-  let depth = 0;
-  for (const character of selectorList) {
-    if (character === '(' || character === '[') {
-      depth++;
-      current += character;
-    } else if (character === ')' || character === ']') {
-      depth--;
-      current += character;
-    } else if (character === ',' && depth === 0) {
-      selectors.push(current.trim());
-      current = '';
-    } else {
-      current += character;
-    }
-  }
-  const remaining = current.trim();
-  if (remaining) {
-    selectors.push(remaining);
-  }
-  return selectors;
-}
-
-/**
  * Deduplicates a minified CSS selector list string by splitting at top-level
  * commas, removing duplicate selectors, combining the selectors that differ
  * only in language-code, and rejoining with commas.
@@ -91,7 +55,7 @@ function splitSelectorList (selectorList) {
  * @return {string}               The deduplicated selector list string.
  */
 function deduplicateSelectorList (selectorList) {
-  const selectors = splitSelectorList(selectorList);
+  const selectors = splitTopLevelCommaList(selectorList);
   const seen = new Set();
   const unique = selectors.filter((selector) => {
     if (seen.has(selector)) {
@@ -224,7 +188,7 @@ export const minifyCSS = function (input) {
 
   try {
     ast = parse(
-      preprocessDeclarationBlocks(neutralizeEscapeSequences(source)),
+      preprocessDeclarationBlocks(source),
       { preserveFormatting: true, silent: true }
     );
   } catch {
@@ -235,6 +199,10 @@ export const minifyCSS = function (input) {
   const context = createMinifyContext();
 
   if (ast?.stylesheet?.rules) {
+    // Every later pass reads selectors, so they are written the one canonical
+    // way before any of them runs.
+    normalizeRuleSelectors(ast.stylesheet.rules);
+
     // Which properties a shorthand may not silently reset is a question about
     // the whole stylesheet, so it is answered before any rule is rewritten.
     recordStylesheetResetProperties(ast.stylesheet.rules, context);
@@ -271,7 +239,10 @@ export const minifyCSS = function (input) {
     const declarationMergedRules = mergeByDeclarations(preCleanedRules);
     const nestedRules = nestFlatRules(declarationMergedRules);
     const nonEmptyRules = removeEmptyRules(nestedRules);
-    const factoredRules = factorCommonParents(nonEmptyRules);
+    // Nesting is what reveals that two rules style the same thing: until their
+    // descendants have moved inside them, the rules only share a declaration.
+    const nestingMergedRules = mergeByDeclarations(nonEmptyRules);
+    const factoredRules = factorCommonParents(nestingMergedRules);
     const nestedFinalRules = nestFlatRules(factoredRules);
     const finalRules = mergeIdenticalNestedRules(nestedFinalRules);
 
@@ -282,7 +253,7 @@ export const minifyCSS = function (input) {
     const mergedOutput = removeRedundantLayerStatementSemicolon(mergeAdjacentRulesWithIdenticalBodies(output));
 
     endMinificationPass();
-    return restoreEscapeSequences(mergedOutput.join(''));
+    return mergedOutput.join('');
   }
 
   endMinificationPass();

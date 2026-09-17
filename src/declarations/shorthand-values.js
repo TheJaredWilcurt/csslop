@@ -2,8 +2,8 @@
  * @file Serializes the collected longhand values of a shorthand into the shortest valid shorthand value, one builder per shorthand family.
  */
 
+import { splitTopLevelComponents } from '../parser/source-search.js';
 import { collapseShorthandParts } from '../value/shared.js';
-import { splitTopLevelComponents } from '../value/syntax.js';
 
 import { buildBackgroundShorthandValue } from './background.js';
 import { UNIFORM_VALUE_SHORTHANDS } from './config.js';

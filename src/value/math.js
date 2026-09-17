@@ -4,6 +4,8 @@
 
 import { calc } from '@csstools/css-calc';
 
+import { findMatchingParenthesis } from '../parser/source-search.js';
+
 import {
   convertAbsoluteLengthToPx,
   formatDimension,
@@ -125,28 +127,6 @@ function findFunctionNameStart (value, openIndex) {
 }
 
 /**
- * Finds the parenthesis closing the one at the given index.
- *
- * @param  {string} value      The CSS value string being scanned.
- * @param  {number} openIndex  The index of the opening parenthesis.
- * @return {number}            The index of the matching closing parenthesis, or -1 when it never closes.
- */
-function findClosingParenthesis (value, openIndex) {
-  let depth = 0;
-  for (let index = openIndex; index < value.length; index++) {
-    if (value[index] === '(') {
-      depth++;
-    } else if (value[index] === ')') {
-      depth--;
-      if (depth === 0) {
-        return index;
-      }
-    }
-  }
-  return -1;
-}
-
-/**
  * Rewrites the contents of every math function in a value, leaving the rest of
  * the value untouched. A `*` only means multiplication inside these functions,
  * so an arithmetic rewrite may only reach the text between their parentheses.
@@ -166,7 +146,7 @@ function rewriteMathFunctionContents (rewriteExpression, value) {
       break;
     }
     const functionName = value.slice(findFunctionNameStart(value, openIndex), openIndex).toLowerCase();
-    const closeIndex = findClosingParenthesis(value, openIndex);
+    const closeIndex = findMatchingParenthesis(value, openIndex);
     if (!MATH_FUNCTION_NAMES.has(functionName) || closeIndex === -1) {
       result += value.slice(index, openIndex + 1);
       index = openIndex + 1;

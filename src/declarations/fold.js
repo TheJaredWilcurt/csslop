@@ -2,7 +2,7 @@
  * @file Folds longhand declarations that follow their own shorthand back into that shorthand, whenever restating the whole shorthand is shorter than keeping the shorthand and its overrides apart.
  */
 
-import { splitTopLevelComponents } from '../value/syntax.js';
+import { splitTopLevelComponents } from '../parser/source-search.js';
 
 import {
   CSS_WIDE_KEYWORDS,

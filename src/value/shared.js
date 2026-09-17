@@ -198,6 +198,7 @@ export {
   convertAbsoluteLengthToPx,
   formatCompactNumber,
   formatDimension,
+  hasSubstitutedParts,
   normalizeScaleComponent,
   parseAlphaString,
   parseAngleToDegrees,

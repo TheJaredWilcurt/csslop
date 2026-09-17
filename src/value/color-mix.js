@@ -3,6 +3,11 @@
  */
 
 import {
+  findMatchingParenthesis,
+  splitTopLevelCommaList
+} from '../parser/source-search.js';
+
+import {
   convertOklchToHex,
   oklabToRgb,
   parseColor,
@@ -87,7 +92,7 @@ function findNoneChannels (rawColorStr) {
 function evaluateNColorMix (colorSpace, args) {
   const parsedArgs = [];
   for (const arg of args) {
-    const parsed = parseColorMixArg(arg.trim());
+    const parsed = parseColorMixArg(arg);
     if (!parsed) {
       return null;
     }
@@ -252,7 +257,7 @@ function mixNColorsOklab (colors, weights, alphaMultiplier) {
 function evaluateColorMix (expr) {
   // Parse: color-mix(in <space> [<hue-method>], <color> [<p>%], <color> [<p>%])
   // We need to handle nested parentheses for inner color functions
-  const inner = extractBalancedArgs(expr, 'color-mix');
+  const inner = extractFunctionArgumentText(expr, 'color-mix');
   if (!inner) {
     return null;
   }
@@ -267,7 +272,7 @@ function evaluateColorMix (expr) {
   const rest = inner.slice(inMatch[0].length);
 
   // Split color arguments (handling nested parens)
-  const args = splitColorMixArgs(rest);
+  const args = splitTopLevelCommaList(rest);
   if (args.length < 2) {
     return null;
   }
@@ -278,8 +283,8 @@ function evaluateColorMix (expr) {
   }
 
   // Parse each argument: "<color> [<percentage>]"
-  const parsed1 = parseColorMixArg(args[0].trim());
-  const parsed2 = parseColorMixArg(args[1].trim());
+  const parsed1 = parseColorMixArg(args[0]);
+  const parsed2 = parseColorMixArg(args[1]);
   if (!parsed1 || !parsed2) {
     return null;
   }
@@ -385,53 +390,23 @@ function evaluateColorMix (expr) {
 }
 
 /**
- * Extract the balanced content inside a function call.
+ * Extract the arguments written inside a function call.
  *
- * @param  {string}      expr      The expression string containing the function call.
- * @param  {string}      funcName  The function name to locate (e.g. "color-mix").
- * @return {string|null}           The content between the matching parentheses, or null if not found.
+ * @param  {string}      expression    The expression string containing the function call.
+ * @param  {string}      functionName  The function name to locate (e.g. "color-mix").
+ * @return {string|null}               The text between the function's parentheses, or null when the function is not called.
  */
-function extractBalancedArgs (expr, funcName) {
-  const prefix = funcName + '(';
-  const start = expr.indexOf(prefix);
-  if (start === -1) {
+function extractFunctionArgumentText (expression, functionName) {
+  const callIndex = expression.indexOf(functionName + '(');
+  if (callIndex === -1) {
     return null;
   }
-  let depth = 1;
-  let position = start + prefix.length;
-  while (position < expr.length && depth > 0) {
-    if (expr[position] === '(') {
-      depth++;
-    } else if (expr[position] === ')') {
-      depth--;
-    }
-    position++;
+  const openIndex = callIndex + functionName.length;
+  const closeIndex = findMatchingParenthesis(expression, openIndex);
+  if (closeIndex === -1) {
+    return expression.slice(openIndex + 1);
   }
-  return expr.slice(start + prefix.length, position - 1);
-}
-
-/**
- * Split color-mix arguments at top-level commas (handling nested parens).
- *
- * @param  {string} str  The color arguments string, with arguments separated by commas.
- * @return {Array}       An array of argument strings split at each top-level comma.
- */
-function splitColorMixArgs (str) {
-  const args = [];
-  let depth = 0;
-  let start = 0;
-  for (let position = 0; position < str.length; position++) {
-    if (str[position] === '(') {
-      depth++;
-    } else if (str[position] === ')') {
-      depth--;
-    } else if (str[position] === ',' && depth === 0) {
-      args.push(str.slice(start, position));
-      start = position + 1;
-    }
-  }
-  args.push(str.slice(start));
-  return args;
+  return expression.slice(openIndex + 1, closeIndex);
 }
 
 /**

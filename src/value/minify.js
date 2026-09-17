@@ -3,6 +3,12 @@
  */
 
 import { isUnicodeCharset } from '../context.js';
+import {
+  findMatchingParenthesis,
+  skipParenthesizedGroup,
+  skipQuotedString,
+  startsUrlToken
+} from '../parser/source-search.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import { evaluateColorMix } from './color-mix.js';
@@ -31,12 +37,12 @@ import {
 import {
   collapseShorthandParts,
   convertAbsoluteLengthToPx,
+  hasSubstitutedParts,
   normalizeScaleComponent,
   parseAlphaString,
   parseAngleToDegrees,
   roundCompactNumber
 } from './shared.js';
-import { findMatchingParenthesis } from './syntax.js';
 import { elideRedundantSeparators } from './tokens.js';
 import { minifyTransformValue } from './transforms.js';
 import { optimizeUnicodeRange } from './unicode-range.js';
@@ -136,68 +142,24 @@ function splitValueSegments (value) {
   const segments = [];
   let index = 0;
 
-  const consumeQuoted = (start) => {
-    const quote = value[start];
-    let end = start + 1;
-    while (end < value.length) {
-      if (value[end] === '\\') {
-        end += 2;
-        continue;
-      }
-      if (value[end] === quote) {
-        end++;
-        break;
-      }
-      end++;
-    }
-    return end;
-  };
-
-  const startsUrl = (start) => {
-    return value.slice(start, start + 4).toLowerCase() === 'url(';
-  };
-
-  const consumeUrl = (start) => {
-    let depth = 1;
-    let end = start + 4;
-    while (end < value.length && depth > 0) {
-      if (value[end] === '"' || value[end] === '\'') {
-        end = consumeQuoted(end);
-        continue;
-      }
-      // An escaped character is url data, never the parenthesis that ends it
-      if (value[end] === '\\') {
-        end += 2;
-        continue;
-      }
-      if (value[end] === '(') {
-        depth++;
-      }
-      if (value[end] === ')') {
-        depth--;
-      }
-      end++;
-    }
-    return end;
-  };
-
   while (index < value.length) {
     if (value[index] === '"' || value[index] === '\'') {
-      const end = consumeQuoted(index);
+      const end = skipQuotedString(value, index);
       segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
 
-    if (startsUrl(index)) {
-      const end = consumeUrl(index);
+    if (startsUrlToken(value, index)) {
+      // The `url(` token opens its parenthesized group at its fourth character
+      const end = skipParenthesizedGroup(value, index + 3);
       segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
 
     const start = index;
-    while (index < value.length && value[index] !== '"' && value[index] !== '\'' && !startsUrl(index)) {
+    while (index < value.length && value[index] !== '"' && value[index] !== '\'' && !startsUrlToken(value, index)) {
       index++;
     }
     segments.push({ text: value.slice(start, index), isLiteral: false });
@@ -836,7 +798,11 @@ const ZERO_INITIAL_PROPERTIES = new Set(['margin', 'padding']);
  *
  * @type {Set<string>}
  */
-const AUTO_INITIAL_PROPERTIES = new Set(['min-width', 'min-height']);
+const AUTO_INITIAL_PROPERTIES = new Set([
+  'min-width',
+  'min-height',
+  'hyphenate-limit-chars'
+]);
 
 /**
  * Properties whose initial value is a single keyword longer than the global
@@ -1006,6 +972,69 @@ const BORDER_STYLE_BEFORE_WIDTH_PATTERN = new RegExp(
  */
 function reorderBorderWidthBeforeStyle (value) {
   return value.replace(BORDER_STYLE_BEFORE_WIDTH_PATTERN, '$2 $1');
+}
+
+/**
+ * Matches a trailing `!important` flag, so the components in front of it can be
+ * rewritten without the flag being mistaken for part of the last one.
+ *
+ * @type {RegExp}
+ */
+const IMPORTANT_SUFFIX_PATTERN = /!important$/i;
+
+/**
+ * Separates a value from the `!important` flag it may end with.
+ *
+ * @param  {string} value  The declaration value, possibly flagged important.
+ * @return {object}        The components in front of the flag, and the flag itself or an empty string.
+ */
+function splitImportantSuffix (value) {
+  const match = value.match(IMPORTANT_SUFFIX_PATTERN);
+  if (!match) {
+    return { components: value, importantSuffix: '' };
+  }
+  return {
+    components: value.slice(0, match.index).trim(),
+    importantSuffix: match[0]
+  };
+}
+
+/**
+ * Collapses a `hyphenate-limit-chars` value to its shortest equivalent form.
+ * The property states up to three components: the shortest word that may be
+ * hyphenated, then the fewest characters allowed before a hyphen, then the
+ * fewest allowed after it. An unstated "before" component is read as `auto`,
+ * and an unstated "after" component repeats whatever "before" holds, so a
+ * trailing component that only restates the default it stands in for is
+ * redundant.
+ *
+ * @param  {string} value  The `hyphenate-limit-chars` value.
+ * @return {string}        The value with its redundant trailing components dropped.
+ */
+function collapseHyphenateLimitChars (value) {
+  const {
+    components,
+    importantSuffix
+  } = splitImportantSuffix(value);
+  const parts = components.split(' ').filter(Boolean);
+  if (hasSubstitutedParts(parts)) {
+    return value;
+  }
+  const isAfterMatchingBefore = (
+    parts.length === 3 &&
+    parts[2].toLowerCase() === parts[1].toLowerCase()
+  );
+  if (isAfterMatchingBefore) {
+    parts.pop();
+  }
+  const isBeforeLeftAtDefault = (
+    parts.length === 2 &&
+    parts[1].toLowerCase() === 'auto'
+  );
+  if (isBeforeLeftAtDefault) {
+    parts.pop();
+  }
+  return parts.join(' ') + importantSuffix;
 }
 
 /**
@@ -1299,6 +1328,10 @@ function applyPropertyOptimizations (val, property) {
   // Check if property supports box-model shorthand collapsing (4 → 3 → 2 → 1 values)
   if (/^(margin|padding|inset|border-width|border-style|border-color|gap|overflow)$/.test(property)) {
     val = collapseShorthandParts(val.split(' ')).join(' ');
+  }
+
+  if (property === 'hyphenate-limit-chars') {
+    val = collapseHyphenateLimitChars(val);
   }
 
   if (property === 'border-radius') {

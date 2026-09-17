@@ -3,6 +3,12 @@
  */
 
 import {
+  findMatchingParenthesis,
+  findTopLevelDelimiter,
+  splitTopLevelComponents
+} from '../parser/source-search.js';
+
+import {
   parseColor,
   rgbaToHex,
   shortestColor
@@ -49,69 +55,6 @@ const RELATIVE_COLOR_CHANNELS = {
 };
 
 /**
- * Finds the closing parenthesis matching the opening one at the given index,
- * accounting for nested parentheses.
- *
- * @param  {string} value      The string being scanned.
- * @param  {number} openIndex  Index of the opening parenthesis.
- * @return {number}            Index of the matching close parenthesis, or -1.
- */
-function findClosingParenthesis (value, openIndex) {
-  let depth = 1;
-  let index = openIndex + 1;
-  while (index < value.length) {
-    const character = value[index];
-    if (character === '(') {
-      depth++;
-    } else if (character === ')') {
-      depth--;
-      if (depth === 0) {
-        return index;
-      }
-    }
-    index++;
-  }
-  return -1;
-}
-
-/**
- * Splits a string on top-level whitespace while treating each parenthesized
- * group as part of a single token, keeping nested function arguments intact.
- *
- * @param  {string} text  The text to split.
- * @return {Array}        The list of top-level tokens.
- */
-function splitTopLevelWhitespace (text) {
-  const tokens = [];
-  let current = '';
-  let depth = 0;
-  for (let index = 0; index < text.length; index++) {
-    const character = text[index];
-    if (character === '(') {
-      depth++;
-      current += character;
-    } else if (character === ')') {
-      if (depth > 0) {
-        depth--;
-      }
-      current += character;
-      // Match any single whitespace character at the top level
-    } else if (depth === 0 && /\s/.test(character)) {
-      if (current) {
-        tokens.push(current);
-        current = '';
-      }
-    } else {
-      current += character;
-    }
-  }
-  if (current) {
-    tokens.push(current);
-  }
-  return tokens;
-}
-
-/**
  * Splits a relative-color body into its channel portion and its optional alpha
  * portion at the top-level `/` separator.
  *
@@ -119,20 +62,14 @@ function splitTopLevelWhitespace (text) {
  * @return {Array}        A two-element array of [channelsPart, alphaPart|null].
  */
 function splitRelativeAlpha (body) {
-  let depth = 0;
-  for (let index = 0; index < body.length; index++) {
-    const character = body[index];
-    if (character === '(') {
-      depth++;
-    } else if (character === ')') {
-      if (depth > 0) {
-        depth--;
-      }
-    } else if (character === '/' && depth === 0) {
-      return [body.slice(0, index).trim(), body.slice(index + 1).trim()];
-    }
+  const separatorIndex = findTopLevelDelimiter(body, '/', 0);
+  if (separatorIndex === -1) {
+    return [body.trim(), null];
   }
-  return [body.trim(), null];
+  return [
+    body.slice(0, separatorIndex).trim(),
+    body.slice(separatorIndex + 1).trim()
+  ];
 }
 
 /**
@@ -276,7 +213,7 @@ function rewriteRelativeColor (functionName, inner) {
   // Strip the leading `from` keyword, allowing it to abut the base color
   const body = inner.replace(/^\s*from\b\s*/i, '').trim();
   const [channelsPart, alphaRaw] = splitRelativeAlpha(body);
-  const tokens = splitTopLevelWhitespace(channelsPart);
+  const tokens = splitTopLevelComponents(channelsPart);
   if (tokens.length < 2) {
     return functionName + '(' + inner + ')';
   }
@@ -316,7 +253,7 @@ function minifyRelativeColorSyntax (value) {
     if (match && !precededByIdentifier) {
       const functionName = match[1].toLowerCase();
       const openParenIndex = index + match[1].length;
-      const closingParenIndex = findClosingParenthesis(value, openParenIndex);
+      const closingParenIndex = findMatchingParenthesis(value, openParenIndex);
       if (closingParenIndex !== -1) {
         const inner = value.slice(openParenIndex + 1, closingParenIndex);
         result += rewriteRelativeColor(functionName, inner);

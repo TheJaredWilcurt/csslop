@@ -272,9 +272,7 @@
                 return response.json();
               })
               .then((libraries) => {
-                this.realFilesMap = libraries.filter((library) => {
-                  return library.size < 450_000;
-                });
+                this.realFilesMap = libraries;
               })
           },
           loadRealSelection: function () {

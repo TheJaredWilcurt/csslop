@@ -21,6 +21,7 @@ import getRealWorldCSS from 'real-world-css-libraries';
 
 import { minifyCSS } from '../index.js';
 
+const verbose = process.argv[2];
 const realTimeStart = Date.now();
 const __dirname = import.meta.dirname;
 const minifiedPath = join(__dirname, 'minified');
@@ -28,8 +29,10 @@ const reportPath = join(__dirname, '..', 'realWorldResults.json');
 
 /**
  * Runs all real world tests, reports outcome to console and saves to JSON.
+ *
+ * @param {string} verbose  Toggles file-specific console logs
  */
-function runAndReportRealWorldTests () {
+function runAndReportRealWorldTests (verbose) {
   function deleteOldMinifiedFiles (libraries) {
     const libraryNames = libraries.map((library) => {
       return library.fileName;
@@ -81,14 +84,9 @@ function runAndReportRealWorldTests () {
   }
 
   function runRealWorldTests (libraries) {
-    function runOneTest ({ fileAlreadyExists, i, libraries, outputFile, padding }) {
+    function runOneTest ({ i, libraries, padding }) {
       const library = libraries[i];
-      let output;
-      let duration;
-      if (fileAlreadyExists) {
-        output = String(readFileSync(outputFile)).trim();
-        duration = library.duration;
-      } else {
+      if (verbose) {
         console.log(
           '\n' +
           library.name.padEnd(padding) +
@@ -97,20 +95,20 @@ function runAndReportRealWorldTests () {
           ' - ' +
           ((i + 1) + '/' + libraries.length)
         );
-        const start = Date.now();
-        output = minifyCSS(library.source);
-        duration = Date.now() - start;
       }
+      const start = Date.now();
+      const output = minifyCSS(library.source);
+      const duration = Date.now() - start;
       return {
         output,
         duration
       };
     }
 
-    function logOneTest ({ duration, fileAlreadyExists, library, output, padding }) {
+    function logOneTest ({ duration, library, output, padding }) {
       const percent = Math.round((output.length / library.source.length) * 100);
-      if (!fileAlreadyExists) {
-        const difference = library.source.length - output.length;
+      const difference = library.source.length - output.length;
+      if (verbose) {
         console.log(
           ((duration / 1000) + 's').padEnd(padding) +
           ' - ' +
@@ -126,24 +124,9 @@ function runAndReportRealWorldTests () {
 
     for (let i = 0; i < libraries.length; i++) {
       const library = libraries[i];
-      const outputFile = join(minifiedPath, library.fileName);
-      const fileAlreadyExists = existsSync(outputFile);
 
-      const { output, duration } = runOneTest({
-        fileAlreadyExists,
-        i,
-        libraries,
-        outputFile,
-        padding
-      });
-
-      const { percent } = logOneTest({
-        fileAlreadyExists,
-        duration,
-        library,
-        output,
-        padding
-      });
+      const { output, duration } = runOneTest({ i, libraries, padding });
+      const { percent } = logOneTest({ duration, library, output, padding });
 
       library.duration = duration;
       library.inputSize = library.source.length;
@@ -203,4 +186,4 @@ function runAndReportRealWorldTests () {
   reportRealWorldTests(mutatedLibraries);
 }
 
-runAndReportRealWorldTests();
+runAndReportRealWorldTests(verbose);
