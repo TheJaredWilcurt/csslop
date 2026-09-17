@@ -6,6 +6,11 @@ import {
   expandToLeafProperties,
   getOverridesOf
 } from '../declarations/config.js';
+import {
+  findMatchingBracket,
+  findMatchingParenthesis,
+  splitTopLevelCommaList
+} from '../parser/source-search.js';
 import { escapeRegexString } from '../utilities.js';
 
 import {
@@ -746,34 +751,6 @@ function mergeByDeclarations (rules) {
 }
 
 /**
- * Splits a selector list on top-level commas, respecting parentheses and
- * brackets so commas inside `:is(...)` or `[attr="a,b"]` are not split.
- *
- * @param  {string} selectorList  The selector list string.
- * @return {Array}                The individual selector strings.
- */
-function splitSelectorListTopLevel (selectorList) {
-  const selectors = [];
-  let current = '';
-  let depth = 0;
-  for (const character of selectorList) {
-    if (character === '(' || character === '[') {
-      depth++;
-    } else if (character === ')' || character === ']') {
-      depth--;
-    }
-    if (character === ',' && depth === 0) {
-      selectors.push(current.trim());
-      current = '';
-    } else {
-      current += character;
-    }
-  }
-  selectors.push(current.trim());
-  return selectors;
-}
-
-/**
  * Advances past a CSS identifier (name) starting at the given index.
  *
  * @param  {string} text   The selector text.
@@ -787,28 +764,6 @@ function skipSelectorName (text, start) {
     index++;
   }
   return index;
-}
-
-/**
- * Finds the index of the closing parenthesis matching the one at openIndex.
- *
- * @param  {string} text       The text to scan.
- * @param  {number} openIndex  Index of the opening parenthesis.
- * @return {number}            Index of the matching close parenthesis, or text length.
- */
-function findMatchingParenthesisIndex (text, openIndex) {
-  let depth = 0;
-  for (let index = openIndex; index < text.length; index++) {
-    if (text[index] === '(') {
-      depth++;
-    } else if (text[index] === ')') {
-      depth--;
-      if (depth === 0) {
-        return index;
-      }
-    }
-  }
-  return text.length;
 }
 
 /**
@@ -851,20 +806,9 @@ function computeSpecificity (selector) {
       index = skipSelectorName(text, index + 1);
     } else if (character === '[') {
       specificity[1]++;
-      // Advance to just past the matching closing bracket
-      let bracketDepth = 0;
-      while (index < text.length) {
-        if (text[index] === '[') {
-          bracketDepth++;
-        } else if (text[index] === ']') {
-          bracketDepth--;
-          if (bracketDepth === 0) {
-            index++;
-            break;
-          }
-        }
-        index++;
-      }
+      // An attribute selector that never closes runs to the end of the selector
+      const closeBracketIndex = findMatchingBracket(text, index);
+      index = closeBracketIndex === -1 ? text.length : closeBracketIndex + 1;
     } else if (character === ':') {
       if (text[index + 1] === ':') {
         specificity[2]++;
@@ -874,8 +818,10 @@ function computeSpecificity (selector) {
         const nameEnd = skipSelectorName(text, nameStart);
         const name = text.slice(nameStart, nameEnd).toLowerCase();
         if (text[nameEnd] === '(') {
-          const closeIndex = findMatchingParenthesisIndex(text, nameEnd);
-          const inner = text.slice(nameEnd + 1, closeIndex);
+          // An argument list that never closes runs to the end of the selector
+          const closeIndex = findMatchingParenthesis(text, nameEnd);
+          const argumentsEnd = closeIndex === -1 ? text.length : closeIndex;
+          const inner = text.slice(nameEnd + 1, argumentsEnd);
           if (name === 'where') {
             // :where() contributes zero specificity
           } else if (name === 'is' || name === 'not' || name === 'has' || name === 'matches') {
@@ -886,7 +832,7 @@ function computeSpecificity (selector) {
           } else {
             specificity[1]++;
           }
-          index = closeIndex + 1;
+          index = argumentsEnd + 1;
         } else {
           // Legacy single-colon pseudo-elements count as pseudo-elements
           if (name === 'before' || name === 'after' || name === 'first-line' || name === 'first-letter') {
@@ -920,7 +866,7 @@ function computeSpecificity (selector) {
  */
 function maxSelectorSpecificity (selectorList) {
   let maximum = [0, 0, 0];
-  for (const selector of splitSelectorListTopLevel(selectorList)) {
+  for (const selector of splitTopLevelCommaList(selectorList)) {
     const specificity = computeSpecificity(selector);
     if (compareSpecificity(specificity, maximum) > 0) {
       maximum = specificity;
@@ -951,7 +897,7 @@ function maximumRuleSpecificity (selectors) {
  */
 function minimumRuleSpecificity (selectors) {
   let minimum = null;
-  for (const selector of splitSelectorListTopLevel((selectors || []).join(','))) {
+  for (const selector of splitTopLevelCommaList((selectors || []).join(','))) {
     const specificity = computeSpecificity(selector);
     if (!minimum || compareSpecificity(specificity, minimum) < 0) {
       minimum = specificity;

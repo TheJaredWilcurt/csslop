@@ -3,6 +3,11 @@
  */
 
 import {
+  findMatchingParenthesis,
+  splitTopLevelCommaList
+} from '../parser/source-search.js';
+
+import {
   normalizeScaleComponent,
   roundCompactNumber
 } from './shared.js';
@@ -18,40 +23,10 @@ function isZeroTransformValue (value) {
 }
 
 /**
- * Splits a CSS function's comma-separated argument string into an array, correctly handling nested parentheses.
- *
- * @param  {string} value  The raw arguments string inside the function parentheses.
- * @return {Array}         An array of trimmed argument strings.
- */
-function splitFunctionArguments (value) {
-  const parts = [];
-  let depth = 0;
-  let current = '';
-  for (const character of value) {
-    if (character === '(') {
-      depth++;
-    }
-    if (character === ')') {
-      depth--;
-    }
-    if (character === ',' && depth === 0) {
-      parts.push(current.trim());
-      current = '';
-    } else {
-      current += character;
-    }
-  }
-  if (current.trim() || parts.length) {
-    parts.push(current.trim());
-  }
-  return parts;
-}
-
-/**
  * Parses a CSS transform value string into an array of objects, each containing a function name and its raw arguments string.
  *
  * @param  {string}     value  The full CSS transform value string.
- * @return {Array|null}        An array of { name, args } objects, or null if the string cannot be parsed.
+ * @return {Array|null}        An array of { name, arguments } objects, or null if the string cannot be parsed.
  */
 function splitTransformFunctions (value) {
   const parts = [];
@@ -72,23 +47,15 @@ function splitTransformFunctions (value) {
     if (nameStart === position || value[position] !== '(') {
       return null;
     }
-    const name = value.slice(nameStart, position);
-    let depth = 1;
-    let end = position + 1;
-    while (end < value.length && depth > 0) {
-      if (value[end] === '(') {
-        depth++;
-      }
-      if (value[end] === ')') {
-        depth--;
-      }
-      end++;
-    }
-    if (depth !== 0) {
+    const closeIndex = findMatchingParenthesis(value, position);
+    if (closeIndex === -1) {
       return null;
     }
-    parts.push({ name, args: value.slice(position + 1, end - 1) });
-    position = end;
+    parts.push({
+      name: value.slice(nameStart, position),
+      argumentText: value.slice(position + 1, closeIndex)
+    });
+    position = closeIndex + 1;
   }
   return parts;
 }
@@ -96,13 +63,13 @@ function splitTransformFunctions (value) {
 /**
  * Minifies a single CSS transform function by simplifying 3D functions to 2D equivalents, collapsing redundant axes, and normalizing scale percentages.
  *
- * @param  {string} name  The transform function name (e.g. "translate3d", "scale").
- * @param  {string} args  The raw comma-separated arguments string.
- * @return {string}       The minified transform function call string.
+ * @param  {string} name          The transform function name (e.g. "translate3d", "scale").
+ * @param  {string} argumentText  The raw comma-separated arguments string.
+ * @return {string}               The minified transform function call string.
  */
-function minifyTransformFunction (name, args) {
+function minifyTransformFunction (name, argumentText) {
   const lowerName = name.toLowerCase();
-  const parts = splitFunctionArguments(args);
+  const parts = splitTopLevelCommaList(argumentText);
 
   if (lowerName === 'rotate' && parts.length === 1) {
     // Convert turn units to degrees (e.g. 0.5turn → 180deg)
@@ -214,8 +181,8 @@ function minifyTransformValue (value) {
   if (!functions) {
     return value;
   }
-  return functions.map(({ name, args }) => {
-    return minifyTransformFunction(name, args);
+  return functions.map(({ name, argumentText }) => {
+    return minifyTransformFunction(name, argumentText);
   }).join(' ');
 }
 

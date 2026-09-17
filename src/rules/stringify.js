@@ -3,6 +3,7 @@
  */
 
 import { processDeclarations } from '../declarations/process.js';
+import { splitTopLevelCommaList } from '../parser/source-search.js';
 import { minifyValueForOutput } from '../value/minify.js';
 
 import {
@@ -25,8 +26,7 @@ import { resolvePropertyDescriptors } from './property.js';
 import {
   flattenNestingParentIsSelector,
   mergeAdjacentWherePseudoClasses,
-  processIsSelector,
-  splitParametersByComma
+  processIsSelector
 } from './selectors.js';
 
 /**
@@ -103,10 +103,9 @@ function minifyFunctionPrelude (prelude) {
   const functionName = trimmedPrelude.slice(0, openParenIndex);
   const closeParenIndex = trimmedPrelude.lastIndexOf(')');
   const innerContent = trimmedPrelude.slice(openParenIndex + 1, closeParenIndex);
-  const parameters = splitParametersByComma(innerContent);
-  const minifiedParameters = parameters.map((parameter) => {
+  const minifiedParameters = splitTopLevelCommaList(innerContent).map((parameter) => {
     // Collapse whitespace around the colon separating parameter name from default value
-    return parameter.trim().replace(/\s*:\s*/, ':');
+    return parameter.replace(/\s*:\s*/, ':');
   });
   return functionName + '(' + minifiedParameters.join(',') + ')';
 }

@@ -29,6 +29,8 @@ const reportPath = join(__dirname, '..', 'realWorldResults.json');
 
 /**
  * Runs all real world tests, reports outcome to console and saves to JSON.
+ *
+ * @param {string} verbose  Toggles file-specific console logs
  */
 function runAndReportRealWorldTests (verbose) {
   function deleteOldMinifiedFiles (libraries) {

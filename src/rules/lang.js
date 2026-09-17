@@ -5,9 +5,12 @@
  */
 
 import {
-  findMatchingCloseParenthesis,
-  findNextFunctionCallOutsideStrings
-} from './selectors.js';
+  findMatchingParenthesis,
+  skipParenthesizedGroup,
+  splitTopLevel
+} from '../parser/source-search.js';
+
+import { findNextFunctionCallOutsideStrings } from './selectors.js';
 
 /**
  * The `:lang()` pseudo-class opening, as it is written in minified output.
@@ -80,49 +83,6 @@ function requiresEscape (character) {
 }
 
 /**
- * Splits the argument list of a `:lang()` into its individual language-codes,
- * treating only the commas outside of a quoted code as separators.
- *
- * @param  {string} argumentList  The text between the parentheses of a `:lang()`.
- * @return {Array}                The language-codes, still in the form they were written in.
- */
-function splitLanguageCodes (argumentList) {
-  const codes = [];
-  let current = '';
-  let openQuote = '';
-  for (let index = 0; index < argumentList.length; index++) {
-    const character = argumentList[index];
-    const nextCharacter = argumentList[index + 1] ?? '';
-    if (character === '\\') {
-      // An escape carries the character behind it along, whatever it may be
-      current += character + nextCharacter;
-      index++;
-      continue;
-    }
-    if (openQuote) {
-      current += character;
-      if (character === openQuote) {
-        openQuote = '';
-      }
-      continue;
-    }
-    if (character === '"' || character === '\'') {
-      openQuote = character;
-      current += character;
-      continue;
-    }
-    if (character === ',') {
-      codes.push(current);
-      current = '';
-      continue;
-    }
-    current += character;
-  }
-  codes.push(current);
-  return codes;
-}
-
-/**
  * Reads the plain language-code out of one `:lang()` argument, stripping the
  * quotes or escapes that were only there to let it be written. Arguments this
  * minifier cannot read with certainty, such as one holding a code point
@@ -191,7 +151,7 @@ function formatLanguageCode (code) {
  */
 function minifyLanguageArguments (argumentList) {
   const codes = [];
-  for (const argument of splitLanguageCodes(argumentList)) {
+  for (const argument of splitTopLevel(argumentList, ',')) {
     const code = readLanguageCode(argument);
     if (code === null) {
       return null;
@@ -217,7 +177,7 @@ function findLanguageFunctions (selector) {
       break;
     }
     const openIndex = startIndex + LANGUAGE_FUNCTION.length - 1;
-    const closeIndex = findMatchingCloseParenthesis(selector, openIndex);
+    const closeIndex = findMatchingParenthesis(selector, openIndex);
     if (closeIndex === -1) {
       break;
     }
@@ -271,15 +231,19 @@ function minifyLanguageSelector (selector) {
  * @return {boolean}           True when an enclosing parenthesis is still open at that position.
  */
 function isInsideFunction (selector, index) {
-  let depth = 0;
-  for (const character of selector.slice(0, index)) {
-    if (character === '(') {
-      depth++;
-    } else if (character === ')') {
-      depth--;
+  let position = 0;
+  while (position < index) {
+    if (selector[position] !== '(') {
+      position++;
+      continue;
     }
+    const afterGroupIndex = skipParenthesizedGroup(selector, position);
+    if (afterGroupIndex > index) {
+      return true;
+    }
+    position = afterGroupIndex;
   }
-  return depth > 0;
+  return false;
 }
 
 /**
@@ -305,7 +269,7 @@ function splitAroundLanguageCodes (selector) {
   if (isInsideFunction(selector, startIndex)) {
     return null;
   }
-  const codes = splitLanguageCodes(selector.slice(openIndex + 1, closeIndex)).map((code) => {
+  const codes = splitTopLevel(selector.slice(openIndex + 1, closeIndex), ',').map((code) => {
     return code.trim();
   });
   if (codes.some((code) => {

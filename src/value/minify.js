@@ -3,6 +3,12 @@
  */
 
 import { isUnicodeCharset } from '../context.js';
+import {
+  findMatchingParenthesis,
+  skipParenthesizedGroup,
+  skipQuotedString,
+  startsUrlToken
+} from '../parser/source-search.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import { evaluateColorMix } from './color-mix.js';
@@ -37,7 +43,6 @@ import {
   parseAngleToDegrees,
   roundCompactNumber
 } from './shared.js';
-import { findMatchingParenthesis } from './syntax.js';
 import { elideRedundantSeparators } from './tokens.js';
 import { minifyTransformValue } from './transforms.js';
 import { optimizeUnicodeRange } from './unicode-range.js';
@@ -137,68 +142,24 @@ function splitValueSegments (value) {
   const segments = [];
   let index = 0;
 
-  const consumeQuoted = (start) => {
-    const quote = value[start];
-    let end = start + 1;
-    while (end < value.length) {
-      if (value[end] === '\\') {
-        end += 2;
-        continue;
-      }
-      if (value[end] === quote) {
-        end++;
-        break;
-      }
-      end++;
-    }
-    return end;
-  };
-
-  const startsUrl = (start) => {
-    return value.slice(start, start + 4).toLowerCase() === 'url(';
-  };
-
-  const consumeUrl = (start) => {
-    let depth = 1;
-    let end = start + 4;
-    while (end < value.length && depth > 0) {
-      if (value[end] === '"' || value[end] === '\'') {
-        end = consumeQuoted(end);
-        continue;
-      }
-      // An escaped character is url data, never the parenthesis that ends it
-      if (value[end] === '\\') {
-        end += 2;
-        continue;
-      }
-      if (value[end] === '(') {
-        depth++;
-      }
-      if (value[end] === ')') {
-        depth--;
-      }
-      end++;
-    }
-    return end;
-  };
-
   while (index < value.length) {
     if (value[index] === '"' || value[index] === '\'') {
-      const end = consumeQuoted(index);
+      const end = skipQuotedString(value, index);
       segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
 
-    if (startsUrl(index)) {
-      const end = consumeUrl(index);
+    if (startsUrlToken(value, index)) {
+      // The `url(` token opens its parenthesized group at its fourth character
+      const end = skipParenthesizedGroup(value, index + 3);
       segments.push({ text: value.slice(index, end), isLiteral: true });
       index = end;
       continue;
     }
 
     const start = index;
-    while (index < value.length && value[index] !== '"' && value[index] !== '\'' && !startsUrl(index)) {
+    while (index < value.length && value[index] !== '"' && value[index] !== '\'' && !startsUrlToken(value, index)) {
       index++;
     }
     segments.push({ text: value.slice(start, index), isLiteral: false });

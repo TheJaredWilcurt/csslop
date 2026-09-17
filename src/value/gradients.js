@@ -3,38 +3,14 @@
  */
 
 import {
+  findMatchingParenthesis,
+  splitTopLevelCommaList
+} from '../parser/source-search.js';
+
+import {
   parseHex,
   shortestColor
 } from './colors.js';
-
-/**
- * Splits a gradient function's argument string at top-level commas, correctly handling nested parentheses.
- *
- * @param  {string} argumentString  The raw gradient arguments string.
- * @return {Array}                  An array of trimmed argument strings.
- */
-function splitGradientArgs (argumentString) {
-  const parts = [];
-  let depth = 0;
-  let current = '';
-  for (const character of argumentString) {
-    if (character === '(') {
-      depth++;
-    } else if (character === ')') {
-      depth--;
-    }
-    if (character === ',' && depth === 0) {
-      parts.push(current.trim());
-      current = '';
-    } else {
-      current += character;
-    }
-  }
-  if (current.trim() || parts.length) {
-    parts.push(current.trim());
-  }
-  return parts;
-}
 
 /**
  * Checks whether a string is a valid gradient stop position consisting of one
@@ -435,45 +411,45 @@ function normalizeRadialGradientShape (args) {
 /**
  * Optimizes gradient arguments by removing default direction or shape keywords, combining adjacent identical color stops, and trimming redundant 0% or 100% stop positions from the first and last stops.
  *
- * @param  {string} func     The gradient function name (e.g. "linear-gradient").
- * @param  {string} argsStr  The raw comma-separated gradient arguments string.
- * @return {string}          The optimized gradient arguments string.
+ * @param  {string} functionName  The gradient function name (e.g. "linear-gradient").
+ * @param  {string} argumentText  The raw comma-separated gradient arguments string.
+ * @return {string}               The optimized gradient arguments string.
  */
-function processGradientArgs (func, argsStr) {
-  const args = splitGradientArgs(argsStr);
-  const functionLower = func.toLowerCase();
+function processGradientArguments (functionName, argumentText) {
+  const argumentList = splitTopLevelCommaList(argumentText);
+  const lowercaseName = functionName.toLowerCase();
 
-  let directionArgCount = 0;
+  let directionArgumentCount = 0;
 
-  if (args.length > 1) {
-    if (functionLower.includes('linear')) {
-      directionArgCount = normalizeLinearGradientDirection(args);
-    } else if (functionLower.includes('radial')) {
-      directionArgCount = normalizeRadialGradientShape(args);
+  if (argumentList.length > 1) {
+    if (lowercaseName.includes('linear')) {
+      directionArgumentCount = normalizeLinearGradientDirection(argumentList);
+    } else if (lowercaseName.includes('radial')) {
+      directionArgumentCount = normalizeRadialGradientShape(argumentList);
     }
   }
 
-  // Extract color stop args (everything after the direction/shape argument)
-  const colorStopArgs = args.slice(directionArgCount).map((arg) => {
-    return normalizeColorStop(arg);
+  // Extract color stop arguments (everything after the direction/shape argument)
+  const colorStopArguments = argumentList.slice(directionArgumentCount).map((argument) => {
+    return normalizeColorStop(argument);
   });
-  if (colorStopArgs.length > 0) {
-    const normalizedStops = colorStopArgs.length >= 2 ?
-      combineAdjacentIdenticalStops(colorStopArgs) :
-      colorStopArgs;
-    args.splice(directionArgCount, colorStopArgs.length, ...normalizedStops);
+  if (colorStopArguments.length > 0) {
+    const normalizedStops = colorStopArguments.length >= 2 ?
+      combineAdjacentIdenticalStops(colorStopArguments) :
+      colorStopArguments;
+    argumentList.splice(directionArgumentCount, colorStopArguments.length, ...normalizedStops);
   }
 
-  if (args.length > directionArgCount) {
-    const firstStopIndex = directionArgCount;
-    const lastStopIndex = args.length - 1;
+  if (argumentList.length > directionArgumentCount) {
+    const firstStopIndex = directionArgumentCount;
+    const lastStopIndex = argumentList.length - 1;
     // Remove default 0% stop position from the first gradient stop
-    args[firstStopIndex] = args[firstStopIndex].replace(/^(.*\S)\s+0%$/, '$1');
+    argumentList[firstStopIndex] = argumentList[firstStopIndex].replace(/^(.*\S)\s+0%$/, '$1');
     // Remove default 100% stop position from the last gradient stop
-    args[lastStopIndex] = args[lastStopIndex].replace(/^(.*\S)\s+100%$/, '$1');
+    argumentList[lastStopIndex] = argumentList[lastStopIndex].replace(/^(.*\S)\s+100%$/, '$1');
   }
 
-  return args.join(',');
+  return argumentList.join(',');
 }
 
 /**
@@ -490,24 +466,21 @@ function minifyGradients (value) {
     // Match gradient function names: linear-gradient, radial-gradient, conic-gradient, and their repeating- variants
     const gradientMatch = rest.match(/^((?:repeating-)?(?:linear|radial|conic)-gradient)\(/i);
     if (gradientMatch) {
-      const func = gradientMatch[1];
-      let depth = 1;
-      let end = position + func.length + 1;
-      while (end < value.length && depth > 0) {
-        if (value[end] === '(') {
-          depth++;
-        } else if (value[end] === ')') {
-          depth--;
-        }
-        end++;
+      const functionName = gradientMatch[1];
+      const openIndex = position + functionName.length;
+      const closeIndex = findMatchingParenthesis(value, openIndex);
+      if (closeIndex === -1) {
+        // A gradient whose arguments never close is left exactly as it was written
+        result += value.slice(position);
+        break;
       }
-      const argsStr = value.slice(position + func.length + 1, end - 1);
-      result += func + '(' + processGradientArgs(func, argsStr) + ')';
-      position = end;
-    } else {
-      result += value[position];
-      position++;
+      const argumentText = value.slice(openIndex + 1, closeIndex);
+      result += functionName + '(' + processGradientArguments(functionName, argumentText) + ')';
+      position = closeIndex + 1;
+      continue;
     }
+    result += value[position];
+    position++;
   }
   return result;
 }

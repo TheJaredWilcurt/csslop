@@ -2,10 +2,10 @@
  * @file Rewrites border longhand declarations that cannot be expressed as a single `border` shorthand into the shortest valid shorthand plus override pair.
  */
 
+import { splitTopLevelComponents } from '../parser/source-search.js';
 import { minifyValue } from '../value/minify.js';
 import { namedColors } from '../value/named-colors.js';
 import { collapseShorthandParts } from '../value/shared.js';
-import { splitTopLevelComponents } from '../value/syntax.js';
 
 import {
   BORDER_EDGE_PROPERTIES,

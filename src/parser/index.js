@@ -410,6 +410,9 @@ function parseBlockItems (state, contents) {
   const items = [];
   let parsing = true;
   while (parsing) {
+    // A semicolon that follows nothing states an empty declaration, which
+    // declares as much as it says: nothing
+    skipSemicolonsAndWhitespace(scanner);
     parseComments(state, items);
     if (!hasMoreInput(scanner) || characterCodeAt(scanner) === CHARACTER_CODE.closeBrace) {
       return items;
@@ -443,7 +446,11 @@ function parseBlock (state, contents) {
   const beforeCloseOffset = scanner.index;
   if (!consumeCloseBrace(scanner)) {
     recordError(state, 'missing \'}\'');
-    return null;
+    // The end of the stylesheet closes every block still open at it, so a
+    // stylesheet that stops mid-block still declares what it got through
+    if (hasMoreInput(scanner)) {
+      return null;
+    }
   }
   return insertWhitespaceNodes(state, items, afterOpenOffset, beforeCloseOffset);
 }

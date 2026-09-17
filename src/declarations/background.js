@@ -2,6 +2,10 @@
  * @file Classifies background shorthand tokens and rebuilds the `background` shorthand from its component values.
  */
 
+import {
+  splitTopLevel,
+  splitTopLevelComponents
+} from '../parser/source-search.js';
 import { minifyValue } from '../value/minify.js';
 
 import { shorthandMap } from './config.js';
@@ -137,6 +141,27 @@ function splitAttachedBackgroundImageToken (token) {
 }
 
 /**
+ * Splits one component of a background shorthand at the `/` that separates a
+ * position from a size, keeping the `/` as a token of its own so that the two
+ * remain told apart however they were written.
+ *
+ * @param  {string} component  One whitespace-separated component of the shorthand.
+ * @return {Array}             The component's tokens, including any `/` it holds.
+ */
+function splitPositionSizeSeparator (component) {
+  const tokens = [];
+  splitTopLevel(component, '/').forEach((part, index) => {
+    if (index > 0) {
+      tokens.push('/');
+    }
+    if (part) {
+      tokens.push(part);
+    }
+  });
+  return tokens;
+}
+
+/**
  * Splits a single-layer background shorthand into top-level tokens while
  * respecting nested parentheses and preserving `/` as its own token.
  *
@@ -145,45 +170,12 @@ function splitAttachedBackgroundImageToken (token) {
  */
 function splitBackgroundTokens (value) {
   const tokens = [];
-  let currentToken = '';
-  let parenthesisDepth = 0;
-
-  for (const character of value) {
-    if (character === '(') {
-      parenthesisDepth++;
-    } else if (character === ')') {
-      parenthesisDepth--;
+  for (const component of splitTopLevelComponents(value)) {
+    for (const token of splitPositionSizeSeparator(component)) {
+      tokens.push(...splitAttachedBackgroundImageToken(token));
     }
-
-    if (parenthesisDepth === 0 && character === '/') {
-      if (currentToken) {
-        tokens.push(currentToken);
-        currentToken = '';
-      }
-      tokens.push('/');
-      continue;
-    }
-
-    if (parenthesisDepth === 0 && /\s/.test(character)) {
-      if (currentToken) {
-        tokens.push(currentToken);
-        currentToken = '';
-      }
-      continue;
-    }
-
-    currentToken += character;
   }
-
-  if (currentToken) {
-    tokens.push(currentToken);
-  }
-
-  const normalizedTokens = [];
-  for (const token of tokens) {
-    normalizedTokens.push(...splitAttachedBackgroundImageToken(token));
-  }
-  return normalizedTokens;
+  return tokens;
 }
 
 /**

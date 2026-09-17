@@ -2,118 +2,24 @@
  * @file Selector minification utilities for CSS rule stringification.
  */
 
-/**
- * Splits a parameter string by commas while respecting nested parentheses,
- * so commas inside function calls within default values are not treated as separators.
- *
- * @param  {string} parameterString  The comma-separated parameter string to split.
- * @return {Array}                   An array of individual parameter strings.
- */
-function splitParametersByComma (parameterString) {
-  const parameters = [];
-  let currentParameter = '';
-  let parenthesisDepth = 0;
-  for (const character of parameterString) {
-    if (character === '(') {
-      parenthesisDepth++;
-    } else if (character === ')') {
-      parenthesisDepth--;
-    }
-    if (character === ',' && parenthesisDepth === 0) {
-      parameters.push(currentParameter);
-      currentParameter = '';
-    } else {
-      currentParameter += character;
-    }
-  }
-  parameters.push(currentParameter);
-  return parameters;
-}
+import {
+  findMatchingBracket,
+  findMatchingParenthesis,
+  findTopLevelDelimiter,
+  skipBracketedGroup,
+  skipQuotedString,
+  splitTopLevel,
+  splitTopLevelCommaList
+} from '../parser/source-search.js';
 
 /**
- * Advances past a quoted string in a selector, honoring backslash escapes so a
- * quoted close-quote does not end the skip early.
+ * The characters that end one compound selector of a complex selector: the
+ * three combinators that join compounds, and the whitespace of the descendant
+ * combinator.
  *
- * @param  {string} text        The selector string being scanned.
- * @param  {number} quoteIndex  The index of the opening quote character.
- * @return {number}             The index right after the closing quote, or the end of the string if the quote never closes.
+ * @type {string}
  */
-function skipQuotedText (text, quoteIndex) {
-  const quote = text[quoteIndex];
-  let index = quoteIndex + 1;
-  while (index < text.length) {
-    if (text[index] === '\\') {
-      index++;
-    } else if (text[index] === quote) {
-      return index + 1;
-    }
-    index++;
-  }
-  return text.length;
-}
-
-/**
- * Advances past an attribute selector `[...]` in a selector, skipping quoted
- * values and escaped characters so brackets inside them are not miscounted.
- *
- * @param  {string} text       The selector string being scanned.
- * @param  {number} openIndex  The index of the `[` that opens the attribute selector.
- * @return {number}            The index right after the closing `]`, or the end of the string if it never closes.
- */
-function skipAttributeSelector (text, openIndex) {
-  let index = openIndex + 1;
-  while (index < text.length) {
-    const character = text[index];
-    if (character === '"' || character === '\'') {
-      index = skipQuotedText(text, index);
-      continue;
-    }
-    if (character === '\\') {
-      index += 2;
-      continue;
-    }
-    if (character === ']') {
-      return index + 1;
-    }
-    index++;
-  }
-  return text.length;
-}
-
-/**
- * Finds the index of the closing parenthesis that matches the opening
- * parenthesis at the given position in the string, skipping over quoted
- * strings and attribute selectors so parentheses inside them are ignored.
- *
- * @param  {string} text       The string to search within.
- * @param  {number} openIndex  The index of the opening parenthesis.
- * @return {number}            The index of the matching closing parenthesis, or -1 if not found.
- */
-function findMatchingCloseParenthesis (text, openIndex) {
-  let depth = 0;
-  let index = openIndex;
-  while (index < text.length) {
-    const character = text[index];
-    if (character === '"' || character === '\'') {
-      index = skipQuotedText(text, index);
-      continue;
-    }
-    if (character === '[') {
-      index = skipAttributeSelector(text, index);
-      continue;
-    }
-    if (character === '(') {
-      depth++;
-    } else if (character === ')') {
-      depth--;
-      if (depth === 0) {
-        return index;
-      }
-    }
-    index++;
-  }
-  return -1;
-}
+const COMPOUND_SELECTOR_BOUNDARIES = '>+~ \t\n\r\f';
 
 /**
  * Finds the next occurrence of a pseudo-class function token (e.g. `:is(`)
@@ -131,11 +37,11 @@ function findNextFunctionCallOutsideStrings (text, functionCall, start) {
   while (index < text.length) {
     const character = text[index];
     if (character === '"' || character === '\'') {
-      index = skipQuotedText(text, index);
+      index = skipQuotedString(text, index);
       continue;
     }
     if (character === '[') {
-      index = skipAttributeSelector(text, index);
+      index = skipBracketedGroup(text, index);
       continue;
     }
     if (character === '\\') {
@@ -208,7 +114,7 @@ function buildWhereCartesianProduct (leftParts, rightParts) {
   const products = [];
   for (const leftSelector of leftParts) {
     for (const rightSelector of rightParts) {
-      const merged = mergeCompoundSelectors(leftSelector.trim(), rightSelector.trim());
+      const merged = mergeCompoundSelectors(leftSelector, rightSelector);
       if (merged === null) {
         return null;
       }
@@ -239,7 +145,7 @@ function mergeAdjacentWherePseudoClasses (selector) {
     }
     // Index of the '(' in the first ':where('
     const firstOpenParenthesis = whereIndex + 6;
-    const firstCloseParenthesis = findMatchingCloseParenthesis(result, firstOpenParenthesis);
+    const firstCloseParenthesis = findMatchingParenthesis(result, firstOpenParenthesis);
     if (firstCloseParenthesis === -1) {
       break;
     }
@@ -251,14 +157,14 @@ function mergeAdjacentWherePseudoClasses (selector) {
     }
     // Index of the '(' in the second ':where('
     const secondOpenParenthesis = adjacentStart + 6;
-    const secondCloseParenthesis = findMatchingCloseParenthesis(result, secondOpenParenthesis);
+    const secondCloseParenthesis = findMatchingParenthesis(result, secondOpenParenthesis);
     if (secondCloseParenthesis === -1) {
       break;
     }
     const firstInnerContent = result.slice(firstOpenParenthesis + 1, firstCloseParenthesis);
     const secondInnerContent = result.slice(secondOpenParenthesis + 1, secondCloseParenthesis);
-    const leftParts = splitParametersByComma(firstInnerContent);
-    const rightParts = splitParametersByComma(secondInnerContent);
+    const leftParts = splitTopLevelCommaList(firstInnerContent);
+    const rightParts = splitTopLevelCommaList(secondInnerContent);
     const mergedParts = buildWhereCartesianProduct(leftParts, rightParts);
     if (mergedParts === null) {
       position = firstCloseParenthesis + 1;
@@ -468,7 +374,7 @@ function summarizeCompoundSelector (selector) {
       }
     } else if (character === '[') {
       // Attribute selector: well-formed input has a closing bracket
-      const closeBracketIndex = selector.indexOf(']', index + 1);
+      const closeBracketIndex = findMatchingBracket(selector, index);
       if (closeBracketIndex === -1) {
         return null;
       }
@@ -488,7 +394,7 @@ function summarizeCompoundSelector (selector) {
       index = nameEnd;
       if (selector[index] === '(') {
         // Functional pseudo-class: skip past its balanced argument parentheses
-        const closeParenthesisIndex = findMatchingCloseParenthesis(selector, index);
+        const closeParenthesisIndex = findMatchingParenthesis(selector, index);
         if (closeParenthesisIndex === -1) {
           return null;
         }
@@ -530,30 +436,8 @@ function summarizeCompoundSelector (selector) {
  * @return {Array}            The compound selector segments, combinators excluded.
  */
 function splitCombinatorSegments (selector) {
-  const segments = [];
-  let currentSegment = '';
-  let depth = 0;
-  for (const character of selector) {
-    if (character === '(' || character === '[') {
-      depth++;
-    } else if (character === ')' || character === ']') {
-      depth--;
-    }
-    // A combinator at the top level ends the current compound segment;
-    // whitespace runs collapse into a single boundary
-    if (depth === 0 && (character === '>' || character === '+' || character === '~' || /\s/.test(character))) {
-      if (currentSegment) {
-        segments.push(currentSegment);
-        currentSegment = '';
-      }
-      continue;
-    }
-    currentSegment += character;
-  }
-  if (currentSegment) {
-    segments.push(currentSegment);
-  }
-  return segments;
+  // A run of boundaries, such as the spaces around a `>`, yields empty segments
+  return splitTopLevel(selector, COMPOUND_SELECTOR_BOUNDARIES).filter(Boolean);
 }
 
 /**
@@ -614,18 +498,7 @@ function containsPseudoElement (selector) {
  * @return {boolean}           True when a top-level combinator is present.
  */
 function hasTopLevelCombinator (selector) {
-  let depth = 0;
-  for (const character of selector) {
-    if (character === '(' || character === '[') {
-      depth++;
-    } else if (character === ')' || character === ']') {
-      depth--;
-    } else if (depth === 0 && (character === '>' || character === '+' || character === '~' || /\s/.test(character))) {
-      // A combinator or whitespace boundary at the top level joins two compounds
-      return true;
-    }
-  }
-  return false;
+  return findTopLevelDelimiter(selector, COMPOUND_SELECTOR_BOUNDARIES, 0) !== -1;
 }
 
 /**
@@ -673,13 +546,13 @@ function unwrapSingleArgumentIsFunctions (selector, hasSiblingSelectors) {
       break;
     }
     const openParenthesisIndex = isIndex + 3;
-    const closeParenthesisIndex = findMatchingCloseParenthesis(result, openParenthesisIndex);
+    const closeParenthesisIndex = findMatchingParenthesis(result, openParenthesisIndex);
     if (closeParenthesisIndex === -1) {
       break;
     }
     const content = result.slice(openParenthesisIndex + 1, closeParenthesisIndex);
     const innerSelector = content.trim();
-    const parts = splitParametersByComma(content);
+    const parts = splitTopLevelCommaList(content);
     if (parts.length !== 1 || !innerSelector) {
       position = closeParenthesisIndex + 1;
       continue;
@@ -734,11 +607,7 @@ function canDecomposeIsSelector (parts) {
   }
   const summaries = [];
   for (const part of parts) {
-    const trimmedPart = part.trim();
-    if (!trimmedPart) {
-      return false;
-    }
-    const summary = summarizeCompoundSelector(trimmedPart);
+    const summary = summarizeCompoundSelector(part);
     if (!summary || !summary.recognizable || summary.hasPseudoElement) {
       return false;
     }
@@ -752,6 +621,25 @@ function canDecomposeIsSelector (parts) {
       summary.typeLevelCount === firstSummary.typeLevelCount
     );
   });
+}
+
+/**
+ * Reads the selector list of an `:is()` that makes up the whole of a selector,
+ * which is the only shape of `:is()` whose parts can be lifted out of it.
+ *
+ * @param  {string}     selector  A minified CSS selector string.
+ * @return {Array|null}           The selectors inside the `:is()`, or null when the selector is anything more than one `:is()`.
+ */
+function readWholeSelectorIsParts (selector) {
+  if (!selector.startsWith(':is(')) {
+    return null;
+  }
+  // The `:is(` token opens its argument list at its fourth character
+  const closingIndex = findMatchingParenthesis(selector, 3);
+  if (closingIndex !== selector.length - 1) {
+    return null;
+  }
+  return splitTopLevelCommaList(selector.slice(4, -1));
 }
 
 /**
@@ -772,43 +660,10 @@ function processIsSelector (selector, hasSiblingSelectors) {
   selector = selector.replace(/:is\(:visited,:link\)/g, ':any-link');
   selector = unwrapSingleArgumentIsFunctions(selector, hasSiblingSelectors);
   // Only process bare :is() selectors (where :is() is the entire selector)
-  if (!selector.startsWith(':is(')) {
+  let parts = readWholeSelectorIsParts(selector);
+  if (!parts) {
     return [selector];
   }
-  let depth = 0;
-  let closingIndex = -1;
-  for (let index = 4; index < selector.length; index++) {
-    if (selector[index] === '(') {
-      depth++;
-    } else if (selector[index] === ')') {
-      if (depth === 0) {
-        closingIndex = index;
-        break;
-      }
-      depth--;
-    }
-  }
-  if (closingIndex !== selector.length - 1) {
-    return [selector];
-  }
-  const content = selector.slice(4, -1);
-  let parts = [];
-  let currentPart = '';
-  let parenDepth = 0;
-  for (const character of content) {
-    if (character === '(') {
-      parenDepth++;
-    } else if (character === ')') {
-      parenDepth--;
-    }
-    if (character === ',' && parenDepth === 0) {
-      parts.push(currentPart);
-      currentPart = '';
-    } else {
-      currentPart += character;
-    }
-  }
-  parts.push(currentPart);
   // Replace :link + :visited with :any-link
   const hasLink = parts.includes(':link');
   const hasVisited = parts.includes(':visited');
@@ -826,11 +681,11 @@ function processIsSelector (selector, hasSiblingSelectors) {
   parts.sort();
   // Unwrap :is() with a single selector
   if (parts.length === 1) {
-    const onlyPart = parts[0].trim();
+    const onlyPart = parts[0];
     const canUnwrap = hasSiblingSelectors ?
       isUniversallyRecognizableSelector(onlyPart) :
       !containsPseudoElement(onlyPart);
-    return canUnwrap ? [onlyPart] : [':is(' + parts[0] + ')'];
+    return canUnwrap ? [onlyPart] : [':is(' + onlyPart + ')'];
   }
   // Drop the :is() wrapper when the parts are equivalent as a plain selector list
   if (canDecomposeIsSelector(parts)) {
@@ -851,29 +706,10 @@ function processIsSelector (selector, hasSiblingSelectors) {
  * @return {Array}            The flattened selector parts, or the original selector.
  */
 function flattenNestingParentIsSelector (selector) {
-  if (!selector.startsWith(':is(')) {
+  const parts = readWholeSelectorIsParts(selector);
+  if (!parts) {
     return [selector];
   }
-  let depth = 0;
-  let closingIndex = -1;
-  for (let index = 4; index < selector.length; index++) {
-    if (selector[index] === '(') {
-      depth++;
-    } else if (selector[index] === ')') {
-      if (depth === 0) {
-        closingIndex = index;
-        break;
-      }
-      depth--;
-    }
-  }
-  // The :is() must span the entire selector to be safely liftable
-  if (closingIndex !== selector.length - 1) {
-    return [selector];
-  }
-  const parts = splitParametersByComma(selector.slice(4, -1)).map((part) => {
-    return part.trim();
-  });
   const hasPotentiallyUnsupportedPart = parts.some((part) => {
     return part.includes(':');
   });
@@ -882,11 +718,10 @@ function flattenNestingParentIsSelector (selector) {
   }
   return parts;
 }
+
 export {
-  findMatchingCloseParenthesis,
   findNextFunctionCallOutsideStrings,
   flattenNestingParentIsSelector,
   mergeAdjacentWherePseudoClasses,
-  processIsSelector,
-  splitParametersByComma
+  processIsSelector
 };

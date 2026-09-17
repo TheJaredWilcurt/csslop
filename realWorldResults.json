@@ -1,16 +1,16 @@
 {
   "totals": {
     "inputSize": 43627238,
-    "outputSize": 34936435,
-    "duration": 18718,
-    "durationHuman": "18.7s",
-    "percent": "80%"
+    "outputSize": 34682240,
+    "duration": 91593,
+    "durationHuman": "1m 31.5s",
+    "percent": "79%"
   },
   "libraries": [
     {
       "name": "30 Days 30 Submits #18",
       "version": "v0.0.0",
-      "duration": 26,
+      "duration": 76,
       "inputSize": 3581,
       "outputSize": 2292,
       "percent": 64
@@ -18,7 +18,7 @@
     {
       "name": "3D transforms",
       "version": "v0.0.0",
-      "duration": 25,
+      "duration": 79,
       "inputSize": 13747,
       "outputSize": 9500,
       "percent": 69
@@ -26,7 +26,7 @@
     {
       "name": "960.gs",
       "version": "v0.0.0",
-      "duration": 14,
+      "duration": 26,
       "inputSize": 9989,
       "outputSize": 4522,
       "percent": 45
@@ -34,7 +34,7 @@
     {
       "name": "98",
       "version": "v0.1.18",
-      "duration": 35,
+      "duration": 105,
       "inputSize": 23150,
       "outputSize": 17308,
       "percent": 75
@@ -42,7 +42,7 @@
     {
       "name": "Academicons",
       "version": "v1.9.6",
-      "duration": 13,
+      "duration": 40,
       "inputSize": 9256,
       "outputSize": 6611,
       "percent": 71
@@ -50,15 +50,15 @@
     {
       "name": "AdminLTE",
       "version": "v4.0.0",
-      "duration": 262,
+      "duration": 1233,
       "inputSize": 409926,
-      "outputSize": 314552,
+      "outputSize": 314478,
       "percent": 77
     },
     {
       "name": "AdminHub",
       "version": "v1.0.0",
-      "duration": 11,
+      "duration": 69,
       "inputSize": 10922,
       "outputSize": 7202,
       "percent": 66
@@ -66,23 +66,23 @@
     {
       "name": "AMOLED-cord",
       "version": "v5.0.11",
-      "duration": 15,
+      "duration": 99,
       "inputSize": 29321,
-      "outputSize": 22057,
-      "percent": 75
+      "outputSize": 22227,
+      "percent": 76
     },
     {
       "name": "Animate",
       "version": "v4.1.1",
-      "duration": 26,
+      "duration": 154,
       "inputSize": 95377,
-      "outputSize": 35616,
+      "outputSize": 35547,
       "percent": 37
     },
     {
       "name": "Animating Hamburger Icons",
       "version": "v0.1.0",
-      "duration": 8,
+      "duration": 52,
       "inputSize": 14685,
       "outputSize": 6558,
       "percent": 45
@@ -90,7 +90,7 @@
     {
       "name": "Animo",
       "version": "v1.0.3",
-      "duration": 13,
+      "duration": 65,
       "inputSize": 67468,
       "outputSize": 12082,
       "percent": 18
@@ -98,7 +98,7 @@
     {
       "name": "Animsition",
       "version": "v4.0.2",
-      "duration": 11,
+      "duration": 59,
       "inputSize": 38452,
       "outputSize": 14263,
       "percent": 37
@@ -106,7 +106,7 @@
     {
       "name": "Awesome Bootstrap Checkbox",
       "version": "v0.3.7",
-      "duration": 6,
+      "duration": 36,
       "inputSize": 9073,
       "outputSize": 6948,
       "percent": 77
@@ -114,23 +114,23 @@
     {
       "name": "Balloon",
       "version": "v1.0.0",
-      "duration": 3,
+      "duration": 34,
       "inputSize": 7577,
-      "outputSize": 6424,
+      "outputSize": 6406,
       "percent": 85
     },
     {
       "name": "Basscss",
       "version": "v8.1.0",
-      "duration": 16,
+      "duration": 121,
       "inputSize": 47232,
-      "outputSize": 15672,
-      "percent": 33
+      "outputSize": 12798,
+      "percent": 27
     },
     {
       "name": "Beer CSS",
       "version": "v4.0.21",
-      "duration": 79,
+      "duration": 538,
       "inputSize": 107060,
       "outputSize": 84792,
       "percent": 79
@@ -138,7 +138,7 @@
     {
       "name": "Blooger_Website",
       "version": "v0.0.0",
-      "duration": 8,
+      "duration": 56,
       "inputSize": 10587,
       "outputSize": 5868,
       "percent": 55
@@ -146,15 +146,15 @@
     {
       "name": "Blue-Topaz Obsidian",
       "version": "v6.0.0",
-      "duration": 890,
+      "duration": 3112,
       "inputSize": 3204106,
-      "outputSize": 2924369,
+      "outputSize": 2924445,
       "percent": 91
     },
     {
       "name": "Blueprint",
       "version": "v0.9.1",
-      "duration": 13,
+      "duration": 41,
       "inputSize": 11834,
       "outputSize": 10145,
       "percent": 86
@@ -162,7 +162,7 @@
     {
       "name": "Boilerform",
       "version": "v1.1.2",
-      "duration": 3,
+      "duration": 15,
       "inputSize": 5533,
       "outputSize": 2809,
       "percent": 51
@@ -170,7 +170,7 @@
     {
       "name": "Bojler",
       "version": "v3.2.1",
-      "duration": 9,
+      "duration": 31,
       "inputSize": 21368,
       "outputSize": 7586,
       "percent": 36
@@ -178,7 +178,7 @@
     {
       "name": "Bootplus",
       "version": "v1.0.5",
-      "duration": 91,
+      "duration": 476,
       "inputSize": 147117,
       "outputSize": 81448,
       "percent": 55
@@ -186,7 +186,7 @@
     {
       "name": "Bootstrap 4",
       "version": "v4.6.2",
-      "duration": 107,
+      "duration": 607,
       "inputSize": 200387,
       "outputSize": 146405,
       "percent": 73
@@ -194,7 +194,7 @@
     {
       "name": "Bootstrap 5",
       "version": "v5.3.8",
-      "duration": 143,
+      "duration": 749,
       "inputSize": 280308,
       "outputSize": 219537,
       "percent": 78
@@ -202,7 +202,7 @@
     {
       "name": "Bttn",
       "version": "v0.2.4",
-      "duration": 20,
+      "duration": 127,
       "inputSize": 42334,
       "outputSize": 26561,
       "percent": 63
@@ -210,23 +210,23 @@
     {
       "name": "Bulma",
       "version": "v1.0.4",
-      "duration": 313,
+      "duration": 2224,
       "inputSize": 763916,
-      "outputSize": 668765,
+      "outputSize": 668755,
       "percent": 88
     },
     {
       "name": "Carbon",
       "version": "v1.107.0",
-      "duration": 424,
+      "duration": 2526,
       "inputSize": 957320,
-      "outputSize": 781724,
+      "outputSize": 781228,
       "percent": 82
     },
     {
       "name": "Cardinal",
       "version": "v3.7.0",
-      "duration": 62,
+      "duration": 474,
       "inputSize": 160807,
       "outputSize": 69924,
       "percent": 43
@@ -234,7 +234,7 @@
     {
       "name": "Checka11y",
       "version": "v2.5.0",
-      "duration": 26,
+      "duration": 487,
       "inputSize": 84059,
       "outputSize": 59769,
       "percent": 71
@@ -242,23 +242,23 @@
     {
       "name": "Chota",
       "version": "v0.9.2",
-      "duration": 14,
+      "duration": 192,
       "inputSize": 24284,
-      "outputSize": 15905,
+      "outputSize": 15825,
       "percent": 65
     },
     {
       "name": "Cirrus",
       "version": "v0.8.0",
-      "duration": 331,
+      "duration": 2190,
       "inputSize": 944537,
-      "outputSize": 678988,
+      "outputSize": 679026,
       "percent": 72
     },
     {
       "name": "Classless",
       "version": "v1.0.0",
-      "duration": 14,
+      "duration": 182,
       "inputSize": 23296,
       "outputSize": 16962,
       "percent": 73
@@ -266,7 +266,7 @@
     {
       "name": "CleanSlate",
       "version": "v0.10.1",
-      "duration": 13,
+      "duration": 154,
       "inputSize": 20469,
       "outputSize": 10308,
       "percent": 50
@@ -274,7 +274,7 @@
     {
       "name": "ClickEffects",
       "version": "v0.0.0",
-      "duration": 14,
+      "duration": 415,
       "inputSize": 33624,
       "outputSize": 14904,
       "percent": 44
@@ -282,7 +282,7 @@
     {
       "name": "CodeFrame",
       "version": "v4.0.9",
-      "duration": 103,
+      "duration": 693,
       "inputSize": 233717,
       "outputSize": 182013,
       "percent": 78
@@ -290,7 +290,7 @@
     {
       "name": "Colofilter",
       "version": "v0.0.0",
-      "duration": 4,
+      "duration": 22,
       "inputSize": 7119,
       "outputSize": 4366,
       "percent": 61
@@ -298,7 +298,7 @@
     {
       "name": "Concise",
       "version": "v4.0.1",
-      "duration": 12,
+      "duration": 56,
       "inputSize": 17050,
       "outputSize": 11362,
       "percent": 67
@@ -306,7 +306,7 @@
     {
       "name": "Crayon",
       "version": "v1.0.0",
-      "duration": 4,
+      "duration": 17,
       "inputSize": 6786,
       "outputSize": 5690,
       "percent": 84
@@ -314,7 +314,7 @@
     {
       "name": "CrookedStyleSheets",
       "version": "v0.0.0",
-      "duration": 3,
+      "duration": 20,
       "inputSize": 4735,
       "outputSize": 3415,
       "percent": 72
@@ -322,7 +322,7 @@
     {
       "name": "cs16.css",
       "version": "v0.0.0",
-      "duration": 9,
+      "duration": 52,
       "inputSize": 23574,
       "outputSize": 19619,
       "percent": 83
@@ -330,7 +330,7 @@
     {
       "name": "CSS Diner",
       "version": "v0.0.0",
-      "duration": 18,
+      "duration": 71,
       "inputSize": 22330,
       "outputSize": 14902,
       "percent": 67
@@ -338,7 +338,7 @@
     {
       "name": "css-extras",
       "version": "v0.4.0",
-      "duration": 4,
+      "duration": 26,
       "inputSize": 23103,
       "outputSize": 5582,
       "percent": 24
@@ -346,7 +346,7 @@
     {
       "name": "CSS Social Buttons",
       "version": "v1.4.0",
-      "duration": 20,
+      "duration": 120,
       "inputSize": 49521,
       "outputSize": 42071,
       "percent": 85
@@ -354,7 +354,7 @@
     {
       "name": "CSS Spinners",
       "version": "v2.2.0",
-      "duration": 35,
+      "duration": 173,
       "inputSize": 143659,
       "outputSize": 54010,
       "percent": 38
@@ -362,7 +362,7 @@
     {
       "name": "CSS3 Buttons",
       "version": "v0.0.0",
-      "duration": 25,
+      "duration": 130,
       "inputSize": 33239,
       "outputSize": 12530,
       "percent": 38
@@ -370,7 +370,7 @@
     {
       "name": "CSSCO",
       "version": "v1.1.0",
-      "duration": 4,
+      "duration": 19,
       "inputSize": 8075,
       "outputSize": 3029,
       "percent": 38
@@ -378,15 +378,15 @@
     {
       "name": "cssicon",
       "version": "v1.0.0",
-      "duration": 127,
+      "duration": 659,
       "inputSize": 293404,
-      "outputSize": 206885,
-      "percent": 71
+      "outputSize": 206642,
+      "percent": 70
     },
     {
       "name": "CSS Plot",
       "version": "v0.0.0",
-      "duration": 20,
+      "duration": 129,
       "inputSize": 28706,
       "outputSize": 12070,
       "percent": 42
@@ -394,7 +394,7 @@
     {
       "name": "CSS Zen Garden #215",
       "version": "v0.0.0",
-      "duration": 16,
+      "duration": 138,
       "inputSize": 68690,
       "outputSize": 59262,
       "percent": 86
@@ -402,7 +402,7 @@
     {
       "name": "Cutestrap1",
       "version": "v1.3.1",
-      "duration": 9,
+      "duration": 35,
       "inputSize": 53970,
       "outputSize": 7384,
       "percent": 14
@@ -410,7 +410,7 @@
     {
       "name": "Cutestrap2",
       "version": "v2.0.0",
-      "duration": 8,
+      "duration": 43,
       "inputSize": 21440,
       "outputSize": 10956,
       "percent": 51
@@ -418,7 +418,7 @@
     {
       "name": "Destyle",
       "version": "v4.0.1",
-      "duration": 3,
+      "duration": 10,
       "inputSize": 6132,
       "outputSize": 2130,
       "percent": 35
@@ -426,7 +426,7 @@
     {
       "name": "Devices",
       "version": "v0.2.0",
-      "duration": 35,
+      "duration": 200,
       "inputSize": 59294,
       "outputSize": 42100,
       "percent": 71
@@ -434,7 +434,7 @@
     {
       "name": "Doxygen Awesome",
       "version": "v2.4.2",
-      "duration": 38,
+      "duration": 228,
       "inputSize": 78045,
       "outputSize": 58253,
       "percent": 75
@@ -442,7 +442,7 @@
     {
       "name": "Effeckt",
       "version": "v0.5.0",
-      "duration": 49,
+      "duration": 247,
       "inputSize": 149789,
       "outputSize": 77229,
       "percent": 52
@@ -450,15 +450,15 @@
     {
       "name": "ElegantFin",
       "version": "v25.12.31",
-      "duration": 48,
+      "duration": 279,
       "inputSize": 96797,
-      "outputSize": 67146,
+      "outputSize": 67112,
       "percent": 69
     },
     {
       "name": "Enferno",
       "version": "v13.1.1",
-      "duration": 1,
+      "duration": 8,
       "inputSize": 1478,
       "outputSize": 886,
       "percent": 60
@@ -466,7 +466,7 @@
     {
       "name": "Evil",
       "version": "v0.0.0",
-      "duration": 1,
+      "duration": 6,
       "inputSize": 3543,
       "outputSize": 861,
       "percent": 24
@@ -474,7 +474,7 @@
     {
       "name": "Facebook Buttons",
       "version": "v1.0.0",
-      "duration": 4,
+      "duration": 21,
       "inputSize": 6656,
       "outputSize": 2862,
       "percent": 43
@@ -482,7 +482,7 @@
     {
       "name": "FF-Ultima",
       "version": "v4.3.0",
-      "duration": 26,
+      "duration": 140,
       "inputSize": 58457,
       "outputSize": 38077,
       "percent": 65
@@ -490,7 +490,7 @@
     {
       "name": "Fileicon",
       "version": "v0.1.1",
-      "duration": 4,
+      "duration": 15,
       "inputSize": 2690,
       "outputSize": 2033,
       "percent": 76
@@ -498,7 +498,7 @@
     {
       "name": "Finimalism",
       "version": "v12.0.0",
-      "duration": 95,
+      "duration": 497,
       "inputSize": 188947,
       "outputSize": 138043,
       "percent": 73
@@ -506,7 +506,7 @@
     {
       "name": "Firefox-ONE",
       "version": "v3.7.0",
-      "duration": 11,
+      "duration": 33,
       "inputSize": 7761,
       "outputSize": 5579,
       "percent": 72
@@ -514,7 +514,7 @@
     {
       "name": "Firefox-UWP-Style",
       "version": "v0.0.0",
-      "duration": 32,
+      "duration": 142,
       "inputSize": 48515,
       "outputSize": 36415,
       "percent": 75
@@ -522,7 +522,7 @@
     {
       "name": "Flakes",
       "version": "v1.0.1",
-      "duration": 124,
+      "duration": 612,
       "inputSize": 243978,
       "outputSize": 130469,
       "percent": 53
@@ -530,7 +530,7 @@
     {
       "name": "Flex Layout Attribute",
       "version": "v1.0.3",
-      "duration": 7,
+      "duration": 30,
       "inputSize": 11006,
       "outputSize": 5906,
       "percent": 54
@@ -538,7 +538,7 @@
     {
       "name": "FluentBird",
       "version": "v1.1.2",
-      "duration": 17,
+      "duration": 74,
       "inputSize": 30985,
       "outputSize": 18454,
       "percent": 60
@@ -546,7 +546,7 @@
     {
       "name": "Fomantic UI",
       "version": "v2.9.4",
-      "duration": 908,
+      "duration": 5333,
       "inputSize": 2033757,
       "outputSize": 1637452,
       "percent": 81
@@ -554,7 +554,7 @@
     {
       "name": "Font Awesome",
       "version": "v7.2.0",
-      "duration": 83,
+      "duration": 501,
       "inputSize": 112042,
       "outputSize": 76196,
       "percent": 68
@@ -562,7 +562,7 @@
     {
       "name": "Foundation",
       "version": "v6.9.0",
-      "duration": 88,
+      "duration": 539,
       "inputSize": 161298,
       "outputSize": 115473,
       "percent": 72
@@ -570,7 +570,7 @@
     {
       "name": "Freebies",
       "version": "v0.0.0",
-      "duration": 9,
+      "duration": 61,
       "inputSize": 25163,
       "outputSize": 11869,
       "percent": 47
@@ -578,7 +578,7 @@
     {
       "name": "Furatto",
       "version": "v3.1.1",
-      "duration": 37,
+      "duration": 303,
       "inputSize": 96841,
       "outputSize": 47920,
       "percent": 49
@@ -586,7 +586,7 @@
     {
       "name": "Gallery",
       "version": "v1.0.2",
-      "duration": 4,
+      "duration": 30,
       "inputSize": 12006,
       "outputSize": 4866,
       "percent": 41
@@ -594,7 +594,7 @@
     {
       "name": "GitHub-Dark",
       "version": "v6.3.0",
-      "duration": 117,
+      "duration": 720,
       "inputSize": 670539,
       "outputSize": 389267,
       "percent": 58
@@ -602,7 +602,7 @@
     {
       "name": "GitHub-Markdown",
       "version": "v5.9.0",
-      "duration": 15,
+      "duration": 99,
       "inputSize": 31067,
       "outputSize": 23163,
       "percent": 75
@@ -610,7 +610,7 @@
     {
       "name": "GitHub-Windows",
       "version": "v0.6.0",
-      "duration": 12,
+      "duration": 67,
       "inputSize": 30578,
       "outputSize": 25317,
       "percent": 83
@@ -618,7 +618,7 @@
     {
       "name": "gitweb-theme",
       "version": "v0.0.0",
-      "duration": 10,
+      "duration": 72,
       "inputSize": 17107,
       "outputSize": 11604,
       "percent": 68
@@ -626,7 +626,7 @@
     {
       "name": "google-type",
       "version": "v0.0.0",
-      "duration": 35,
+      "duration": 194,
       "inputSize": 52213,
       "outputSize": 32667,
       "percent": 63
@@ -634,7 +634,7 @@
     {
       "name": "Gridism",
       "version": "v0.2.2",
-      "duration": 3,
+      "duration": 13,
       "inputSize": 3475,
       "outputSize": 1671,
       "percent": 48
@@ -642,7 +642,7 @@
     {
       "name": "Gridlex",
       "version": "v2.7.1",
-      "duration": 14,
+      "duration": 98,
       "inputSize": 45359,
       "outputSize": 34441,
       "percent": 76
@@ -650,15 +650,15 @@
     {
       "name": "Gumby",
       "version": "v2.6.4",
-      "duration": 97,
+      "duration": 539,
       "inputSize": 167127,
-      "outputSize": 127243,
+      "outputSize": 127242,
       "percent": 76
     },
     {
       "name": "Gutenberg",
       "version": "v0.7.0",
-      "duration": 6,
+      "duration": 30,
       "inputSize": 10139,
       "outputSize": 4693,
       "percent": 46
@@ -666,7 +666,7 @@
     {
       "name": "Halfmoon",
       "version": "v2.0.2",
-      "duration": 195,
+      "duration": 1102,
       "inputSize": 462723,
       "outputSize": 363905,
       "percent": 79
@@ -674,7 +674,7 @@
     {
       "name": "HalfStyle",
       "version": "v2.0.2",
-      "duration": 3,
+      "duration": 13,
       "inputSize": 7473,
       "outputSize": 3096,
       "percent": 41
@@ -682,7 +682,7 @@
     {
       "name": "Hint",
       "version": "v3.0.0",
-      "duration": 5,
+      "duration": 41,
       "inputSize": 10831,
       "outputSize": 6562,
       "percent": 61
@@ -690,7 +690,7 @@
     {
       "name": "Holmes",
       "version": "v6.8.12",
-      "duration": 3,
+      "duration": 85,
       "inputSize": 12464,
       "outputSize": 6090,
       "percent": 49
@@ -698,7 +698,7 @@
     {
       "name": "Hover Buttons",
       "version": "v0.15.0",
-      "duration": 22,
+      "duration": 240,
       "inputSize": 52953,
       "outputSize": 35724,
       "percent": 67
@@ -706,7 +706,7 @@
     {
       "name": "HTML Sheets of Paper",
       "version": "v0.0.0",
-      "duration": 2,
+      "duration": 13,
       "inputSize": 5233,
       "outputSize": 1197,
       "percent": 23
@@ -714,7 +714,7 @@
     {
       "name": "Hugo Universal Theme",
       "version": "v1.4.1",
-      "duration": 42,
+      "duration": 525,
       "inputSize": 77539,
       "outputSize": 53028,
       "percent": 68
@@ -722,15 +722,15 @@
     {
       "name": "Icon Hover Effects",
       "version": "v0.0.0",
-      "duration": 9,
+      "duration": 81,
       "inputSize": 16330,
-      "outputSize": 7051,
+      "outputSize": 7048,
       "percent": 43
     },
     {
       "name": "Instagram.css",
       "version": "v0.1.4",
-      "duration": 8,
+      "duration": 81,
       "inputSize": 15056,
       "outputSize": 6963,
       "percent": 46
@@ -738,7 +738,7 @@
     {
       "name": "Jupyter Themes",
       "version": "v0.20.0",
-      "duration": 42,
+      "duration": 271,
       "inputSize": 72719,
       "outputSize": 52664,
       "percent": 72
@@ -746,7 +746,7 @@
     {
       "name": "Justified",
       "version": "v0.0.0",
-      "duration": 0,
+      "duration": 2,
       "inputSize": 196,
       "outputSize": 149,
       "percent": 76
@@ -754,7 +754,7 @@
     {
       "name": "Kickoff",
       "version": "v8.0.0",
-      "duration": 27,
+      "duration": 125,
       "inputSize": 255488,
       "outputSize": 42921,
       "percent": 17
@@ -762,7 +762,7 @@
     {
       "name": "KNACSS",
       "version": "v8.2.0",
-      "duration": 17,
+      "duration": 90,
       "inputSize": 31390,
       "outputSize": 22761,
       "percent": 73
@@ -770,7 +770,7 @@
     {
       "name": "Less Framework",
       "version": "v0.0.0",
-      "duration": 3,
+      "duration": 8,
       "inputSize": 3648,
       "outputSize": 1359,
       "percent": 37
@@ -778,7 +778,7 @@
     {
       "name": "Linktree",
       "version": "v0.0.0",
-      "duration": 14,
+      "duration": 61,
       "inputSize": 45800,
       "outputSize": 37460,
       "percent": 82
@@ -786,7 +786,7 @@
     {
       "name": "littlebox",
       "version": "v0.0.4",
-      "duration": 56,
+      "duration": 325,
       "inputSize": 130429,
       "outputSize": 83649,
       "percent": 64
@@ -794,7 +794,7 @@
     {
       "name": "Load Awesome",
       "version": "v1.1.0",
-      "duration": 70,
+      "duration": 704,
       "inputSize": 190180,
       "outputSize": 83750,
       "percent": 44
@@ -802,7 +802,7 @@
     {
       "name": "Loaders",
       "version": "v0.1.2",
-      "duration": 18,
+      "duration": 158,
       "inputSize": 56509,
       "outputSize": 21717,
       "percent": 38
@@ -810,7 +810,7 @@
     {
       "name": "Luxbar",
       "version": "v0.3.0",
-      "duration": 5,
+      "duration": 48,
       "inputSize": 8259,
       "outputSize": 6646,
       "percent": 80
@@ -818,7 +818,7 @@
     {
       "name": "Lynx",
       "version": "v1.4.0",
-      "duration": 19,
+      "duration": 131,
       "inputSize": 33290,
       "outputSize": 22892,
       "percent": 69
@@ -826,7 +826,7 @@
     {
       "name": "markdown-css",
       "version": "v0.0.0",
-      "duration": 4,
+      "duration": 15,
       "inputSize": 3693,
       "outputSize": 2747,
       "percent": 74
@@ -834,15 +834,15 @@
     {
       "name": "Material for Bootstrap",
       "version": "v4.1.1",
-      "duration": 172,
+      "duration": 927,
       "inputSize": 311662,
-      "outputSize": 228951,
+      "outputSize": 228999,
       "percent": 73
     },
     {
       "name": "medium.css",
       "version": "v1.0.2",
-      "duration": 7,
+      "duration": 25,
       "inputSize": 5403,
       "outputSize": 3612,
       "percent": 67
@@ -850,7 +850,7 @@
     {
       "name": "Meyer",
       "version": "v2.0.0",
-      "duration": 1,
+      "duration": 9,
       "inputSize": 1107,
       "outputSize": 746,
       "percent": 67
@@ -858,7 +858,7 @@
     {
       "name": "Microsoft Metro Buttons",
       "version": "v1.2.0",
-      "duration": 16,
+      "duration": 124,
       "inputSize": 20474,
       "outputSize": 9363,
       "percent": 46
@@ -866,7 +866,7 @@
     {
       "name": "Microtip",
       "version": "v0.2.2",
-      "duration": 5,
+      "duration": 47,
       "inputSize": 8537,
       "outputSize": 5654,
       "percent": 66
@@ -874,7 +874,7 @@
     {
       "name": "Mini",
       "version": "v3.0.1",
-      "duration": 42,
+      "duration": 263,
       "inputSize": 55940,
       "outputSize": 45124,
       "percent": 81
@@ -882,7 +882,7 @@
     {
       "name": "Mini Reset",
       "version": "v0.0.7",
-      "duration": 2,
+      "duration": 5,
       "inputSize": 622,
       "outputSize": 478,
       "percent": 77
@@ -890,15 +890,15 @@
     {
       "name": "Missing",
       "version": "v1.3.0",
-      "duration": 49,
+      "duration": 409,
       "inputSize": 76016,
-      "outputSize": 55404,
+      "outputSize": 55427,
       "percent": 73
     },
     {
       "name": "Mobi",
       "version": "v3.1.1",
-      "duration": 10,
+      "duration": 88,
       "inputSize": 13762,
       "outputSize": 9398,
       "percent": 68
@@ -906,7 +906,7 @@
     {
       "name": "Mocka",
       "version": "v1.0.1",
-      "duration": 3,
+      "duration": 18,
       "inputSize": 2797,
       "outputSize": 1558,
       "percent": 56
@@ -914,7 +914,7 @@
     {
       "name": "Modern CSS Resets",
       "version": "v1.4.0",
-      "duration": 1,
+      "duration": 7,
       "inputSize": 1222,
       "outputSize": 610,
       "percent": 50
@@ -922,7 +922,7 @@
     {
       "name": "MVCSS",
       "version": "v4.1.0",
-      "duration": 14,
+      "duration": 223,
       "inputSize": 24258,
       "outputSize": 13433,
       "percent": 55
@@ -930,7 +930,7 @@
     {
       "name": "MVP",
       "version": "v1.17.3",
-      "duration": 9,
+      "duration": 83,
       "inputSize": 10267,
       "outputSize": 7921,
       "percent": 77
@@ -938,7 +938,7 @@
     {
       "name": "My Internet",
       "version": "v1.0.0",
-      "duration": 9,
+      "duration": 66,
       "inputSize": 17759,
       "outputSize": 11002,
       "percent": 62
@@ -946,7 +946,7 @@
     {
       "name": "Natural Selection",
       "version": "v0.0.0",
-      "duration": 1,
+      "duration": 12,
       "inputSize": 6505,
       "outputSize": 0,
       "percent": 0
@@ -954,7 +954,7 @@
     {
       "name": "NES.css",
       "version": "v2.3.0",
-      "duration": 148,
+      "duration": 1035,
       "inputSize": 308246,
       "outputSize": 279372,
       "percent": 91
@@ -962,7 +962,7 @@
     {
       "name": "Normalize",
       "version": "v8.0.1",
-      "duration": 3,
+      "duration": 13,
       "inputSize": 6138,
       "outputSize": 1699,
       "percent": 28
@@ -970,7 +970,7 @@
     {
       "name": "object-fit Polyfill",
       "version": "v0.3.4",
-      "duration": 1,
+      "duration": 5,
       "inputSize": 2036,
       "outputSize": 1637,
       "percent": 80
@@ -978,7 +978,7 @@
     {
       "name": "Obnoxious",
       "version": "v3.5.2",
-      "duration": 8,
+      "duration": 49,
       "inputSize": 19795,
       "outputSize": 13476,
       "percent": 68
@@ -986,15 +986,15 @@
     {
       "name": "Obsidian Colored Sidebar",
       "version": "v2.0.0",
-      "duration": 7,
+      "duration": 50,
       "inputSize": 17815,
-      "outputSize": 12199,
-      "percent": 68
+      "outputSize": 11578,
+      "percent": 65
     },
     {
       "name": "Obsidian Modular CSS Layout",
       "version": "v0.10.0",
-      "duration": 15,
+      "duration": 85,
       "inputSize": 43210,
       "outputSize": 19437,
       "percent": 45
@@ -1002,7 +1002,7 @@
     {
       "name": "Obsidian Notebook Themes",
       "version": "v2.2.3",
-      "duration": 5,
+      "duration": 22,
       "inputSize": 8571,
       "outputSize": 6057,
       "percent": 71
@@ -1010,7 +1010,7 @@
     {
       "name": "OffCanvasMenuEffects",
       "version": "v0.0.0",
-      "duration": 5,
+      "duration": 29,
       "inputSize": 13905,
       "outputSize": 6048,
       "percent": 43
@@ -1018,7 +1018,7 @@
     {
       "name": "Orbit",
       "version": "v1.4.11",
-      "duration": 111,
+      "duration": 621,
       "inputSize": 155954,
       "outputSize": 132217,
       "percent": 85
@@ -1026,7 +1026,7 @@
     {
       "name": "OrgCSS",
       "version": "v9.2.3",
-      "duration": 17,
+      "duration": 98,
       "inputSize": 50032,
       "outputSize": 24665,
       "percent": 49
@@ -1034,7 +1034,7 @@
     {
       "name": "Paper",
       "version": "v0.4.1",
-      "duration": 2,
+      "duration": 13,
       "inputSize": 1521,
       "outputSize": 1070,
       "percent": 70
@@ -1042,23 +1042,23 @@
     {
       "name": "PatternBolt",
       "version": "v0.0.0",
-      "duration": 71,
+      "duration": 528,
       "inputSize": 552577,
-      "outputSize": 542279,
-      "percent": 98
+      "outputSize": 296391,
+      "percent": 54
     },
     {
       "name": "PatternFly",
       "version": "v6.5.2",
-      "duration": 722,
+      "duration": 3501,
       "inputSize": 1976773,
-      "outputSize": 1791694,
+      "outputSize": 1791748,
       "percent": 91
     },
     {
       "name": "Pesticide",
       "version": "v1.3.0",
-      "duration": 6,
+      "duration": 51,
       "inputSize": 20080,
       "outputSize": 4554,
       "percent": 23
@@ -1066,7 +1066,7 @@
     {
       "name": "Phonon",
       "version": "v1.5.1",
-      "duration": 86,
+      "duration": 572,
       "inputSize": 159849,
       "outputSize": 119275,
       "percent": 75
@@ -1074,7 +1074,7 @@
     {
       "name": "Photon",
       "version": "v0.1.2",
-      "duration": 23,
+      "duration": 189,
       "inputSize": 32662,
       "outputSize": 19778,
       "percent": 61
@@ -1082,7 +1082,7 @@
     {
       "name": "Picnic",
       "version": "v7.1.0",
-      "duration": 32,
+      "duration": 235,
       "inputSize": 58813,
       "outputSize": 36661,
       "percent": 62
@@ -1090,15 +1090,15 @@
     {
       "name": "Pico",
       "version": "v2.1.1",
-      "duration": 46,
+      "duration": 317,
       "inputSize": 97069,
-      "outputSize": 80993,
-      "percent": 83
+      "outputSize": 81146,
+      "percent": 84
     },
     {
       "name": "Pills",
       "version": "v1.0.1",
-      "duration": 4,
+      "duration": 27,
       "inputSize": 6107,
       "outputSize": 4711,
       "percent": 77
@@ -1106,7 +1106,7 @@
     {
       "name": "Portfolio Template",
       "version": "v0.0.0",
-      "duration": 8,
+      "duration": 36,
       "inputSize": 10914,
       "outputSize": 6802,
       "percent": 62
@@ -1114,7 +1114,7 @@
     {
       "name": "Preboot",
       "version": "v2.0.0",
-      "duration": 9,
+      "duration": 43,
       "inputSize": 17006,
       "outputSize": 7149,
       "percent": 42
@@ -1122,15 +1122,15 @@
     {
       "name": "Pretty Checkbox",
       "version": "v3.0.3",
-      "duration": 10,
+      "duration": 55,
       "inputSize": 22629,
-      "outputSize": 15033,
-      "percent": 66
+      "outputSize": 15123,
+      "percent": 67
     },
     {
       "name": "Progress Tracker",
       "version": "v3.0.0",
-      "duration": 6,
+      "duration": 41,
       "inputSize": 9293,
       "outputSize": 6637,
       "percent": 71
@@ -1138,7 +1138,7 @@
     {
       "name": "ProtonMail Themes",
       "version": "v4.0.8",
-      "duration": 3,
+      "duration": 18,
       "inputSize": 8520,
       "outputSize": 7306,
       "percent": 86
@@ -1146,7 +1146,7 @@
     {
       "name": "ProxMorph",
       "version": "v2.7.3",
-      "duration": 43,
+      "duration": 199,
       "inputSize": 117568,
       "outputSize": 60742,
       "percent": 52
@@ -1154,7 +1154,7 @@
     {
       "name": "Pure",
       "version": "v3.0.0",
-      "duration": 10,
+      "duration": 59,
       "inputSize": 26207,
       "outputSize": 15214,
       "percent": 58
@@ -1162,7 +1162,7 @@
     {
       "name": "Pygments Fruity",
       "version": "v1.0.0",
-      "duration": 3,
+      "duration": 10,
       "inputSize": 5098,
       "outputSize": 1252,
       "percent": 25
@@ -1170,7 +1170,7 @@
     {
       "name": "Ratchet",
       "version": "v2.0.2",
-      "duration": 15,
+      "duration": 75,
       "inputSize": 24863,
       "outputSize": 17606,
       "percent": 71
@@ -1178,7 +1178,7 @@
     {
       "name": "Remedy Quotes",
       "version": "v0.1.0",
-      "duration": 13,
+      "duration": 88,
       "inputSize": 21954,
       "outputSize": 6069,
       "percent": 28
@@ -1186,7 +1186,7 @@
     {
       "name": "Remedy",
       "version": "v0.1.0",
-      "duration": 1,
+      "duration": 6,
       "inputSize": 4038,
       "outputSize": 762,
       "percent": 19
@@ -1194,7 +1194,7 @@
     {
       "name": "Repaintless",
       "version": "v1.4.0",
-      "duration": 3,
+      "duration": 14,
       "inputSize": 15985,
       "outputSize": 5828,
       "percent": 36
@@ -1202,7 +1202,7 @@
     {
       "name": "Reset",
       "version": "v1.0.2",
-      "duration": 1,
+      "duration": 7,
       "inputSize": 2416,
       "outputSize": 1257,
       "percent": 52
@@ -1210,7 +1210,7 @@
     {
       "name": "Responsive 4",
       "version": "v4.1.4",
-      "duration": 36,
+      "duration": 189,
       "inputSize": 70886,
       "outputSize": 49947,
       "percent": 70
@@ -1218,7 +1218,7 @@
     {
       "name": "Responsive 5",
       "version": "v5.0.0",
-      "duration": 32,
+      "duration": 161,
       "inputSize": 63129,
       "outputSize": 44206,
       "percent": 70
@@ -1226,7 +1226,7 @@
     {
       "name": "Ress",
       "version": "v5.0.2",
-      "duration": 2,
+      "duration": 15,
       "inputSize": 6769,
       "outputSize": 2210,
       "percent": 33
@@ -1234,7 +1234,7 @@
     {
       "name": "Ripple UI",
       "version": "v1.12.1",
-      "duration": 1885,
+      "duration": 9600,
       "inputSize": 4740747,
       "outputSize": 4724919,
       "percent": 100
@@ -1242,7 +1242,7 @@
     {
       "name": "Sakura",
       "version": "v1.5.1",
-      "duration": 3,
+      "duration": 25,
       "inputSize": 4098,
       "outputSize": 2934,
       "percent": 72
@@ -1250,7 +1250,7 @@
     {
       "name": "Sanitize",
       "version": "v13.0.0",
-      "duration": 2,
+      "duration": 15,
       "inputSize": 7267,
       "outputSize": 2011,
       "percent": 28
@@ -1258,7 +1258,7 @@
     {
       "name": "SAPC-APCA",
       "version": "v0.0.0",
-      "duration": 95,
+      "duration": 608,
       "inputSize": 137080,
       "outputSize": 82692,
       "percent": 60
@@ -1266,7 +1266,7 @@
     {
       "name": "Select",
       "version": "v3.2.0",
-      "duration": 2,
+      "duration": 11,
       "inputSize": 3161,
       "outputSize": 1779,
       "percent": 56
@@ -1274,7 +1274,7 @@
     {
       "name": "Select2 Bootstrap",
       "version": "v1.2.5",
-      "duration": 1,
+      "duration": 17,
       "inputSize": 2991,
       "outputSize": 1959,
       "percent": 65
@@ -1282,7 +1282,7 @@
     {
       "name": "Semantic UI",
       "version": "v2.5.0",
-      "duration": 333,
+      "duration": 2779,
       "inputSize": 752082,
       "outputSize": 504003,
       "percent": 67
@@ -1290,7 +1290,7 @@
     {
       "name": "Shards",
       "version": "v3.0.0",
-      "duration": 56,
+      "duration": 347,
       "inputSize": 113246,
       "outputSize": 88099,
       "percent": 78
@@ -1298,7 +1298,7 @@
     {
       "name": "Shina Fox",
       "version": "v0.1.0",
-      "duration": 15,
+      "duration": 79,
       "inputSize": 30871,
       "outputSize": 20789,
       "percent": 67
@@ -1306,7 +1306,7 @@
     {
       "name": "Sierra",
       "version": "v3.5.0",
-      "duration": 19,
+      "duration": 101,
       "inputSize": 51645,
       "outputSize": 26663,
       "percent": 52
@@ -1314,7 +1314,7 @@
     {
       "name": "Simple Grid",
       "version": "v0.0.0",
-      "duration": 3,
+      "duration": 10,
       "inputSize": 2513,
       "outputSize": 1652,
       "percent": 66
@@ -1322,15 +1322,15 @@
     {
       "name": "Simple Line Icons",
       "version": "v2.5.4",
-      "duration": 7,
+      "duration": 37,
       "inputSize": 12973,
-      "outputSize": 10175,
+      "outputSize": 10172,
       "percent": 78
     },
     {
       "name": "Simple",
       "version": "v2.3.7",
-      "duration": 9,
+      "duration": 51,
       "inputSize": 14088,
       "outputSize": 9583,
       "percent": 68
@@ -1338,7 +1338,7 @@
     {
       "name": "SimpTip",
       "version": "v1.0.4",
-      "duration": 6,
+      "duration": 33,
       "inputSize": 12957,
       "outputSize": 9229,
       "percent": 71
@@ -1346,7 +1346,7 @@
     {
       "name": "Skeleton",
       "version": "v2.0.4",
-      "duration": 4,
+      "duration": 26,
       "inputSize": 9952,
       "outputSize": 5622,
       "percent": 56
@@ -1354,7 +1354,7 @@
     {
       "name": "SlitSlider",
       "version": "v1.1.0",
-      "duration": 1,
+      "duration": 7,
       "inputSize": 2170,
       "outputSize": 983,
       "percent": 45
@@ -1362,7 +1362,7 @@
     {
       "name": "Social Sign-in Buttons",
       "version": "v0.0.0",
-      "duration": 6,
+      "duration": 36,
       "inputSize": 9395,
       "outputSize": 3656,
       "percent": 39
@@ -1370,7 +1370,7 @@
     {
       "name": "SPCSS",
       "version": "v0.9.0",
-      "duration": 2,
+      "duration": 10,
       "inputSize": 1793,
       "outputSize": 1325,
       "percent": 74
@@ -1378,7 +1378,7 @@
     {
       "name": "Spectre",
       "version": "v0.5.9",
-      "duration": 34,
+      "duration": 171,
       "inputSize": 62360,
       "outputSize": 42989,
       "percent": 69
@@ -1386,7 +1386,7 @@
     {
       "name": "Spicetify Bloom",
       "version": "v0.0.0",
-      "duration": 35,
+      "duration": 190,
       "inputSize": 79673,
       "outputSize": 57642,
       "percent": 72
@@ -1394,7 +1394,7 @@
     {
       "name": "Spicetify Dribbblish",
       "version": "v0.0.0",
-      "duration": 13,
+      "duration": 86,
       "inputSize": 25863,
       "outputSize": 19646,
       "percent": 76
@@ -1402,15 +1402,15 @@
     {
       "name": "Spicetify Text",
       "version": "v0.0.0",
-      "duration": 14,
+      "duration": 81,
       "inputSize": 34970,
-      "outputSize": 26834,
-      "percent": 77
+      "outputSize": 26716,
+      "percent": 76
     },
     {
       "name": "Spinkit",
       "version": "v2.0.1",
-      "duration": 7,
+      "duration": 36,
       "inputSize": 14783,
       "outputSize": 7891,
       "percent": 53
@@ -1418,15 +1418,15 @@
     {
       "name": "Stackicons",
       "version": "v1.13.0",
-      "duration": 305,
+      "duration": 1461,
       "inputSize": 1055930,
-      "outputSize": 864025,
+      "outputSize": 863721,
       "percent": 82
     },
     {
       "name": "StackOverflow-Dark",
       "version": "v5.1.2",
-      "duration": 60,
+      "duration": 388,
       "inputSize": 182559,
       "outputSize": 138158,
       "percent": 76
@@ -1434,7 +1434,7 @@
     {
       "name": "Stacks",
       "version": "v2.8.6",
-      "duration": 291,
+      "duration": 1418,
       "inputSize": 620329,
       "outputSize": 508321,
       "percent": 82
@@ -1442,7 +1442,7 @@
     {
       "name": "Swagger UI Themes 2",
       "version": "v2.1.0",
-      "duration": 25,
+      "duration": 112,
       "inputSize": 59809,
       "outputSize": 33523,
       "percent": 56
@@ -1450,7 +1450,7 @@
     {
       "name": "Swagger UI Themes 3",
       "version": "v3.0.1",
-      "duration": 20,
+      "duration": 97,
       "inputSize": 36041,
       "outputSize": 19852,
       "percent": 55
@@ -1458,7 +1458,7 @@
     {
       "name": "System",
       "version": "v0.1.11",
-      "duration": 12,
+      "duration": 38,
       "inputSize": 17664,
       "outputSize": 12754,
       "percent": 72
@@ -1466,7 +1466,7 @@
     {
       "name": "Tablecloth",
       "version": "v1.0.0",
-      "duration": 5,
+      "duration": 25,
       "inputSize": 11041,
       "outputSize": 7666,
       "percent": 69
@@ -1474,7 +1474,7 @@
     {
       "name": "Tachyons",
       "version": "v4.12.0",
-      "duration": 59,
+      "duration": 218,
       "inputSize": 114983,
       "outputSize": 71214,
       "percent": 62
@@ -1482,7 +1482,7 @@
     {
       "name": "Tailwind Cards",
       "version": "v0.0.0",
-      "duration": 1785,
+      "duration": 5539,
       "inputSize": 4793412,
       "outputSize": 3807411,
       "percent": 79
@@ -1490,15 +1490,15 @@
     {
       "name": "Tailwind",
       "version": "v2.2.19",
-      "duration": 1235,
+      "duration": 4263,
       "inputSize": 3642351,
-      "outputSize": 2884104,
+      "outputSize": 2884166,
       "percent": 79
     },
     {
       "name": "Tent",
       "version": "v1.4.3",
-      "duration": 13,
+      "duration": 67,
       "inputSize": 21524,
       "outputSize": 14475,
       "percent": 67
@@ -1506,7 +1506,7 @@
     {
       "name": "The 50 Front-end Project #44",
       "version": "v0.0.0",
-      "duration": 5,
+      "duration": 34,
       "inputSize": 9443,
       "outputSize": 6535,
       "percent": 69
@@ -1514,7 +1514,7 @@
     {
       "name": "The New CSS Reset",
       "version": "v1.11.3",
-      "duration": 1,
+      "duration": 5,
       "inputSize": 2901,
       "outputSize": 862,
       "percent": 30
@@ -1522,7 +1522,7 @@
     {
       "name": "Toast",
       "version": "v1.1.0",
-      "duration": 3,
+      "duration": 20,
       "inputSize": 7274,
       "outputSize": 5087,
       "percent": 70
@@ -1530,15 +1530,15 @@
     {
       "name": "Tocas",
       "version": "v5.7.0",
-      "duration": 199,
+      "duration": 976,
       "inputSize": 406431,
-      "outputSize": 260710,
+      "outputSize": 260636,
       "percent": 64
     },
     {
       "name": "Tooltip Twispy",
       "version": "v1.0.6",
-      "duration": 3,
+      "duration": 18,
       "inputSize": 6291,
       "outputSize": 3566,
       "percent": 57
@@ -1546,7 +1546,7 @@
     {
       "name": "Tootik",
       "version": "v1.0.2",
-      "duration": 9,
+      "duration": 43,
       "inputSize": 44297,
       "outputSize": 7626,
       "percent": 17
@@ -1554,7 +1554,7 @@
     {
       "name": "Tuesday",
       "version": "v1.3.0",
-      "duration": 3,
+      "duration": 18,
       "inputSize": 27142,
       "outputSize": 10036,
       "percent": 37
@@ -1562,7 +1562,7 @@
     {
       "name": "Tufte",
       "version": "v1.8.0",
-      "duration": 5,
+      "duration": 30,
       "inputSize": 11212,
       "outputSize": 7772,
       "percent": 69
@@ -1570,7 +1570,7 @@
     {
       "name": "Tui",
       "version": "v2.1.2",
-      "duration": 26,
+      "duration": 118,
       "inputSize": 46295,
       "outputSize": 30224,
       "percent": 65
@@ -1578,7 +1578,7 @@
     {
       "name": "tw-animate-css",
       "version": "v1.4.0",
-      "duration": 5,
+      "duration": 19,
       "inputSize": 17423,
       "outputSize": 12642,
       "percent": 73
@@ -1586,7 +1586,7 @@
     {
       "name": "UIkit",
       "version": "v3.25.17",
-      "duration": 147,
+      "duration": 642,
       "inputSize": 400726,
       "outputSize": 278078,
       "percent": 69
@@ -1594,7 +1594,7 @@
     {
       "name": "Unfold",
       "version": "v0.0.0",
-      "duration": 37,
+      "duration": 143,
       "inputSize": 90006,
       "outputSize": 25438,
       "percent": 28
@@ -1602,7 +1602,7 @@
     {
       "name": "Universal.css",
       "version": "v0.0.0",
-      "duration": 3494,
+      "duration": 13455,
       "inputSize": 5020671,
       "outputSize": 4458139,
       "percent": 89
@@ -1610,7 +1610,7 @@
     {
       "name": "USWDS",
       "version": "v3.13.0",
-      "duration": 281,
+      "duration": 1250,
       "inputSize": 652623,
       "outputSize": 501864,
       "percent": 77
@@ -1618,7 +1618,7 @@
     {
       "name": "Utility OpenType",
       "version": "v0.1.4",
-      "duration": 5,
+      "duration": 27,
       "inputSize": 12886,
       "outputSize": 10319,
       "percent": 80
@@ -1626,15 +1626,15 @@
     {
       "name": "Vim CSS3 Syntax",
       "version": "v2.10.0",
-      "duration": 20,
+      "duration": 94,
       "inputSize": 32219,
-      "outputSize": 17437,
+      "outputSize": 17414,
       "percent": 54
     },
     {
       "name": "Virtual Bookshelf",
       "version": "v1.1.0",
-      "duration": 3,
+      "duration": 12,
       "inputSize": 4989,
       "outputSize": 3501,
       "percent": 70
@@ -1642,7 +1642,7 @@
     {
       "name": "VitePress",
       "version": "v1.6.4",
-      "duration": 8,
+      "duration": 37,
       "inputSize": 12210,
       "outputSize": 8143,
       "percent": 67
@@ -1650,7 +1650,7 @@
     {
       "name": "Vivify",
       "version": "v1.0.0",
-      "duration": 19,
+      "duration": 81,
       "inputSize": 71707,
       "outputSize": 48378,
       "percent": 67
@@ -1658,7 +1658,7 @@
     {
       "name": "Voxels",
       "version": "v1.0.0",
-      "duration": 2,
+      "duration": 10,
       "inputSize": 4735,
       "outputSize": 3415,
       "percent": 72
@@ -1666,7 +1666,7 @@
     {
       "name": "w3css",
       "version": "v4.10.0",
-      "duration": 17,
+      "duration": 71,
       "inputSize": 23062,
       "outputSize": 21892,
       "percent": 95
@@ -1674,7 +1674,7 @@
     {
       "name": "Waffle Grid",
       "version": "v1.3.6",
-      "duration": 5,
+      "duration": 33,
       "inputSize": 8722,
       "outputSize": 6348,
       "percent": 73
@@ -1682,15 +1682,15 @@
     {
       "name": "Water",
       "version": "v2.1.1",
-      "duration": 13,
+      "duration": 65,
       "inputSize": 32362,
-      "outputSize": 21383,
-      "percent": 66
+      "outputSize": 17408,
+      "percent": 54
     },
     {
       "name": "Weather Icons",
       "version": "v2.0.10",
-      "duration": 68,
+      "duration": 334,
       "inputSize": 175928,
       "outputSize": 59026,
       "percent": 34
@@ -1698,7 +1698,7 @@
     {
       "name": "Webgradients",
       "version": "v0.0.0",
-      "duration": 14,
+      "duration": 84,
       "inputSize": 22908,
       "outputSize": 14631,
       "percent": 64
@@ -1706,7 +1706,7 @@
     {
       "name": "Wenk",
       "version": "v1.0.8",
-      "duration": 2,
+      "duration": 9,
       "inputSize": 3061,
       "outputSize": 1746,
       "percent": 57
@@ -1714,7 +1714,7 @@
     {
       "name": "Wikipedia Dark",
       "version": "v3.7.9",
-      "duration": 94,
+      "duration": 495,
       "inputSize": 365866,
       "outputSize": 307988,
       "percent": 84
@@ -1722,7 +1722,7 @@
     {
       "name": "Windows 95",
       "version": "v0.0.0",
-      "duration": 6,
+      "duration": 25,
       "inputSize": 7254,
       "outputSize": 4650,
       "percent": 64
@@ -1730,7 +1730,7 @@
     {
       "name": "Windows 98",
       "version": "v0.0.1",
-      "duration": 3,
+      "duration": 13,
       "inputSize": 4547,
       "outputSize": 2577,
       "percent": 57
@@ -1738,7 +1738,7 @@
     {
       "name": "Wing",
       "version": "v1.0.0",
-      "duration": 6,
+      "duration": 30,
       "inputSize": 8355,
       "outputSize": 5576,
       "percent": 67
@@ -1746,7 +1746,7 @@
     {
       "name": "Woah",
       "version": "v1.3.1",
-      "duration": 6,
+      "duration": 34,
       "inputSize": 19423,
       "outputSize": 10690,
       "percent": 55
@@ -1754,7 +1754,7 @@
     {
       "name": "WTF Forms",
       "version": "v2.2.0",
-      "duration": 4,
+      "duration": 24,
       "inputSize": 10548,
       "outputSize": 7251,
       "percent": 69
@@ -1762,7 +1762,7 @@
     {
       "name": "YaCy",
       "version": "v4.1.2",
-      "duration": 11,
+      "duration": 62,
       "inputSize": 23758,
       "outputSize": 12692,
       "percent": 53
@@ -1770,7 +1770,7 @@
     {
       "name": "Yue",
       "version": "v1.1.1",
-      "duration": 3,
+      "duration": 10,
       "inputSize": 2636,
       "outputSize": 1951,
       "percent": 74
@@ -1778,9 +1778,9 @@
     {
       "name": "Zotero Dark Theme",
       "version": "v0.0.0",
-      "duration": 5,
+      "duration": 21,
       "inputSize": 13440,
-      "outputSize": 8450,
+      "outputSize": 8449,
       "percent": 63
     }
   ]
