@@ -47,8 +47,10 @@ function roundCompactNumber (value, precision = 3) {
   if (!Number.isFinite(number)) {
     return String(value);
   }
-  // Strip trailing zeros and trailing decimal point from the fixed-precision string
-  let result = number.toFixed(precision).replace(/0+$/, '').replace(/\.$/, '');
+  // Strip the zeros trailing the fraction, then the decimal point they leave
+  // behind. Only zeros written after a decimal point are droppable, so the
+  // match has to start at one: the zeros of a whole number are digits.
+  let result = number.toFixed(precision).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   if (result.startsWith('0.')) {
     result = result.slice(1);
   }
@@ -56,6 +58,44 @@ function roundCompactNumber (value, precision = 3) {
     result = '-' + result.slice(2);
   }
   return result;
+}
+
+/**
+ * The most characters the result of a resolved calculation is written with,
+ * counting the digits and the decimal point but not the sign. A calculation is
+ * only replaced by its result to save characters, and a result that repeats
+ * can always be written out longer, so its digits are cut off where the
+ * accuracy they add stops paying for the characters they cost.
+ *
+ * @type {number}
+ */
+const MAXIMUM_RESOLVED_NUMBER_CHARACTERS = 7;
+
+/**
+ * Formats what a calculation resolved to as the number a stylesheet states it
+ * with: rounded to however many decimal places are left over once the whole
+ * part and the decimal point have taken their share of the character budget a
+ * resolved number is written within.
+ *
+ * @param  {number|string} value              The number the calculation resolved to.
+ * @param  {number}        maximumCharacters  The most characters the written number may take.
+ * @return {string}                           The number as it is written into the stylesheet.
+ */
+function formatResolvedNumber (value, maximumCharacters = MAXIMUM_RESOLVED_NUMBER_CHARACTERS) {
+  const number = typeof value === 'number' ? value : parseFloat(value);
+  if (!Number.isFinite(number)) {
+    return String(value);
+  }
+  const wholePart = Math.floor(Math.abs(number));
+  // A magnitude below one is written without its leading zero, so nothing of
+  // its whole part is spent from the budget
+  let wholeDigitCount = 0;
+  if (wholePart !== 0) {
+    wholeDigitCount = String(wholePart).length;
+  }
+  // The decimal point itself takes one of the characters the digits could have
+  const decimalPlaces = Math.max(maximumCharacters - wholeDigitCount - 1, 0);
+  return roundCompactNumber(number, decimalPlaces);
 }
 
 /**
@@ -84,15 +124,16 @@ function convertAbsoluteLengthToPx (value, unit) {
 }
 
 /**
- * Formats a numeric value with its CSS unit as a compact string, rounding to the specified precision.
+ * Formats what a calculation resolved to as the dimension a stylesheet states
+ * it with, rounding the number into the character budget a resolved number is
+ * written within.
  *
- * @param  {number} value      The numeric dimension value.
- * @param  {string} unit       The CSS unit suffix (e.g. "px", "%").
- * @param  {number} precision  The number of decimal places to keep.
- * @return {string}            The formatted dimension string.
+ * @param  {number} value  The numeric result of the calculation.
+ * @param  {string} unit   The CSS unit suffix the result carries (e.g. "px", "%").
+ * @return {string}        The dimension as it is written into the stylesheet.
  */
-function formatDimension (value, unit, precision = 3) {
-  return roundCompactNumber(value, precision) + unit;
+function formatResolvedDimension (value, unit) {
+  return formatResolvedNumber(value) + unit;
 }
 
 /**
@@ -197,7 +238,8 @@ export {
   collapseShorthandParts,
   convertAbsoluteLengthToPx,
   formatCompactNumber,
-  formatDimension,
+  formatResolvedDimension,
+  formatResolvedNumber,
   hasSubstitutedParts,
   normalizeScaleComponent,
   parseAlphaString,

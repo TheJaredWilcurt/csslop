@@ -1352,11 +1352,85 @@ const MERGE_AT_LATER_RULE = 'later';
 const MERGE_AT_EARLIER_RULE = 'earlier';
 
 /**
+ * Reports whether an entry of a rule's body is a declaration whose standing in
+ * the cascade can be read off the property it writes. Anything else a body may
+ * hold, such as a nested rule, is never shadowed by a declaration beside it.
+ *
+ * @param  {object}  entry  An entry of a rule's declaration list.
+ * @return {boolean}        True when the entry is a property declaration.
+ */
+function isPropertyDeclaration (entry) {
+  return entry.type === 'declaration' && Boolean(entry.property);
+}
+
+/**
+ * Finds which declaration decides each leaf property once a list of
+ * declarations is read as one rule's body. Within a rule, an important
+ * declaration beats a non-important one, and between two of equal weight the
+ * last one written wins.
+ *
+ * @param  {Array} declarations  The declarations of the combined rule, in the order they would be written.
+ * @return {Map}                 Map of leaf property name to the declaration that decides it.
+ */
+function findDecidingDeclarations (declarations) {
+  const decidingDeclarations = new Map();
+  const importantDeclarations = new Set();
+  for (const declaration of declarations) {
+    if (!isPropertyDeclaration(declaration)) {
+      continue;
+    }
+    const isImportant = isImportantDeclaration(declaration);
+    if (isImportant) {
+      importantDeclarations.add(declaration);
+    }
+    for (const leafProperty of expandToOverridableProperties(declaration.property)) {
+      const decidingDeclaration = decidingDeclarations.get(leafProperty);
+      const outranksIt = (
+        !decidingDeclaration ||
+        isImportant ||
+        !importantDeclarations.has(decidingDeclaration)
+      );
+      if (outranksIt) {
+        decidingDeclarations.set(leafProperty, declaration);
+      }
+    }
+  }
+  return decidingDeclarations;
+}
+
+/**
+ * Reports whether anything a rule brings to a merge still decides a property
+ * of the combined rule. A declaration that loses every property it writes to
+ * another declaration of the same rule is dropped from the merged rule, so
+ * where the merged rule sits cannot change how it reads.
+ *
+ * @param  {object}  rule                  The rule contributing the entries.
+ * @param  {Map}     decidingDeclarations  The deciding declaration of each leaf property of the merged rule.
+ * @return {boolean}                       True when the rule still decides something after the merge.
+ */
+function decidesAnythingAfterMerge (rule, decidingDeclarations) {
+  return (rule.declarations || []).some((entry) => {
+    if (!isPropertyDeclaration(entry)) {
+      return entry.type !== 'whitespace' && entry.type !== 'comment';
+    }
+    return [...expandToOverridableProperties(entry.property)].some((leafProperty) => {
+      return decidingDeclarations.get(leafProperty) === entry;
+    });
+  });
+}
+
+/**
  * Decides where two rules with the same selector can be combined. Merging them
  * always makes one set of declarations cross whatever separates the two rules,
  * which can flip a conflict the crossing declarations used to win or lose, so
  * the merged rule goes wherever the set that moved keeps its old standing.
  * Nothing separates adjacent rules, so those always merge.
+ *
+ * The declarations one rule loses to the other are the exception: they are
+ * dropped from the merged rule, so the merged rule belongs wherever the
+ * declarations that outlive the merge already were, and nothing has to cross
+ * anything at all. That is what lets `.a{color:red!important}` swallow a later
+ * `.a{color:tan}` across a rule that also writes `color`.
  *
  * @param  {object}      overrideIndex    The index of what each position writes to.
  * @param  {object}      earlierRule      The first of the two rules with this selector.
@@ -1367,7 +1441,20 @@ const MERGE_AT_EARLIER_RULE = 'earlier';
  */
 function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPosition, laterPosition) {
   const rulesAreAdjacent = earlierPosition === laterPosition - 1;
-  if (rulesAreAdjacent || !overrideIndex.blocksRelocation(earlierRule, earlierPosition)) {
+  if (rulesAreAdjacent) {
+    return MERGE_AT_LATER_RULE;
+  }
+  const decidingDeclarations = findDecidingDeclarations([
+    ...(earlierRule.declarations || []),
+    ...(laterRule.declarations || [])
+  ]);
+  if (!decidesAnythingAfterMerge(laterRule, decidingDeclarations)) {
+    return MERGE_AT_EARLIER_RULE;
+  }
+  if (!decidesAnythingAfterMerge(earlierRule, decidingDeclarations)) {
+    return MERGE_AT_LATER_RULE;
+  }
+  if (!overrideIndex.blocksRelocation(earlierRule, earlierPosition)) {
     return MERGE_AT_LATER_RULE;
   }
   if (!overrideIndex.blocksRelocation(laterRule, earlierPosition)) {
