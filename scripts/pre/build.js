@@ -2,8 +2,8 @@
  * @file Scripts that run before `npm run build`.
  */
 
-import { minifySiteCSS } from './minifySiteCSS.js';
-import { refreshRealWorldSite } from './refreshRealWorldSite.js';
+import { minifySiteCSS } from '../minifySiteCSS.js';
+import { refreshRealWorldSite } from '../refreshRealWorldSite.js';
 
 /**
  * Runs automatically before `npm run build`.

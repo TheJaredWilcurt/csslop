@@ -37,6 +37,7 @@ import {
 import {
   collapseShorthandParts,
   convertAbsoluteLengthToPx,
+  formatResolvedNumber,
   hasSubstitutedParts,
   normalizeScaleComponent,
   parseAlphaString,
@@ -1376,7 +1377,7 @@ function computeMinifiedValue (declaration) {
     // Remove whitespace around * and / operators (safe outside calc context)
     val = val.replace(/\s*([*/])\s*/g, '$1');
     val = normalizeMathFunctions(val, declaration.property, declaration.value || '');
-    val = simplifyStandaloneCalc(val);
+    val = simplifyStandaloneCalc(val, declaration.property);
     // Simplify calc() expressions containing zero-percent additive terms
     val = val.replace(/calc\(([^()]+)\)/gi, (match, inner) => {
       // Collapse whitespace inside calc expression
@@ -1400,10 +1401,11 @@ function computeMinifiedValue (declaration) {
     }
     val = val.replace(/(^|\s|,|\()(-?)0+(\.\d+)/g, '$1$2$3'); // e.g. 0.5 -> .5, -0.5 -> -.5
 
-    // If value is a standalone number with optional unit, round it compactly
+    // If value is a standalone number with optional unit, round it into the
+    // character budget a number is written within
     if (/^[+-]?(?:\d+|\d*\.\d+)([a-z%]+)?$/i.test(val)) {
       const [, rawNumber, rawUnit = ''] = val.match(/^([+-]?(?:\d+|\d*\.\d+))([a-z%]+)?$/i);
-      val = roundCompactNumber(rawNumber, 4) + rawUnit;
+      val = formatResolvedNumber(rawNumber) + rawUnit;
     }
 
     val = lowercaseHexColors(val);

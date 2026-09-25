@@ -8,7 +8,8 @@ import { findMatchingParenthesis } from '../parser/source-search.js';
 
 import {
   convertAbsoluteLengthToPx,
-  formatDimension,
+  formatResolvedDimension,
+  formatResolvedNumber,
   roundCompactNumber
 } from './shared.js';
 
@@ -246,6 +247,158 @@ function convertReciprocalMultiplicationToDivision (expression) {
 }
 
 /**
+ * Matches a whole expression that divides a percentage by a plain number,
+ * capturing the percentage and the divisor it is shared out between.
+ *
+ * @type {RegExp}
+ */
+const PERCENTAGE_DIVISION = /^([+-]?(?:\d+|\d*\.\d+))%\s*\/\s*([+-]?(?:\d+|\d*\.\d+))$/;
+
+/**
+ * Picks between what a calculation resolved to and the calculation itself,
+ * keeping whichever takes fewer characters to write. A tie goes to the
+ * resolved value, which states the same thing without the arithmetic.
+ *
+ * @param  {string} resolved     The value the calculation resolves to.
+ * @param  {string} calculation  The calculation, written as compactly as it can be.
+ * @return {string}              The shorter of the two.
+ */
+function shorterOfResolutionAndCalculation (resolved, calculation) {
+  if (resolved.length <= calculation.length) {
+    return resolved;
+  }
+  return calculation;
+}
+
+/**
+ * Resolves a percentage divided by a number into the single percentage it
+ * equals, which is how `calc(100%/16)` comes to be written as `6.25%`. The
+ * division stays as it was written when the result is no shorter, and when
+ * the divisor is zero, since that resolves to nothing a stylesheet can state.
+ *
+ * @param  {string}      expression  The contents of a `calc()`, with its whitespace collapsed.
+ * @return {string|null}             The shorter of the resolved percentage and the division, or null when the expression is not one.
+ */
+function resolvePercentageDivision (expression) {
+  const division = expression.match(PERCENTAGE_DIVISION);
+  if (!division) {
+    return null;
+  }
+  const [, percentage, divisor] = division;
+  const calculation = 'calc(' + percentage + '%/' + divisor + ')';
+  if (Number(divisor) === 0) {
+    return calculation;
+  }
+  const resolved = formatResolvedNumber(Number(percentage) / Number(divisor)) + '%';
+  return shorterOfResolutionAndCalculation(resolved, calculation);
+}
+
+/**
+ * The properties whose values every CSS specification defines as
+ * non-negative, so that a math function declared on one of them has its
+ * result clamped rather than read as written.
+ *
+ * @type {Set<string>}
+ */
+const NON_NEGATIVE_PROPERTIES = new Set([
+  'animation-duration',
+  'animation-iteration-count',
+  'background-size',
+  'block-size',
+  'border-block-end-width',
+  'border-block-start-width',
+  'border-block-width',
+  'border-bottom-left-radius',
+  'border-bottom-right-radius',
+  'border-bottom-width',
+  'border-end-end-radius',
+  'border-end-start-radius',
+  'border-image-outset',
+  'border-image-width',
+  'border-inline-end-width',
+  'border-inline-start-width',
+  'border-inline-width',
+  'border-left-width',
+  'border-radius',
+  'border-right-width',
+  'border-start-end-radius',
+  'border-start-start-radius',
+  'border-top-left-radius',
+  'border-top-right-radius',
+  'border-top-width',
+  'border-width',
+  'column-count',
+  'column-gap',
+  'column-rule-width',
+  'column-width',
+  'flex-basis',
+  'flex-grow',
+  'flex-shrink',
+  'font-size',
+  'gap',
+  'height',
+  'inline-size',
+  'line-height',
+  'mask-size',
+  'max-block-size',
+  'max-height',
+  'max-inline-size',
+  'max-width',
+  'min-block-size',
+  'min-height',
+  'min-inline-size',
+  'min-width',
+  'outline-width',
+  'padding',
+  'padding-block',
+  'padding-block-end',
+  'padding-block-start',
+  'padding-bottom',
+  'padding-inline',
+  'padding-inline-end',
+  'padding-inline-start',
+  'padding-left',
+  'padding-right',
+  'padding-top',
+  'perspective',
+  'row-gap',
+  'shape-margin',
+  'stroke-width',
+  'tab-size',
+  'transition-duration',
+  'width'
+]);
+
+/**
+ * Matches a value written as a single negative number, with or without the
+ * unit or percent sign that follows its digits.
+ *
+ * @type {RegExp}
+ */
+const NEGATIVE_NUMBER_VALUE = /^-(?:\d+|\d*\.\d+)(?:[a-z]+|%)?$/i;
+
+/**
+ * Clamps what a math function resolved to into the range its property
+ * accepts. A negative length written out directly makes the declaration
+ * invalid and the CSS engine throws it away, but a math function is allowed
+ * to resolve to one: its result is clamped to the nearest value the property
+ * does take, which on a property that only accepts non-negative values is
+ * zero, as the range checking section of the CSS Values specification
+ * describes: https://drafts.csswg.org/css-values/#calc-range.
+ *
+ * @param  {string} resolvedValue  The value the math function resolved to.
+ * @param  {string} property       The property the math function is declared on.
+ * @return {string}                The resolved value, held inside the property's range.
+ */
+function clampResolvedValueToPropertyRange (resolvedValue, property) {
+  const acceptsNegativeValues = !NON_NEGATIVE_PROPERTIES.has(String(property).toLowerCase());
+  if (acceptsNegativeValues || !NEGATIVE_NUMBER_VALUE.test(resolvedValue)) {
+    return resolvedValue;
+  }
+  return '0';
+}
+
+/**
  * The units a folded calc() expression leads with, in the order they are
  * written. Every other unit follows them alphabetically.
  *
@@ -276,15 +429,15 @@ function tryFoldCalcExpression (expression) {
     expr = expr.replace(/\(([^()]+)\)/g, '$1');
     // Fold: <number> * <number><unit> → computed result in same unit
     expr = expr.replace(/(-?(?:\d*\.\d+|\d+))\s*\*\s*(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q|%)/gi, (match, a, b, unit) => {
-      return formatDimension(parseFloat(a) * parseFloat(b), unit);
+      return formatResolvedDimension(parseFloat(a) * parseFloat(b), unit);
     });
     // Fold: <number><unit> * <number> → computed result in same unit
     expr = expr.replace(/(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q|%)\s*\*\s*(-?(?:\d*\.\d+|\d+))/gi, (match, a, unit, b) => {
-      return formatDimension(parseFloat(a) * parseFloat(b), unit);
+      return formatResolvedDimension(parseFloat(a) * parseFloat(b), unit);
     });
     // Fold: <number><unit> / <number> → computed result in same unit
     expr = expr.replace(/(-?(?:\d*\.\d+|\d+))(px|pt|pc|in|cm|mm|q)\s*\/\s*(-?(?:\d*\.\d+|\d+))/gi, (match, value, unit, divisor) => {
-      return formatDimension(parseFloat(value) / parseFloat(divisor), unit);
+      return formatResolvedDimension(parseFloat(value) / parseFloat(divisor), unit);
     });
     // Collapse zero-with-unit terms (e.g. 0px, 0%) to plain 0 or remove them
     expr = expr.replace(/(^|[+-])\s*0(?:px|pt|pc|in|cm|mm|q|%)\b/g, (match, sign) => {
@@ -361,26 +514,100 @@ function tryFoldCalcExpression (expression) {
 
   if (outputTerms.length === 1) {
     const { unit, value } = outputTerms[0];
-    if (unit) {
-      return roundCompactNumber(value) + unit;
-    }
-    return roundCompactNumber(value);
+    return formatResolvedDimension(value, unit);
   }
 
   const [first, ...rest] = outputTerms;
-  let result = roundCompactNumber(first.value) + first.unit;
+  let result = formatResolvedDimension(first.value, first.unit);
   for (const term of rest) {
     const sign = term.value < 0 ? '-' : '+';
-    result += ' ' + sign + ' ' + roundCompactNumber(Math.abs(term.value)) + term.unit;
+    result += ' ' + sign + ' ' + formatResolvedDimension(Math.abs(term.value), term.unit);
   }
   return 'calc(' + result + ')';
+}
+
+/**
+ * Matches a whole expression that scales a percentage by a plain number,
+ * written either way around. Both operands are already as short as they can
+ * be, so the expression is only ever squeezed, never resolved.
+ *
+ * @type {RegExp}
+ */
+const PERCENTAGE_MULTIPLICATION = /^(?:-?(?:\d*\.\d+|\d+)%\s*\*\s*-?(?:\d*\.\d+|\d+)|-?(?:\d*\.\d+|\d+)\s*\*\s*-?(?:\d*\.\d+|\d+)%)$/;
+
+/**
+ * Matches a value that is a single percentage, which is all a calculation
+ * leaves behind once every term of it has resolved into one.
+ *
+ * @type {RegExp}
+ */
+const RESOLVED_PERCENTAGE = /^-?(?:\d+|\d*\.\d+)%$/;
+
+/**
+ * Chooses how a calculation that shares a percentage out resolves. The
+ * library states the result to the full precision a float carries, which is
+ * both longer than the calculation it replaces and finer than a stylesheet
+ * has any use for, so the result is rounded into the budget a resolved number
+ * is written within and kept only when it is the shorter of the two.
+ *
+ * @param  {string} simplified    The result the calculation library returned.
+ * @param  {string} compactInner  The contents of the `calc()`, with its whitespace collapsed.
+ * @param  {string} match         The whole `calc()` as it was written.
+ * @return {string}               How the resolved calculation is written.
+ */
+function chooseResolvedPercentage (simplified, compactInner, match) {
+  // A division sign written after a percentage, which is what the resolved percentage was shared out by
+  const dividesAPercentage = RESOLVED_PERCENTAGE.test(simplified) && /%\s*\//.test(match);
+  if (!dividesAPercentage) {
+    return simplified;
+  }
+  // Remove whitespace around division operator
+  const calculation = 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
+  const resolved = formatResolvedNumber(parseFloat(simplified)) + '%';
+  return shorterOfResolutionAndCalculation(resolved, calculation);
+}
+
+/**
+ * Resolves the contents of a `calc()` into the shortest way of writing the
+ * same value, which is either the value the arithmetic works out to or the
+ * calculation itself with the whitespace squeezed out of it.
+ *
+ * @param  {string} match         The whole `calc()` as it was written.
+ * @param  {string} compactInner  The contents of the `calc()`, with its whitespace collapsed.
+ * @return {string}               The shortest way of writing what the calculation states.
+ */
+function resolveCalcExpression (match, compactInner) {
+  if (PERCENTAGE_MULTIPLICATION.test(compactInner)) {
+    // Remove whitespace around multiplication/division operators
+    return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
+  }
+
+  const dividedPercentage = resolvePercentageDivision(compactInner);
+  if (dividedPercentage) {
+    return dividedPercentage;
+  }
+
+  const folded = tryFoldCalcExpression(compactInner);
+  if (folded) {
+    return folded;
+  }
+
+  try {
+    const simplified = calc(match);
+    if (typeof simplified !== 'string') {
+      return match;
+    }
+    return chooseResolvedPercentage(simplified, compactInner, match);
+  } catch {
+    return match;
+  }
 }
 
 /**
  * Simplifies calc(), min(), and max() expressions within a CSS value string using the `@csstools`/css-calc library, falling back to the original value on failure.
  *
  * @param  {string} value          The CSS value string containing math functions to simplify.
- * @param  {string} property       The CSS property name, used for context-aware simplification.
+ * @param  {string} property       The CSS property name, whose range every resolved result is clamped into.
  * @param  {string} originalValue  The original unmodified value to fall back to if simplification produces an invalid result.
  * @return {string}                The value with math functions simplified where possible.
  */
@@ -404,7 +631,10 @@ function normalizeMathFunctions (value, property, originalValue = '') {
   result = result.replace(/\b(min|max)\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match) => {
     try {
       const simplified = calc(match);
-      return typeof simplified === 'string' ? simplified : match;
+      if (typeof simplified !== 'string') {
+        return match;
+      }
+      return clampResolvedValueToPropertyRange(simplified, property);
     } catch {
       return match;
     }
@@ -414,35 +644,8 @@ function normalizeMathFunctions (value, property, originalValue = '') {
   result = result.replace(/calc\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
     // Collapse whitespace inside calc expression
     const compactInner = inner.replace(/\s+/g, ' ').trim();
-    // Preserve percent-times-number expressions (e.g. 50%*2 or 2*50%) — just strip inner spaces
-    if (/^(?:-?(?:\d*\.\d+|\d+)%\s*\*\s*-?(?:\d*\.\d+|\d+)|-?(?:\d*\.\d+|\d+)\s*\*\s*-?(?:\d*\.\d+|\d+)%)$/i.test(compactInner)) {
-      // Remove whitespace around multiplication/division operators
-      return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
-    }
-    // Preserve percent/number division expressions (e.g. 100%/3) — just strip inner spaces
-    if (/^\d+(?:\.\d+)?%\s*\/\s*\d+(?:\.\d+)?$/i.test(compactInner)) {
-      // Remove whitespace around division operator
-      return 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
-    }
-
-    const folded = tryFoldCalcExpression(compactInner);
-    if (folded) {
-      return folded;
-    }
-
-    try {
-      const simplified = calc(match);
-      if (typeof simplified !== 'string') {
-        return match;
-      }
-      // If simplified to a bare percentage but original had division, preserve the calc form
-      if (/^-?(?:\d+|\d*\.\d+)%$/.test(simplified) && /%\s*\//.test(match)) {
-        return 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
-      }
-      return simplified;
-    } catch {
-      return match;
-    }
+    const resolved = resolveCalcExpression(match, compactInner);
+    return clampResolvedValueToPropertyRange(resolved, property);
   }));
 
   // When calc() folded to an absolute-length unit (pt, pc, in, cm, mm, q), convert to pixels
@@ -456,9 +659,9 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     }
   }
 
-  // Round results with excessive decimal places (4+ digits after the decimal)
+  // Round a result whose decimal places run past the budget a resolved number is written within
   result = result.replace(/(-?(?:\d+|\d*\.\d+)\.\d{4,})([a-z%]+)/gi, (match, number, unit) => {
-    return roundCompactNumber(number) + unit;
+    return formatResolvedNumber(number) + unit;
   });
   return result;
 }
@@ -466,18 +669,14 @@ function normalizeMathFunctions (value, property, originalValue = '') {
 /**
  * Simplifies a standalone calc() value by flattening nested calc expressions, converting absolute length units to pixels, and folding constant terms.
  *
- * @param  {string} value  The CSS value string that may be a standalone calc() expression.
+ * @param  {string} value  The CSS value string, already known to be a single `calc()`.
  * @return {string}        The simplified value, or the original value if simplification is not applicable.
  */
-function simplifyStandaloneCalc (value) {
-  // Check if value starts with calc( and ends with )
-  if (!/^calc\(/i.test(value) || !value.endsWith(')')) {
-    return value;
-  }
+function foldStandaloneCalc (value) {
   let inner = value.slice(5, -1).trim();
 
   // Preserve percent-times-number expressions, only stripping whitespace around operators
-  if (/^(?:-?(?:\d*\.\d+|\d+)%\s*\*\s*-?(?:\d*\.\d+|\d+)|-?(?:\d*\.\d+|\d+)\s*\*\s*-?(?:\d*\.\d+|\d+)%)$/i.test(inner.replace(/\s+/g, ' ').trim())) {
+  if (PERCENTAGE_MULTIPLICATION.test(inner.replace(/\s+/g, ' ').trim())) {
     return 'calc(' + inner.replace(/\s*([*/])\s*/g, '$1') + ')';
   }
 
@@ -516,13 +715,29 @@ function simplifyStandaloneCalc (value) {
 
   // Collapse whitespace and check for percent-division expressions
   const compactInner = inner.replace(/\s+/g, ' ').trim();
-  // Preserve percent/number division, just strip whitespace around the operator
-  if (/^\d+(?:\.\d+)?%\s*\/\s*\d+(?:\.\d+)?$/i.test(compactInner)) {
-    return 'calc(' + compactInner.replace(/\s*\/\s*/g, '/') + ')';
+  const dividedPercentage = resolvePercentageDivision(compactInner);
+  if (dividedPercentage) {
+    return dividedPercentage;
   }
 
   // Default: strip whitespace around multiplication/division operators
   return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
+}
+
+/**
+ * Simplifies a value that is a single `calc()`, holding whatever it resolves
+ * to inside the range the property it is declared on accepts.
+ *
+ * @param  {string} value     The CSS value string that may be a standalone calc() expression.
+ * @param  {string} property  The CSS property the value is declared on.
+ * @return {string}           The simplified value, or the original value if simplification is not applicable.
+ */
+function simplifyStandaloneCalc (value, property = '') {
+  // Check if value starts with calc( and ends with )
+  if (!/^calc\(/i.test(value) || !value.endsWith(')')) {
+    return value;
+  }
+  return clampResolvedValueToPropertyRange(foldStandaloneCalc(value), property);
 }
 
 export {
