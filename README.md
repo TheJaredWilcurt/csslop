@@ -35,7 +35,7 @@ These were the latest and greatest models at the time. Since then I've mostly us
 
 **AI's used during maintenance:**
 
-As new tests are created upstream I use whatever the latest models are, documented in the release notes.
+As new tests are created upstream I use whatever the latest models are and document them in the release notes.
 
 These tools were prompted to pass the tests in the `/copiedTests` folder that came from `keithamus/css-minify-tests`.
 
