@@ -5,6 +5,11 @@
 import { findMatchingParenthesis } from '../parser/source-search.js';
 
 import {
+  formatUnitTotals,
+  MATH_FUNCTION_NAMES,
+  simplifyCalc
+} from './math-expression.js';
+import {
   convertAbsoluteLengthToPx,
   formatResolvedDimension,
   formatResolvedNumber,
@@ -83,25 +88,6 @@ function keepSeparatorAfterDissolvedFunction (replacer) {
     return replacement;
   };
 }
-
-/**
- * The functions whose arguments are a math expression, where `*` and `/` are
- * arithmetic operators rather than characters of some other syntax.
- *
- * @type {Set<string>}
- */
-const MATH_FUNCTION_NAMES = new Set([
-  'abs',
-  'calc',
-  'clamp',
-  'hypot',
-  'max',
-  'min',
-  'mod',
-  'rem',
-  'round',
-  'sign'
-]);
 
 /**
  * Matches a single character that may appear in a CSS function name.
@@ -269,6 +255,38 @@ function shorterOfResolutionAndCalculation (resolved, calculation) {
 }
 
 /**
+ * Writes a calculation as compactly as its syntax allows, squeezing out every
+ * space but the ones a `+` or a `-` needs to be read as an operator.
+ *
+ * @param  {string} inner  The contents of the `calc()`.
+ * @return {string}        The whole `calc()`, written as compactly as it can be.
+ */
+function compactCalculation (inner) {
+  // Remove whitespace around multiplication and division operators
+  const compactInner = inner.replace(/\s+/g, ' ').trim().replace(/\s*([*/])\s*/g, '$1');
+  return 'calc(' + compactInner + ')';
+}
+
+/**
+ * Picks between a calculation and what resolving its arithmetic came to. A
+ * resolved value states the same thing without any arithmetic, so it wins a
+ * tie, but a result that is itself a calculation only states the same terms
+ * another way, and writing them out again for no saving gains nothing.
+ *
+ * @param  {string} resolved     The value the calculation resolved to.
+ * @param  {string} calculation  The calculation, written as compactly as it can be.
+ * @return {string}              Whichever of the two the value is written as.
+ */
+function chooseResolvedCalculation (resolved, calculation) {
+  // A resolution that kept its function form left terms behind that only
+  // resolve once the element they are measured against is laid out
+  if (resolved.startsWith('calc(') && resolved.length >= calculation.length) {
+    return calculation;
+  }
+  return shorterOfResolutionAndCalculation(resolved, calculation);
+}
+
+/**
  * Resolves a percentage divided by a number into the single percentage it
  * equals, which is how `calc(100%/16)` comes to be written as `6.25%`. The
  * division stays as it was written when the result is no shorter, and when
@@ -397,21 +415,6 @@ function clampResolvedValueToPropertyRange (resolvedValue, property) {
 }
 
 /**
- * The units a folded calc() expression leads with, in the order they are
- * written. Every other unit follows them alphabetically.
- *
- * @type {Array}
- */
-const PREFERRED_UNIT_ORDER = ['%', '', 'px'];
-
-/**
- * The same leading units, for excluding them from the alphabetical remainder.
- *
- * @type {Set<string>}
- */
-const PREFERRED_UNITS = new Set(PREFERRED_UNIT_ORDER);
-
-/**
  * Attempts to simplify a calc() expression by combining like-unit terms and evaluating pure arithmetic, returning the simplified string or null if folding is not possible.
  *
  * @param  {string}      expression  The expression inside calc() to attempt folding.
@@ -490,38 +493,7 @@ function tryFoldCalcExpression (expression) {
     totals.set(unit, (totals.get(unit) || 0) + number);
   }
 
-  const orderedUnits = [...PREFERRED_UNIT_ORDER, ...[...totals.keys()].filter((unit) => {
-    return !PREFERRED_UNITS.has(unit);
-  }).sort()];
-  const outputTerms = [];
-
-  for (const unit of orderedUnits) {
-    if (!totals.has(unit)) {
-      continue;
-    }
-    const value = totals.get(unit);
-    if (Math.abs(value) < 1e-12) {
-      continue;
-    }
-    outputTerms.push({ unit, value });
-  }
-
-  if (!outputTerms.length) {
-    return '0';
-  }
-
-  if (outputTerms.length === 1) {
-    const { unit, value } = outputTerms[0];
-    return formatResolvedDimension(value, unit);
-  }
-
-  const [first, ...rest] = outputTerms;
-  let result = formatResolvedDimension(first.value, first.unit);
-  for (const term of rest) {
-    const sign = term.value < 0 ? '-' : '+';
-    result += ' ' + sign + ' ' + formatResolvedDimension(Math.abs(term.value), term.unit);
-  }
-  return 'calc(' + result + ')';
+  return formatUnitTotals(totals);
 }
 
 /**
@@ -576,8 +548,7 @@ function chooseResolvedPercentage (simplified, compactInner, match) {
  */
 function resolveCalcExpression (match, compactInner) {
   if (PERCENTAGE_MULTIPLICATION.test(compactInner)) {
-    // Remove whitespace around multiplication/division operators
-    return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
+    return compactCalculation(compactInner);
   }
 
   const dividedPercentage = resolvePercentageDivision(compactInner);
@@ -590,27 +561,41 @@ function resolveCalcExpression (match, compactInner) {
     return folded;
   }
 
-  try {
-    const simplified = simplifyCalc(match);
-    if (typeof simplified !== 'string') {
-      return match;
-    }
-    return chooseResolvedPercentage(simplified, compactInner, match);
-  } catch {
+  const simplified = simplifyCalc(match);
+  if (simplified === null) {
     return match;
   }
+  const resolved = chooseResolvedPercentage(simplified, compactInner, match);
+  return chooseResolvedCalculation(resolved, compactCalculation(compactInner));
 }
 
 /**
- * Simplifies calc(), min(), and max() expressions within a CSS value string using
- * the simplifyCalc function, falling back to the original value on failure.
+ * Matches a math function other than `calc()` whose arguments hold no further
+ * parentheses, so that the whole of the function is matched. A `calc()` is
+ * left to its own pass, which weighs what the calculation resolves to against
+ * the calculation itself.
  *
- * @param  {string} value          The CSS value string containing math functions to simplify.
- * @param  {string} property       The CSS property name, whose range every resolved result is clamped into.
- * @param  {string} originalValue  The original unmodified value to fall back to if simplification produces an invalid result.
- * @return {string}                The value with math functions simplified where possible.
+ * @type {RegExp}
  */
-function normalizeMathFunctions (value, property, originalValue = '') {
+const RESOLVABLE_MATH_FUNCTION = new RegExp(
+  '\\b(?:' +
+  [...MATH_FUNCTION_NAMES].filter((name) => {
+    return name !== 'calc';
+  }).join('|') +
+  ')\\([^()]+\\)',
+  'gi'
+);
+
+/**
+ * Runs one pass of the math simplifications over a value: the rewrites that
+ * state a calculation more compactly, and the resolutions that replace a math
+ * function with the value it works out to.
+ *
+ * @param  {string} value     The CSS value string containing math functions to simplify.
+ * @param  {string} property  The CSS property name, whose range every resolved result is clamped into.
+ * @return {string}           The value with its math functions simplified where possible.
+ */
+function simplifyMathFunctionsOnce (value, property) {
   let result = rewriteMathFunctionContents(convertReciprocalMultiplicationToDivision, value);
 
   // Unwrap calc(1 / (1 / x)) → x (double-reciprocal identity)
@@ -626,26 +611,47 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     return 'calc(' + inner + ')';
   }));
 
-  // Simplify min()/max() expressions using simplifyCalc
-  result = result.replace(/\b(min|max)\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match) => {
-    try {
-      const simplified = simplifyCalc(match);
-      if (typeof simplified !== 'string') {
-        return match;
-      }
-      return clampResolvedValueToPropertyRange(simplified, property);
-    } catch {
+  // Resolve every math function that compares or rounds its arguments
+  result = result.replace(RESOLVABLE_MATH_FUNCTION, keepSeparatorAfterDissolvedFunction((match) => {
+    const simplified = simplifyCalc(match);
+    if (simplified === null) {
       return match;
     }
+    return clampResolvedValueToPropertyRange(simplified, property);
   }));
 
-  // Simplify calc() expressions using constant folding and simplifyCalc
+  // Simplify calc() expressions using constant folding and expression resolution
   result = result.replace(/calc\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
     // Collapse whitespace inside calc expression
     const compactInner = inner.replace(/\s+/g, ' ').trim();
     const resolved = resolveCalcExpression(match, compactInner);
     return clampResolvedValueToPropertyRange(resolved, property);
   }));
+
+  return result;
+}
+
+/**
+ * Simplifies every math function within a CSS value string, resolving the ones
+ * whose operands are all known and stating the rest as compactly as they can
+ * be written.
+ *
+ * @param  {string} value          The CSS value string containing math functions to simplify.
+ * @param  {string} property       The CSS property name, whose range every resolved result is clamped into.
+ * @param  {string} originalValue  The value as it was authored, which tells whether a result was ever part of a calculation.
+ * @return {string}                The value with math functions simplified where possible.
+ */
+function normalizeMathFunctions (value, property, originalValue = '') {
+  let result = value;
+  let previous;
+
+  do {
+    previous = result;
+    // Resolving a math function leaves a plain value where it stood, which can
+    // bring the function it was nested in within reach of the next pass, so
+    // the value is simplified until it settles
+    result = simplifyMathFunctionsOnce(result, property);
+  } while (result !== previous);
 
   // When calc() folded to an absolute-length unit (pt, pc, in, cm, mm, q), convert to pixels
   if (originalValue.includes('calc(') && /^-?(?:\d+|\d*\.\d+)(pt|pc|in|cm|mm|q)$/i.test(result)) {
@@ -666,7 +672,7 @@ function normalizeMathFunctions (value, property, originalValue = '') {
 }
 
 /**
- * Simplifies a standalone calc() value by flattening nested calc expressions, converting absolute length units to pixels, and folding constant terms.
+ * Simplifies a standalone calc() value by resolving its arithmetic, flattening nested calc expressions, converting absolute length units to pixels, and folding constant terms.
  *
  * @param  {string} value  The CSS value string, already known to be a single `calc()`.
  * @return {string}        The simplified value, or the original value if simplification is not applicable.
@@ -676,7 +682,15 @@ function foldStandaloneCalc (value) {
 
   // Preserve percent-times-number expressions, only stripping whitespace around operators
   if (PERCENTAGE_MULTIPLICATION.test(inner.replace(/\s+/g, ' ').trim())) {
-    return 'calc(' + inner.replace(/\s*([*/])\s*/g, '$1') + ')';
+    return compactCalculation(inner);
+  }
+
+  // Resolve the calculation as it was written, which is the only reading of it
+  // that keeps the grouping its parentheses state. Everything below reads a
+  // flattened copy of the expression, where that grouping is already gone.
+  const resolved = simplifyCalc(value);
+  if (resolved !== null) {
+    return chooseResolvedCalculation(resolved, compactCalculation(inner));
   }
 
   // If no nested function calls and no multiplication/division involving parens, try flattening
@@ -713,14 +727,12 @@ function foldStandaloneCalc (value) {
   }
 
   // Collapse whitespace and check for percent-division expressions
-  const compactInner = inner.replace(/\s+/g, ' ').trim();
-  const dividedPercentage = resolvePercentageDivision(compactInner);
+  const dividedPercentage = resolvePercentageDivision(inner.replace(/\s+/g, ' ').trim());
   if (dividedPercentage) {
     return dividedPercentage;
   }
 
-  // Default: strip whitespace around multiplication/division operators
-  return 'calc(' + compactInner.replace(/\s*([*/])\s*/g, '$1') + ')';
+  return compactCalculation(inner);
 }
 
 /**
