@@ -2,8 +2,6 @@
  * @file Simplifies CSS math functions (calc, min, max) by folding constant expressions, flattening nested calcs, and converting absolute lengths to pixels.
  */
 
-import { calc } from '@csstools/css-calc';
-
 import { findMatchingParenthesis } from '../parser/source-search.js';
 
 import {
@@ -593,7 +591,7 @@ function resolveCalcExpression (match, compactInner) {
   }
 
   try {
-    const simplified = calc(match);
+    const simplified = simplifyCalc(match);
     if (typeof simplified !== 'string') {
       return match;
     }
@@ -604,7 +602,8 @@ function resolveCalcExpression (match, compactInner) {
 }
 
 /**
- * Simplifies calc(), min(), and max() expressions within a CSS value string using the `@csstools`/css-calc library, falling back to the original value on failure.
+ * Simplifies calc(), min(), and max() expressions within a CSS value string using
+ * the simplifyCalc function, falling back to the original value on failure.
  *
  * @param  {string} value          The CSS value string containing math functions to simplify.
  * @param  {string} property       The CSS property name, whose range every resolved result is clamped into.
@@ -627,10 +626,10 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     return 'calc(' + inner + ')';
   }));
 
-  // Simplify min()/max() expressions using @csstools/css-calc
+  // Simplify min()/max() expressions using simplifyCalc
   result = result.replace(/\b(min|max)\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match) => {
     try {
-      const simplified = calc(match);
+      const simplified = simplifyCalc(match);
       if (typeof simplified !== 'string') {
         return match;
       }
@@ -640,7 +639,7 @@ function normalizeMathFunctions (value, property, originalValue = '') {
     }
   }));
 
-  // Simplify calc() expressions using constant folding and @csstools/css-calc
+  // Simplify calc() expressions using constant folding and simplifyCalc
   result = result.replace(/calc\(([^()]+)\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
     // Collapse whitespace inside calc expression
     const compactInner = inner.replace(/\s+/g, ' ').trim();

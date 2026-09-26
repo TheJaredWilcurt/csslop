@@ -28,10 +28,6 @@ const config = defineConfig({
               name: 'codemirror-lang-css'
             },
             {
-              test: /node_modules\/@csstools\/css-calc/,
-              name: 'css-calc'
-            },
-            {
               test: /node_modules\/@node-projects\/css-parser/,
               name: 'css-parser'
             },
