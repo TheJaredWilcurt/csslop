@@ -8,7 +8,7 @@ import { minifyCSS } from '../index.js';
 
 const __dirname = import.meta.dirname;
 
-const fileName = 'zotero-dark-theme-v0.0.0.css';
+const fileName = 'nes-v2.3.0.css';
 
 /**
  * Runs the idempotency test.
@@ -25,10 +25,10 @@ function run () {
 
   if (first !== second) {
     const log = {
-      'Failed idempotency for': filePath,
       'Original File': file,
       'First Run': first,
-      Rerun: second
+      Rerun: second,
+      'Failed idempotency for': filePath
     };
     console.log(JSON.stringify(log, null, 2));
   } else {
