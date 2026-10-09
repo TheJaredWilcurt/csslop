@@ -25,7 +25,7 @@
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/lang-css": "^6.3.1",
-    "@codemirror/view": "^6.43.13",
+    "@codemirror/view": "^6.43.14",
     "@eslint/js": "^10.0.1",
     "@node-projects/css-parser": "^5.2.0",
     "@stylistic/eslint-plugin": "^5.10.0",
@@ -35,12 +35,12 @@
     "eslint-config-tjw-import-x": "^1.0.1",
     "eslint-config-tjw-jsdoc": "^2.0.1",
     "eslint-plugin-import-x": "^4.17.0",
-    "eslint-plugin-jsdoc": "^65.1.0",
+    "eslint-plugin-jsdoc": "^65.2.2",
     "fflate": "^0.8.3",
     "globals": "^17.13.0",
     "pretty-ms": "^9.3.1",
     "real-world-css-libraries": "^1.0.8",
-    "vite": "^8.3.2"
+    "vite": "^8.3.4"
   },
   "author": "The Jared Wilcurt",
   "homepage": "https://github.com/TheJaredWilcurt/csslop#readme",
@@ -57,7 +57,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "26.10.0"
+      "version": "26.11.1"
     },
     "packageManager": {
       "name": "npm",
