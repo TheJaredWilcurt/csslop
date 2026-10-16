@@ -452,6 +452,67 @@ function parseOklchHue (token) {
 }
 
 /**
+ * Removes whitespace before a negative numeric channel in Lab-family colors.
+ * A preceding numeric token already separates the sign from the prior channel.
+ *
+ * @param  {string} functionName  The name of the color function.
+ * @param  {string} value         The minified function arguments.
+ * @return {string}               The arguments with redundant channel spacing removed.
+ */
+function compactNegativeColorChannelSpacing (functionName, value) {
+  const normalizedFunctionName = functionName.toLowerCase();
+  if (!['lab', 'lch', 'oklab', 'oklch'].includes(normalizedFunctionName)) {
+    return value;
+  }
+
+  let result = '';
+  let nestingDepth = 0;
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    if (character === ' ' && nestingDepth === 0) {
+      const previousCharacter = result[result.length - 1];
+      const nextCharacter = value[index + 1];
+      const characterAfterSign = value[index + 2];
+      const characterAfterDecimal = value[index + 3];
+      const previousEndsNumber = (
+        isCssDigit(previousCharacter) ||
+        previousCharacter === '%'
+      );
+      const nextStartsNegativeNumber = (
+        nextCharacter === '-' &&
+        (
+          isCssDigit(characterAfterSign) ||
+          (
+            characterAfterSign === '.' &&
+            isCssDigit(characterAfterDecimal)
+          )
+        )
+      );
+      if (previousEndsNumber && nextStartsNegativeNumber) {
+        continue;
+      }
+    }
+    result += character;
+    if (character === '(') {
+      nestingDepth++;
+    } else if (character === ')') {
+      nestingDepth--;
+    }
+  }
+  return result;
+}
+
+/**
+ * Checks whether a character is an ASCII decimal digit.
+ *
+ * @param  {string}  character  The character to inspect.
+ * @return {boolean}            Whether the character is a digit.
+ */
+function isCssDigit (character) {
+  return character >= '0' && character <= '9';
+}
+
+/**
  * Converts `oklch()` colors that fall inside the sRGB gamut to their hex
  * equivalent when that is shorter. Out-of-gamut colors have no sRGB
  * representation, so they are left in their native color space.
@@ -574,11 +635,13 @@ function convertColorsToHex (val) {
       }
       return integer;
     });
+    minified = compactNegativeColorChannelSpacing(func, minified);
     return func + '(' + minified.trim() + ')';
   });
 
   // Convert in-gamut oklab() to hex when it produces a shorter representation
-  val = val.replace(/\boklab\(\s*(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))\s+(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, lStr, aStr, bStr, alphaStr) => {
+  // A negative channel may touch the preceding number because its sign separates the CSS number tokens.
+  val = val.replace(/\boklab\(\s*(-?(?:\d+|\d*\.\d+))(?:\s+|(?=-))(-?(?:\d+|\d*\.\d+))(?:\s+|(?=-))(-?(?:\d+|\d*\.\d+))(?:\s*\/\s*(-?(?:\d+|\d*\.\d+)%?))?\s*\)/gi, (match, lStr, aStr, bStr, alphaStr) => {
     const alpha = parseAlphaString(alphaStr);
     const hex = convertOklabToHex(parseFloat(lStr), parseFloat(aStr), parseFloat(bStr), alpha);
     if (!hex) {
@@ -892,14 +955,13 @@ const POSITION_COMPONENT_SOURCE = '(' + POSITION_OFFSET_SOURCE + '(?:\\s+' + POS
 const URL_TOKEN_BODY_SOURCE = 'url\\([^()]*';
 
 /**
- * Matches a close-paren that ends an image function, directly followed by a
- * position that no slash follows, which is the position that needs its
- * separator put back. The parenthesis that ends a `url()` is skipped, since
- * that one closes a token rather than a function.
+ * Matches a close-paren that ends an image function, followed by a separated
+ * position that no slash follows. The parenthesis that ends a `url()` is
+ * skipped, since that one closes a token rather than a function.
  *
  * @type {RegExp}
  */
-const UNSEPARATED_FUNCTION_POSITION_PATTERN = new RegExp('(?<!' + URL_TOKEN_BODY_SOURCE + ')\\)' + POSITION_COMPONENT_SOURCE + '(?!\\/)', 'gi');
+const SEPARATED_FUNCTION_POSITION_PATTERN = new RegExp('(?<!' + URL_TOKEN_BODY_SOURCE + ')\\)\\s+' + POSITION_COMPONENT_SOURCE + '(?!\\/)', 'gi');
 
 /**
  * Matches a `url()` separated from the position that follows it, which is the
@@ -920,18 +982,16 @@ const SEPARATED_IMAGE_SIZE_POSITION_PATTERN = new RegExp('\\)\\s+' + POSITION_CO
 /**
  * Normalizes the separator between the image of a layer and the position that
  * follows it. Both `background` and `mask` take a `<position> [ / <size> ]`
- * component after their image, and a bare position only reads as its own
- * component while whitespace separates it from an image function. Neither a
- * position that a `/` follows nor one that follows a `url()` needs the
- * separator, since the slash delimits the pair and a url is consumed whole as a
- * single token that ends at its own closing parenthesis.
+ * component after their image. The closing parenthesis already delimits a
+ * function token from the position, and neither a position that a `/` follows
+ * nor one that follows a `url()` needs a separator either.
  *
  * @param  {string} value  The layered image value, with the parenthesis padding removed.
  * @return {string}        The value with the position separator normalized.
  */
 function normalizeImagePositionSeparator (value) {
-  const separatedFromFunction = value.replace(UNSEPARATED_FUNCTION_POSITION_PATTERN, ') $1');
-  const joinedToUrl = separatedFromFunction.replace(SEPARATED_URL_POSITION_PATTERN, '$1$2');
+  const joinedToFunction = value.replace(SEPARATED_FUNCTION_POSITION_PATTERN, ')$1');
+  const joinedToUrl = joinedToFunction.replace(SEPARATED_URL_POSITION_PATTERN, '$1$2');
   return joinedToUrl.replace(SEPARATED_IMAGE_SIZE_POSITION_PATTERN, ')$1');
 }
 
