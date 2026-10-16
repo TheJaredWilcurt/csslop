@@ -404,14 +404,8 @@ function stringifyRule (rule, context) {
     if (canUnwrapSupports(supports)) {
       return children;
     }
-    // Check if @supports condition has adjacent logical operators that allow tight spacing
-    const needsTightSpacing = supports.startsWith('(') && /\)(?:and|or)\s*\(/.test(supports);
-    let supportsSeparator;
-    if (needsTightSpacing) {
-      supportsSeparator = '';
-    } else {
-      supportsSeparator = ' ';
-    }
+    // A condition beginning with "(" can follow the at-rule name without whitespace.
+    const supportsSeparator = supports.startsWith('(') ? '' : ' ';
     return '@supports' + supportsSeparator + supports + '{' + children + '}';
   }
 
