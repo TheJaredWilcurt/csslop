@@ -145,8 +145,57 @@ function rewriteMathFunctionContents (rewriteExpression, value) {
 }
 
 /**
+ * Matches a number written with a decimal point that begins a token of its
+ * own, capturing its sign, the digits before its decimal point, and the digits
+ * after it. The lookbehind keeps the match from starting partway through an
+ * identifier (`--x0.5`) or another number, and the lookahead keeps it from
+ * matching a fragment of a dotted name such as `0.5.png`.
+ *
+ * @type {RegExp}
+ */
+const DECIMAL_NUMBER = /(?<![\w.-])([+-]?)(\d*)\.(\d+)(?![\d.])/g;
+
+/**
+ * Writes a decimal number in the fewest characters that state the same value,
+ * dropping the zeros before its whole part (`0.25` → `.25`) and after its
+ * fraction (`1.50` → `1.5`), along with a decimal point left with no fraction
+ * behind it (`2.0` → `2`). The digits that remain are kept as written, so no
+ * precision is lost.
+ *
+ * @param  {string} sign            The sign written before the number, empty when there is none.
+ * @param  {string} wholeDigits     The digits written before the decimal point.
+ * @param  {string} fractionDigits  The digits written after the decimal point.
+ * @return {string}                 The number written as compactly as it can be.
+ */
+function shortenDecimalNumber (sign, wholeDigits, fractionDigits) {
+  // Leading zeros of the whole part
+  const wholePart = wholeDigits.replace(/^0+/, '');
+  // Trailing zeros of the fraction
+  const fractionPart = fractionDigits.replace(/0+$/, '');
+  if (!fractionPart) {
+    return sign + (wholePart || '0');
+  }
+  return sign + wholePart + '.' + fractionPart;
+}
+
+/**
+ * Shortens every decimal number in the contents of a math function. Numbers
+ * that follow an operator written without whitespace (`x*0.25s`) are out of
+ * reach of the general number shortening, which only looks past a separator.
+ *
+ * @param  {string} expression  The contents of a math function.
+ * @return {string}             The expression with every decimal number written as compactly as it can be.
+ */
+function shortenDecimalNumbers (expression) {
+  return expression.replace(DECIMAL_NUMBER, (match, sign, wholeDigits, fractionDigits) => {
+    return shortenDecimalNumber(sign, wholeDigits, fractionDigits);
+  });
+}
+
+/**
  * Matches a multiplication by a decimal below one, capturing the digits after
- * its decimal point and the unit written on it. The trailing lookahead keeps
+ * its decimal point and the unit written on it (so a multiplier with a unit
+ * can be recognized and left alone). The trailing lookahead keeps
  * the match away from numbers that only begin this way, such as the exponent
  * of `.5e3` or a unit name that is still being read.
  *
@@ -205,28 +254,47 @@ function reciprocalOfDecimalFraction (fractionDigits) {
 }
 
 /**
- * Rewrites a multiplication by a decimal below one as a division by the whole
- * number that decimal is the reciprocal of, which is never longer to write and
- * usually shorter (`calc(var(--x)*.25)` → `calc(var(--x)/4)`). A unit written
- * on the multiplier moves onto the divisor, since only how the operand is
- * stated changes.
+ * Builds the division that scales a value exactly as multiplying it by a
+ * unitless decimal below one does, when that division is no longer to write
+ * than the multiplication. A multiplier carrying a unit is never rewritten:
+ * dividing by a dimension inverts its unit in the type of the result
+ * (`x*.25s` is a time, while `x/4s` is per unit of time), so the two would not
+ * be equivalent.
+ *
+ * @param  {string}      fractionDigits  The digits written after the decimal point of the multiplier.
+ * @param  {string}      unit            The unit written on the multiplier, empty when it is unitless.
+ * @return {string|null}                 The equivalent division, or null when there is none worth using.
+ */
+function divisionEquivalentToFractionalMultiplier (fractionDigits, unit) {
+  if (unit) {
+    return null;
+  }
+  const divisor = reciprocalOfDecimalFraction(fractionDigits);
+  if (divisor === null) {
+    return null;
+  }
+  const division = '/' + divisor;
+  // Compared against the shortest the multiplication could have been written
+  const multiplication = '*.' + fractionDigits;
+  if (division.length > multiplication.length) {
+    return null;
+  }
+  return division;
+}
+
+/**
+ * Rewrites a multiplication by a unitless decimal below one as a division by
+ * the whole number that decimal is the reciprocal of, which is never longer to
+ * write and usually shorter (`calc(var(--x)*.25)` → `calc(var(--x)/4)`).
+ * Multipliers with a unit are left as written, since dividing by a dimension
+ * would invert its unit.
  *
  * @param  {string} expression  The contents of a math function.
  * @return {string}             The expression with reciprocal multipliers stated as divisions.
  */
 function convertReciprocalMultiplicationToDivision (expression) {
   return expression.replace(FRACTIONAL_MULTIPLIER, (match, fractionDigits, unit) => {
-    const divisor = reciprocalOfDecimalFraction(fractionDigits);
-    if (divisor === null) {
-      return match;
-    }
-    const division = '/' + divisor + unit;
-    // Compared against the shortest the multiplication could have been written
-    const multiplication = '*.' + fractionDigits + unit;
-    if (division.length > multiplication.length) {
-      return match;
-    }
-    return division;
+    return divisionEquivalentToFractionalMultiplier(fractionDigits, unit) ?? match;
   });
 }
 
@@ -596,7 +664,8 @@ const RESOLVABLE_MATH_FUNCTION = new RegExp(
  * @return {string}           The value with its math functions simplified where possible.
  */
 function simplifyMathFunctionsOnce (value, property) {
-  let result = rewriteMathFunctionContents(convertReciprocalMultiplicationToDivision, value);
+  let result = rewriteMathFunctionContents(shortenDecimalNumbers, value);
+  result = rewriteMathFunctionContents(convertReciprocalMultiplicationToDivision, result);
 
   // Unwrap calc(1 / (1 / x)) → x (double-reciprocal identity)
   result = result.replace(/calc\(\s*1\s*\/\s*\(\s*1\s*\/\s*([^()]+)\s*\)\s*\)/gi, keepSeparatorAfterDissolvedFunction((match, inner) => {
