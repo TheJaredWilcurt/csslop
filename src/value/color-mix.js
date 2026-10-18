@@ -57,29 +57,102 @@ function formatOklch (L, C, H, alpha) {
 }
 
 /**
- * Detect which channel indices have 'none' in a raw color function string.
+ * Splits the simple, non-nested components of a static color function.
  *
- * @param  {string} rawColorStr  The raw CSS color function string (e.g. "rgb(none 0 0)").
- * @return {Array}               An array of zero-based channel indices where 'none' was found.
+ * @param  {string} argumentText  The text inside a color function's parentheses.
+ * @return {Array}                The whitespace, comma, and slash-delimited components.
  */
-function findNoneChannels (rawColorStr) {
+function splitSimpleColorComponents (argumentText) {
+  // Split CSS color components at whitespace, commas, or the alpha slash.
+  return argumentText.trim().split(/[\s,/]+/).filter((part) => {
+    return part.length > 0;
+  });
+}
+
+/**
+ * Collects the zero-based positions of missing color components.
+ *
+ * @param  {Array}  components  The parsed color components.
+ * @param  {number} startIndex  The component index represented by the first item.
+ * @return {Array}              The channel indices whose value is `none`.
+ */
+function collectNoneChannelIndices (components, startIndex) {
   const indices = [];
-  // Match rgb/rgba/hsl/hsla/hwb function calls and extract their arguments
-  const functionMatch = rawColorStr.match(/\b(?:rgba?|hsla?|hwb)\(([^)]*)\)/i);
-  if (functionMatch) {
-    // Split arguments on whitespace, commas, or slash separators
-    const parts = functionMatch[1].trim().split(/[\s,/]+/).map((part) => {
-      return part.trim();
-    }).filter((part) => {
-      return part.length > 0;
-    });
-    parts.forEach((part, index) => {
-      if (part.toLowerCase() === 'none') {
-        indices.push(index);
-      }
-    });
+  for (let index = 0; index < components.length; index++) {
+    if (components[index].toLowerCase() === 'none') {
+      indices.push(startIndex + index);
+    }
   }
   return indices;
+}
+
+/**
+ * Finds the first CSS whitespace character in a string.
+ *
+ * @param  {string} text  The text to inspect.
+ * @return {number}       The first whitespace index, or -1 when there is none.
+ */
+function findFirstWhitespaceIndex (text) {
+  for (let index = 0; index < text.length; index++) {
+    if (' \t\n\r\f'.includes(text[index])) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Detect which channel indices have `none` in a raw static color function.
+ *
+ * @param  {string} rawColorString  The raw CSS color function string.
+ * @return {Array}                  An array of zero-based channel indices where `none` was found.
+ */
+function findNoneChannels (rawColorString) {
+  const openParenthesisIndex = rawColorString.indexOf('(');
+  const closeParenthesisIndex = rawColorString.lastIndexOf(')');
+  if (openParenthesisIndex === -1 || closeParenthesisIndex <= openParenthesisIndex) {
+    return [];
+  }
+
+  const functionName = rawColorString.slice(0, openParenthesisIndex).trim().toLowerCase();
+  const argumentText = rawColorString.slice(openParenthesisIndex + 1, closeParenthesisIndex).trim();
+  if (['rgb', 'rgba', 'hsl', 'hsla', 'hwb'].includes(functionName)) {
+    return collectNoneChannelIndices(splitSimpleColorComponents(argumentText), 0);
+  }
+
+  if (functionName !== 'color') {
+    return [];
+  }
+
+  const firstComponentEnd = findFirstWhitespaceIndex(argumentText);
+  if (firstComponentEnd === -1 || argumentText.slice(0, firstComponentEnd).toLowerCase() !== 'srgb') {
+    return [];
+  }
+  const channelText = argumentText.slice(firstComponentEnd).trim();
+  return collectNoneChannelIndices(splitSimpleColorComponents(channelText), 0);
+}
+
+/**
+ * Fills missing interpolation components from the matching component in the
+ * other color before either color is premultiplied by alpha.
+ *
+ * @param  {object} firstColor   The first parsed color-mix argument.
+ * @param  {object} secondColor  The second parsed color-mix argument.
+ * @return {void}
+ */
+function fillMissingColorChannels (firstColor, secondColor) {
+  const firstMissingChannels = findNoneChannels(firstColor.raw);
+  const secondMissingChannels = findNoneChannels(secondColor.raw);
+  for (const channelIndex of firstMissingChannels) {
+    if (channelIndex < firstColor.color.length) {
+      firstColor.color[channelIndex] = secondColor.color[channelIndex];
+    }
+  }
+  for (const channelIndex of secondMissingChannels) {
+    if (channelIndex < secondColor.color.length) {
+      secondColor.color[channelIndex] = firstColor.color[channelIndex];
+    }
+  }
 }
 
 /**
@@ -208,17 +281,26 @@ function normalizeUnresolvableNColorMix (colorSpace, parsedArgs) {
  * @return {string}                  A hex color string.
  */
 function mixNColorsSrgb (colors, weights, alphaMultiplier) {
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  let alpha = 0;
+  let premultipliedRed = 0;
+  let premultipliedGreen = 0;
+  let premultipliedBlue = 0;
+  let interpolatedAlpha = 0;
   for (let i = 0; i < colors.length; i++) {
-    r += colors[i][0] * weights[i];
-    g += colors[i][1] * weights[i];
-    b += colors[i][2] * weights[i];
-    alpha += colors[i][3] * weights[i];
+    const weightedAlpha = colors[i][3] * weights[i];
+    premultipliedRed += colors[i][0] * weightedAlpha;
+    premultipliedGreen += colors[i][1] * weightedAlpha;
+    premultipliedBlue += colors[i][2] * weightedAlpha;
+    interpolatedAlpha += weightedAlpha;
   }
-  return rgbaToHex(Math.round(r), Math.round(g), Math.round(b), alpha * alphaMultiplier);
+  if (interpolatedAlpha === 0) {
+    return rgbaToHex(0, 0, 0, 0);
+  }
+  return rgbaToHex(
+    Math.round(premultipliedRed / interpolatedAlpha),
+    Math.round(premultipliedGreen / interpolatedAlpha),
+    Math.round(premultipliedBlue / interpolatedAlpha),
+    interpolatedAlpha * alphaMultiplier
+  );
 }
 
 /**
@@ -236,16 +318,28 @@ function mixNColorsOklab (colors, weights, alphaMultiplier) {
   let L = 0;
   let a = 0;
   let b = 0;
-  let alpha = 0;
+  let interpolatedAlpha = 0;
   for (let i = 0; i < oklabValues.length; i++) {
-    L += oklabValues[i].L * weights[i];
-    a += oklabValues[i].a * weights[i];
-    b += oklabValues[i].b * weights[i];
-    alpha += colors[i][3] * weights[i];
+    const weightedAlpha = colors[i][3] * weights[i];
+    L += oklabValues[i].L * weightedAlpha;
+    a += oklabValues[i].a * weightedAlpha;
+    b += oklabValues[i].b * weightedAlpha;
+    interpolatedAlpha += weightedAlpha;
   }
-  alpha *= alphaMultiplier;
-  const rgb = oklabToRgb(L, a, b);
-  return rgbaToHex(rgb[0], rgb[1], rgb[2], alpha >= 1 ? 1 : alpha);
+  if (interpolatedAlpha === 0) {
+    return rgbaToHex(0, 0, 0, 0);
+  }
+  const rgb = oklabToRgb(
+    L / interpolatedAlpha,
+    a / interpolatedAlpha,
+    b / interpolatedAlpha
+  );
+  return rgbaToHex(
+    rgb[0],
+    rgb[1],
+    rgb[2],
+    interpolatedAlpha * alphaMultiplier
+  );
 }
 
 /**
@@ -329,19 +423,7 @@ function evaluateColorMix (expr) {
     return rgbaToHex(parsed1.color[0], parsed1.color[1], parsed1.color[2], parsed1.color[3]);
   }
 
-  // CSS spec: 'none' channels are missing — fill from the other color before mixing
-  const nones1 = findNoneChannels(parsed1.raw);
-  const nones2 = findNoneChannels(parsed2.raw);
-  for (const idx of nones1) {
-    if (idx < parsed1.color.length) {
-      parsed1.color[idx] = parsed2.color[idx];
-    }
-  }
-  for (const idx of nones2) {
-    if (idx < parsed2.color.length) {
-      parsed2.color[idx] = parsed1.color[idx];
-    }
-  }
+  fillMissingColorChannels(parsed1, parsed2);
 
   const t1 = p1 / (p1 + p2);
   const t2 = p2 / (p1 + p2);
@@ -349,37 +431,44 @@ function evaluateColorMix (expr) {
   const [r2, g2, b2, a2] = parsed2.color;
 
   if (colorSpace === 'srgb') {
-    const r = Math.round(r1 * t1 + r2 * t2);
-    const g = Math.round(g1 * t1 + g2 * t2);
-    const b = Math.round(b1 * t1 + b2 * t2);
-    const a = (a1 * t1 + a2 * t2) * alphaMultiplier;
-    return rgbaToHex(r, g, b, a);
+    return mixNColorsSrgb(
+      [parsed1.color, parsed2.color],
+      [t1, t2],
+      alphaMultiplier
+    );
   }
 
   if (colorSpace === 'oklab') {
     const lab1 = rgbToOklab(r1, g1, b1);
     const lab2 = rgbToOklab(r2, g2, b2);
-    const L = lab1.L * t1 + lab2.L * t2;
-    const a = lab1.a * t1 + lab2.a * t2;
-    const b = lab1.b * t1 + lab2.b * t2;
-    const alpha = (a1 * t1 + a2 * t2) * alphaMultiplier;
-    // Check if result fits in sRGB gamut
-    const rgb = oklabToRgb(L, a, b);
-    if (alpha >= 1) {
-      return rgbaToHex(rgb[0], rgb[1], rgb[2], 1);
+    const firstWeightedAlpha = a1 * t1;
+    const secondWeightedAlpha = a2 * t2;
+    const interpolatedAlpha = firstWeightedAlpha + secondWeightedAlpha;
+    if (interpolatedAlpha === 0) {
+      return rgbaToHex(0, 0, 0, 0);
     }
-    return rgbaToHex(rgb[0], rgb[1], rgb[2], alpha);
+    const L = (lab1.L * firstWeightedAlpha + lab2.L * secondWeightedAlpha) / interpolatedAlpha;
+    const a = (lab1.a * firstWeightedAlpha + lab2.a * secondWeightedAlpha) / interpolatedAlpha;
+    const b = (lab1.b * firstWeightedAlpha + lab2.b * secondWeightedAlpha) / interpolatedAlpha;
+    const rgb = oklabToRgb(L, a, b);
+    return rgbaToHex(rgb[0], rgb[1], rgb[2], interpolatedAlpha * alphaMultiplier);
   }
 
   if (colorSpace === 'oklch') {
     const lch1 = rgbToOklch(r1, g1, b1);
     const lch2 = rgbToOklch(r2, g2, b2);
-    const L = lch1.L * t1 + lch2.L * t2;
-    const C = lch1.C * t1 + lch2.C * t2;
-    const H = interpolateHueShorter(lch1.H, lch2.H, t2);
-    const alpha = (a1 * t1 + a2 * t2) * alphaMultiplier;
+    const firstWeightedAlpha = a1 * t1;
+    const secondWeightedAlpha = a2 * t2;
+    const interpolatedAlpha = firstWeightedAlpha + secondWeightedAlpha;
+    if (interpolatedAlpha === 0) {
+      return rgbaToHex(0, 0, 0, 0);
+    }
+    const L = (lch1.L * firstWeightedAlpha + lch2.L * secondWeightedAlpha) / interpolatedAlpha;
+    const C = (lch1.C * firstWeightedAlpha + lch2.C * secondWeightedAlpha) / interpolatedAlpha;
+    const H = interpolateHueShorter(lch1.H, lch2.H, secondWeightedAlpha / interpolatedAlpha);
+    const alpha = interpolatedAlpha * alphaMultiplier;
     // In-gamut results have an exact sRGB equivalent, which is always shorter than oklch()
-    const hex = convertOklchToHex(L, C, H, alpha >= 1 ? 1 : alpha);
+    const hex = convertOklchToHex(L, C, H, alpha);
     if (hex) {
       return hex;
     }

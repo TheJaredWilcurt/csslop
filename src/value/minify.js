@@ -44,6 +44,7 @@ import {
   parseAngleToDegrees,
   roundCompactNumber
 } from './shared.js';
+import { minifySvgDataUri } from './svg-data-uri.js';
 import { elideRedundantSeparators } from './tokens.js';
 import { minifyTransformValue } from './transforms.js';
 import { optimizeUnicodeRange } from './unicode-range.js';
@@ -274,10 +275,112 @@ function minifyUrlContent (rawContent) {
     }
   }
 
+  const minifiedSvgDataUri = minifySvgDataUri(path);
+  if (minifiedSvgDataUri) {
+    return minifiedSvgDataUri;
+  }
+
   // Remove a leading current-directory indicator (`./`); browsers resolve it implicitly
   path = path.replace(/^\.\//, '');
 
   return formatUrlPath(path);
+}
+
+/**
+ * Builds a marker that cannot appear in a parsed CSS value. URL functions are
+ * temporarily replaced with these markers while generic string operations run.
+ *
+ * @param  {number} index  The URL token index.
+ * @return {string}        The marker representing that URL token.
+ */
+function createUrlTokenMarker (index) {
+  return '\u0000csslop-url-' + index + '\u0000';
+}
+
+/**
+ * Replaces URL tokens with stable markers so generic value normalization does
+ * not alter data carried inside a URL.
+ *
+ * @param  {string} value  The CSS value to protect.
+ * @return {object}        The protected value and the original URL tokens.
+ */
+function protectUrlTokens (value) {
+  const urlTokens = [];
+  let protectedValue = '';
+  for (const segment of splitValueSegments(value)) {
+    const isUrlToken = segment.isLiteral && startsUrlToken(segment.text, 0);
+    if (isUrlToken) {
+      protectedValue += createUrlTokenMarker(urlTokens.length);
+      urlTokens.push(segment.text);
+    } else {
+      protectedValue += segment.text;
+    }
+  }
+  return { value: protectedValue, urlTokens };
+}
+
+/**
+ * Restores the URL tokens removed by `protectUrlTokens`.
+ *
+ * @param  {string} value      The value containing URL markers.
+ * @param  {Array}  urlTokens  The original URL token text.
+ * @return {string}            The value with URL tokens restored.
+ */
+function restoreUrlTokens (value, urlTokens) {
+  let restoredValue = value;
+  for (let index = 0; index < urlTokens.length; index++) {
+    const marker = createUrlTokenMarker(index);
+    restoredValue = restoredValue.split(marker).join(urlTokens[index]);
+  }
+  return restoredValue;
+}
+
+/**
+ * Removes whitespace after protected URL tokens. A CSS URL token closes itself
+ * at `)`, so the following component remains distinguishable without a space.
+ *
+ * @param  {string} value      The protected CSS value.
+ * @param  {Array}  urlTokens  The original URL token text.
+ * @return {string}            The protected value without trailing URL spacing.
+ */
+function removeWhitespaceAfterUrlTokens (value, urlTokens) {
+  let compactValue = value;
+  for (let index = 0; index < urlTokens.length; index++) {
+    const marker = createUrlTokenMarker(index);
+    const markerIndex = compactValue.indexOf(marker);
+    if (markerIndex === -1) {
+      continue;
+    }
+    const contentStart = markerIndex + marker.length;
+    let nextContentIndex = contentStart;
+    while (' \t\n\r\f'.includes(compactValue[nextContentIndex])) {
+      nextContentIndex++;
+    }
+    compactValue = compactValue.slice(0, contentStart) + compactValue.slice(nextContentIndex);
+  }
+  return compactValue;
+}
+
+/**
+ * Removes an explicit default background position directly after a protected
+ * URL marker, where the ordinary close-parenthesis optimization cannot see it.
+ *
+ * @param  {string} value      The protected background value.
+ * @param  {Array}  urlTokens  The original URL token text.
+ * @return {string}            The value with redundant URL positions removed.
+ */
+function removeDefaultBackgroundPositionsAfterUrlTokens (value, urlTokens) {
+  let normalizedValue = value;
+  for (let index = 0; index < urlTokens.length; index++) {
+    const marker = createUrlTokenMarker(index);
+    // Match a URL marker followed by the default 0 0 background-position pair.
+    const defaultPositionPattern = new RegExp(
+      marker + '\\s*0(?:%|px)?\\s+0(?:%|px)?(?=\\s|$)',
+      'g'
+    );
+    normalizedValue = normalizedValue.replace(defaultPositionPattern, marker);
+  }
+  return normalizedValue;
 }
 
 /**
@@ -347,6 +450,9 @@ function minifyUrls (value) {
  * @return {string}           The value with whitespace collapsed, quotes normalized, and unicode escapes resolved.
  */
 function normalizeWhitespaceAndQuotes (val, property) {
+  const protectedUrls = protectUrlTokens(val);
+  val = protectedUrls.value;
+
   // Unescape unicode (skip control characters — they must stay escaped in CSS strings).
   // Only resolve escapes when the charset is unicode-compatible (UTF-8/UTF-16 or default).
   if (isUnicodeCharset()) {
@@ -385,7 +491,8 @@ function normalizeWhitespaceAndQuotes (val, property) {
     });
   }
 
-  return val;
+  val = removeWhitespaceAfterUrlTokens(val, protectedUrls.urlTokens);
+  return restoreUrlTokens(val, protectedUrls.urlTokens);
 }
 
 /**
@@ -1135,11 +1242,12 @@ function minifyValueForOutput (declaration) {
  * Applies property-specific optimizations to a CSS value (transition, flex, font,
  * background, display, scale, border-radius, shorthand collapsing, etc.).
  *
- * @param  {string} val       The CSS value string after generic minification.
- * @param  {string} property  The CSS property name.
- * @return {string}           The value with property-specific optimizations applied.
+ * @param  {string} val        The CSS value string after generic minification.
+ * @param  {string} property   The CSS property name.
+ * @param  {Array}  urlTokens  URL tokens currently represented by markers.
+ * @return {string}            The value with property-specific optimizations applied.
  */
-function applyPropertyOptimizations (val, property) {
+function applyPropertyOptimizations (val, property, urlTokens) {
   if (property === 'font-weight' && isUnicodeCharset()) {
     // Replace font-weight keyword "bold" with its numeric equivalent
     val = val.replace(/\bbold\b/gi, '700');
@@ -1326,7 +1434,7 @@ function applyPropertyOptimizations (val, property) {
   }
 
   if (property === 'background' && val !== 'none') {
-    const normalized = val
+    let normalized = val
       // Remove default "0 0" background-position values
       .replace(/(?:^|\s)0(?:%|px)? 0(?:%|px)?(?=\s|$)/g, ' ')
       // Remove "0 0" background-position after a close-paren (e.g. after url())
@@ -1340,6 +1448,7 @@ function applyPropertyOptimizations (val, property) {
       // Collapse whitespace to single space
       .replace(/\s+/g, ' ')
       .trim();
+    normalized = removeDefaultBackgroundPositionsAfterUrlTokens(normalized, urlTokens);
     if (normalized) {
       val = normalized;
     }
@@ -1425,11 +1534,14 @@ function computeMinifiedValue (declaration) {
     return 'none';
   }
   let val = declaration.value;
+  let protectedUrlState = null;
 
   if (typeof val === 'string') {
     val = val.trim();
     val = normalizeWhitespaceAndQuotes(val, declaration.property);
     val = minifyUrls(val);
+    protectedUrlState = protectUrlTokens(val);
+    val = protectedUrlState.value;
 
     // Instead of unconditionally removing spaces around + and - and *, handle math vs non-math
     // Collapse spaces around division operator
@@ -1482,7 +1594,11 @@ function computeMinifiedValue (declaration) {
     val = simplifyEquivalentLightDarkFunctions(val);
 
     // Property-specific optimizations
-    val = applyPropertyOptimizations(val, declaration.property);
+    val = applyPropertyOptimizations(
+      val,
+      declaration.property,
+      protectedUrlState ? protectedUrlState.urlTokens : []
+    );
 
     // Minify relative color syntax (identity resolution and whitespace collapsing)
     val = minifyRelativeColorSyntax(val);
@@ -1492,6 +1608,11 @@ function computeMinifiedValue (declaration) {
   // Check if value contains a gradient function
   if (/gradient\(/.test(val)) {
     val = minifyGradients(val);
+  }
+
+  if (protectedUrlState) {
+    val = removeWhitespaceAfterUrlTokens(val, protectedUrlState.urlTokens);
+    val = restoreUrlTokens(val, protectedUrlState.urlTokens);
   }
 
   // Unicode range optimization: dedup, merge overlapping/adjacent, wildcard compression

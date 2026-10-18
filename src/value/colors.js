@@ -303,6 +303,29 @@ function parseHex (hex) {
 }
 
 /**
+ * Matches a static `color(srgb ...)` function. The three color components may
+ * be unit-interval numbers or percentages, followed by an optional alpha.
+ *
+ * @type {RegExp}
+ */
+const SRGB_COLOR_FUNCTION_PATTERN = /^color\(\s*srgb\s+(-?[\d.]+%?)\s+(-?[\d.]+%?)\s+(-?[\d.]+%?)(?:\s*\/\s*(-?[\d.]+%?))?\s*\)$/;
+
+/**
+ * Converts one `color(srgb ...)` component to the 0-255 range.
+ *
+ * @param  {string}      component  A unit-interval number or percentage.
+ * @return {number|null}            The channel value, or null when invalid.
+ */
+function parseSrgbColorComponent (component) {
+  const numericValue = parseFloat(component);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  const normalizedValue = component.endsWith('%') ? numericValue / 100 : numericValue;
+  return Math.round(normalizedValue * 255);
+}
+
+/**
  * Parse a CSS color string to [r, g, b, a] (r,g,b: 0-255, a: 0-1) or null if unresolvable.
  *
  * @param  {string}     colorString  The CSS color string (named, hex, rgb, rgba, hsl, hsla, or hwb).
@@ -326,8 +349,20 @@ function parseColor (colorString) {
     return parseHex(normalized);
   }
 
+  // color(srgb ...) uses unit-interval color channels rather than rgb's 0-255 channels.
+  let match = normalized.match(SRGB_COLOR_FUNCTION_PATTERN);
+  if (match) {
+    const red = parseSrgbColorComponent(match[1]);
+    const green = parseSrgbColorComponent(match[2]);
+    const blue = parseSrgbColorComponent(match[3]);
+    if (red === null || green === null || blue === null) {
+      return null;
+    }
+    return [red, green, blue, Math.max(0, Math.min(1, parseAlphaString(match[4])))];
+  }
+
   // rgb() / rgba() space syntax
-  let match = normalized.match(/^rgba?\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*(-?[\d.]+%?))?\s*\)$/);
+  match = normalized.match(/^rgba?\(\s*(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)(?:\s*\/\s*(-?[\d.]+%?))?\s*\)$/);
   if (match) {
     const r = Math.round(parseFloat(match[1]));
     const g = Math.round(parseFloat(match[2]));
