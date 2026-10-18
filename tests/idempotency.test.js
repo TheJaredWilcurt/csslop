@@ -8,7 +8,7 @@ import { minifyCSS } from '../index.js';
 
 const __dirname = import.meta.dirname;
 
-const fileName = 'zotero-dark-theme-v0.0.0.css';
+const fileName = '3dtransforms-v0.0.0.css';
 
 /**
  * Runs the idempotency test.
