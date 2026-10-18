@@ -139,14 +139,127 @@ function formatSvgColor (color) {
 }
 
 /**
- * Minifies a color-bearing SVG attribute only when it is a static CSS color.
+ * Reads past one CSS escape sequence. A non-hex escape consumes its following
+ * character, which keeps an escaped comma, quote, or parenthesis from being
+ * interpreted as font-family syntax.
+ *
+ * @param  {string} value  The CSS value containing the escape.
+ * @param  {number} index  The index of the escape's backslash.
+ * @return {number}        The index immediately after the escape.
+ */
+function skipCssEscape (value, index) {
+  return Math.min(index + 2, value.length);
+}
+
+/**
+ * Reads past a CSS string, preserving escaped delimiters within it.
+ *
+ * @param  {string} value  The CSS value containing the string.
+ * @param  {number} index  The index of the opening quote.
+ * @return {number}        The index immediately after the string, or the end.
+ */
+function skipCssString (value, index) {
+  const quoteCharacter = value[index];
+  index++;
+  while (index < value.length) {
+    if (value[index] === '\\') {
+      index = skipCssEscape(value, index);
+      continue;
+    }
+    if (value[index] === quoteCharacter) {
+      return index + 1;
+    }
+    index++;
+  }
+  return index;
+}
+
+/**
+ * Reads past a CSS comment so punctuation in comment text does not affect
+ * font-family list parsing.
+ *
+ * @param  {string} value  The CSS value containing the comment.
+ * @param  {number} index  The index of the comment's opening slash.
+ * @return {number}        The index immediately after the comment, or the end.
+ */
+function skipCssComment (value, index) {
+  const commentEndIndex = value.indexOf('*/', index + 2);
+  if (commentEndIndex === -1) {
+    return value.length;
+  }
+  return commentEndIndex + 2;
+}
+
+/**
+ * Removes CSS whitespace after top-level font-family separators. Quotes,
+ * escapes, comments, and function arguments are kept opaque so that commas
+ * belonging to a family name or a substituted value are not altered.
+ *
+ * @param  {string} attributeValue  The unquoted SVG font-family value.
+ * @return {string}                 The compacted font-family value.
+ */
+function minifySvgFontFamilyValue (attributeValue) {
+  // XML entities are resolved before this presentation attribute is parsed as
+  // CSS, so an encoded quote could otherwise be mistaken for ordinary text.
+  if (attributeValue.includes('&')) {
+    return attributeValue;
+  }
+
+  let minifiedValue = '';
+  let index = 0;
+  let parenthesisDepth = 0;
+  while (index < attributeValue.length) {
+    const character = attributeValue[index];
+    if (character === '\\') {
+      const escapeEndIndex = skipCssEscape(attributeValue, index);
+      minifiedValue += attributeValue.slice(index, escapeEndIndex);
+      index = escapeEndIndex;
+      continue;
+    }
+    if (character === '"' || character === '\'') {
+      const stringEndIndex = skipCssString(attributeValue, index);
+      minifiedValue += attributeValue.slice(index, stringEndIndex);
+      index = stringEndIndex;
+      continue;
+    }
+    if (character === '/' && attributeValue[index + 1] === '*') {
+      const commentEndIndex = skipCssComment(attributeValue, index);
+      minifiedValue += attributeValue.slice(index, commentEndIndex);
+      index = commentEndIndex;
+      continue;
+    }
+    if (character === '(') {
+      parenthesisDepth++;
+    } else if (character === ')' && parenthesisDepth > 0) {
+      parenthesisDepth--;
+    } else if (character === ',' && parenthesisDepth === 0) {
+      minifiedValue += character;
+      index++;
+      while (isWhitespace(attributeValue[index])) {
+        index++;
+      }
+      continue;
+    }
+    minifiedValue += character;
+    index++;
+  }
+  return minifiedValue;
+}
+
+/**
+ * Minifies supported SVG presentation attribute values when their syntax is
+ * safe to rewrite.
  *
  * @param  {string} attributeName   The attribute name.
  * @param  {string} attributeValue  The attribute value without its quotes.
  * @return {string}                 The minified value, or the original value.
  */
 function minifySvgAttributeValue (attributeName, attributeValue) {
-  if (!COLOR_ATTRIBUTE_NAMES.has(attributeName.toLowerCase())) {
+  const normalizedAttributeName = attributeName.toLowerCase();
+  if (normalizedAttributeName === 'font-family') {
+    return minifySvgFontFamilyValue(attributeValue);
+  }
+  if (!COLOR_ATTRIBUTE_NAMES.has(normalizedAttributeName)) {
     return attributeValue;
   }
   const color = parseColor(attributeValue);
