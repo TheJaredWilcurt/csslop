@@ -19,6 +19,9 @@ const folders = {};
  * @return {Array} All tests
  */
 function loadAllTests () {
+  function normalizeEOL (value) {
+    return value.replaceAll('\r\n', '\n');
+  }
   const allTests = [];
   const __dirname = import.meta.dirname;
   const copiedTests = join(__dirname, '..', 'copiedTests');
@@ -34,9 +37,9 @@ function loadAllTests () {
       const test = {
         folder,
         testNumber,
-        source: String(readFileSync(source)).trim(),
-        expected: String(readFileSync(expected)).trim(),
-        description: String(readFileSync(README)).trim()
+        source: normalizeEOL(String(readFileSync(source)).trim()),
+        expected: normalizeEOL(String(readFileSync(expected)).trim()),
+        description: normalizeEOL(String(readFileSync(README)).trim())
       };
       allTests.push(test);
     }
@@ -78,7 +81,7 @@ function runAllTests (allTests) {
       });
     }
     if (actual !== rerun) {
-      if (!folders.idempotency?.fail)  {
+      if (!folders.idempotency?.fail) {
         fail++;
       }
       folders.idempotency.fail++;
