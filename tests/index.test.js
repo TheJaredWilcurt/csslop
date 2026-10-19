@@ -78,8 +78,10 @@ function runAllTests (allTests) {
       });
     }
     if (actual !== rerun) {
+      if (!folders.idempotency?.fail)  {
+        fail++;
+      }
       folders.idempotency.fail++;
-      fail++;
       console.log({
         id: '/copiedTests/' + testFolder + '/' + testNumber,
         description: 'This test has failed idempotency. ' +
