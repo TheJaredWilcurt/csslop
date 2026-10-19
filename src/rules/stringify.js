@@ -24,6 +24,7 @@ import {
 } from './normalize.js';
 import { resolvePropertyDescriptors } from './property.js';
 import {
+  combineLegacyAnySelectors,
   flattenNestingParentIsSelector,
   mergeAdjacentWherePseudoClasses,
   processIsSelector
@@ -257,6 +258,7 @@ function stringifyRule (rule, context) {
         minified = minifyLanguageSelector(minified);
         return minified;
       });
+      uniqueSelectors = combineLegacyAnySelectors(uniqueSelectors);
       // When this rule is a nesting parent, its whole selector list is treated
       // as :is() for the children's specificity, so a top-level :is() can be
       // safely lifted into the list without altering specificity.

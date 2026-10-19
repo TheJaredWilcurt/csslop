@@ -5,7 +5,10 @@
 import { splitTopLevelComponents } from '../parser/source-search.js';
 import { minifyValue } from '../value/minify.js';
 import { namedColors } from '../value/named-colors.js';
-import { collapseShorthandParts } from '../value/shared.js';
+import {
+  collapseShorthandParts,
+  hasSubstitutedParts
+} from '../value/shared.js';
 
 import {
   BORDER_EDGE_PROPERTIES,
@@ -107,16 +110,14 @@ function findLastDeclarationIndex (declarations, property) {
 }
 
 /**
- * Rewrites a `border-width` + `border-style` + `border-color` trio whose color
- * differs per edge into a `border` shorthand built from the first color, followed
- * by a `border-color` override that restores the per-edge colors. The rewrite is
- * only applied when the resulting pair is shorter than the three longhands.
+ * Rewrites a border trio into a shorthand and overrides for components that
+ * differ by edge. Only shorter rewrites with uniform importance are used.
  *
  * @param  {Array}  declarations  The declarations of a single rule.
  * @param  {object} context       The minification context with the stylesheet's reset properties.
  * @return {Array}                The declarations, with the trio rewritten when it is shorter.
  */
-function collapseBorderTrioWithPerEdgeColor (declarations, context) {
+function collapseBorderTrioWithPerEdgeOverrides (declarations, context) {
   // The `border` shorthand also resets `border-image`, so the trio stays as it
   // is when another rule of the stylesheet relies on that value.
   if (resetsPropertyDeclaredElsewhere('border', collectDeclaredProperties(declarations), context)) {
@@ -130,6 +131,18 @@ function collapseBorderTrioWithPerEdgeColor (declarations, context) {
     return index !== -1;
   });
   if (!hasWholeTrio) {
+    return declarations;
+  }
+  const hasCompetingBorderWrites = declarations.some((declaration) => {
+    const property = declaration.property || '';
+    if (BORDER_TRIO_PROPERTIES.includes(property)) {
+      return declarations.filter((entry) => {
+        return entry.property === property;
+      }).length !== 1;
+    }
+    return property === 'border' || (property.startsWith('border-') && !property.startsWith('border-image'));
+  });
+  if (hasCompetingBorderWrites) {
     return declarations;
   }
 
@@ -150,28 +163,38 @@ function collapseBorderTrioWithPerEdgeColor (declarations, context) {
   const [width, style, color] = trioValues.map((value) => {
     return value.replace('!important', '').trim();
   });
-  const colorComponents = splitTopLevelComponents(color);
-  const isSingleComponent = (value) => {
-    return splitTopLevelComponents(value).length === 1;
-  };
-  const canBuildShorthand = (
-    isSingleComponent(width) &&
-    isSingleComponent(style) &&
-    colorComponents.length > 1
-  );
-  if (!canBuildShorthand) {
+  const componentsByProperty = [width, style, color].map(splitTopLevelComponents);
+  const hasPerEdgeComponents = componentsByProperty.some((components) => {
+    return components.length > 1;
+  });
+  const allComponents = componentsByProperty.flat();
+  if (!hasPerEdgeComponents || hasSubstitutedParts(allComponents)) {
     return declarations;
   }
-  const usesCssWideKeyword = [width, style, ...colorComponents].some((value) => {
+  const usesCssWideKeyword = allComponents.some((value) => {
     return CSS_WIDE_KEYWORDS.has(value.toLowerCase());
   });
   if (usesCssWideKeyword) {
     return declarations;
   }
 
-  const borderValue = buildBorderShorthandValue(width, style, colorComponents[0]) + importantSuffix;
-  const colorValue = color + importantSuffix;
-  const rewrittenLength = ('border:' + borderValue + ';border-color:' + colorValue).length;
+  const [widthComponents, styleComponents, colorComponents] = componentsByProperty;
+  const borderValue = buildBorderShorthandValue(
+    widthComponents.length === 1 ? width : '',
+    styleComponents.length === 1 ? style : '',
+    colorComponents[0]
+  ) + importantSuffix;
+  const overrides = BORDER_TRIO_PROPERTIES.flatMap((property, index) => {
+    if (componentsByProperty[index].length === 1) {
+      return [];
+    }
+    return [{
+      property,
+      value: trioValues[index]
+    }];
+  });
+  const replacement = [{ property: 'border', value: borderValue }, ...overrides];
+  const rewrittenLength = measureDeclarations(replacement);
   const longhandLength = (
     'border-width:' + trioValues[0] +
     ';border-style:' + trioValues[1] +
@@ -185,16 +208,7 @@ function collapseBorderTrioWithPerEdgeColor (declarations, context) {
   const insertionIndex = Math.min(...trioIndexes);
   return declarations.flatMap((declaration, index) => {
     if (index === insertionIndex) {
-      return [
-        {
-          property: 'border',
-          value: borderValue
-        },
-        {
-          property: 'border-color',
-          value: colorValue
-        }
-      ];
+      return replacement;
     }
     if (replacedIndexes.has(index)) {
       return [];
@@ -216,8 +230,8 @@ function classifyBorderEdgeComponent (component) {
   if (BORDER_STYLE_KEYWORDS.has(keyword)) {
     return 'border-style';
   }
-  // Match a number with an optional unit, which is how a length is written
-  const isLength = /^[+-]?(?:\d+|\d*\.\d+)[a-z]*$/i.test(component);
+  // Match a number, optional exponent, and optional length unit.
+  const isLength = /^[+-]?(?:\d+|\d*\.\d+)(?:e[+-]?\d+)?[a-z]*$/i.test(component);
   if (BORDER_WIDTH_KEYWORDS.has(keyword) || isLength || LENGTH_FUNCTION_PATTERN.test(component)) {
     return 'border-width';
   }
@@ -411,6 +425,6 @@ function splitBorderEdgesIntoTrio (declarations) {
 }
 
 export {
-  collapseBorderTrioWithPerEdgeColor,
+  collapseBorderTrioWithPerEdgeOverrides,
   splitBorderEdgesIntoTrio
 };

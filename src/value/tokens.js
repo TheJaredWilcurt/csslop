@@ -141,4 +141,41 @@ function elideRedundantSeparators (value, elidesAfterSelfEndingTokens = true) {
   }).join('');
 }
 
-export { elideRedundantSeparators };
+/**
+ * Shortens decimal dimension and percentage tokens without changing their
+ * digits. Unitless numbers stay untouched because integer grammars reject
+ * scientific notation.
+ *
+ * @param  {string} value  The CSS value.
+ * @return {string}        The value with shorter numeric spellings.
+ */
+function shortenDimensionNumbers (value) {
+  return tokenizeCssValue(value).map((token) => {
+    if (token.type !== 'dimension' && token.type !== 'percentage') {
+      return token.text;
+    }
+    // Capture a decimal coefficient and its unit, excluding existing exponents.
+    const match = token.text.match(/^([+-]?)(\d*\.\d+|\d+)([%a-z]+)$/i);
+    if (!match) {
+      return token.text;
+    }
+    const [, sign, coefficient, unit] = match;
+    const decimalIndex = coefficient.indexOf('.');
+    const fractionalDigits = decimalIndex === -1 ? 0 : coefficient.length - decimalIndex - 1;
+    const digits = coefficient.replace('.', '');
+    // Leading zeros carry no magnitude; trailing zeros move into the exponent.
+    const significantDigits = digits.replace(/^0+/, '').replace(/0+$/, '');
+    if (!significantDigits) {
+      return token.text;
+    }
+    const trailingZeros = digits.length - digits.replace(/0+$/, '').length;
+    const exponent = trailingZeros - fractionalDigits;
+    const scientific = sign + significantDigits + 'e' + exponent + unit;
+    return scientific.length < token.text.length ? scientific : token.text;
+  }).join('');
+}
+
+export {
+  elideRedundantSeparators,
+  shortenDimensionNumbers
+};
