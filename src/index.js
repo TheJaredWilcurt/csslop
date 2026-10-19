@@ -23,24 +23,13 @@ import {
 import { preprocessDeclarationBlocks } from './preprocess.js';
 import { combineLanguageSelectors } from './rules/lang.js';
 import { normalizeRuleSelectors } from './rules/normalize.js';
-import {
-  deduplicateKeyframes,
-  expandPureNestedRules,
-  factorCommonParents,
-  mergeByDeclarations,
-  mergeIdenticalNestedRules,
-  mergeLayerRules,
-  mergeMediaRules,
-  mergeSelectorRules,
-  nestFlatRules,
-  removeEmptyRules,
-  removeFullyOverriddenSelectors,
-  removeOverriddenMultiSelectorProperties
-} from './rules/optimize.js';
+import { optimizeRuleList } from './rules/optimize.js';
+import { combineLegacyAnySelectors } from './rules/selectors.js';
 import {
   removeRedundantLayerStatementSemicolon,
   stringifyRule
 } from './rules/stringify.js';
+import { removeInvalidSelectorRules } from './rules/validate.js';
 import {
   clearMinifiedValueCache,
   minifyValue
@@ -64,7 +53,7 @@ function deduplicateSelectorList (selectorList) {
     seen.add(selector);
     return true;
   });
-  return combineLanguageSelectors(unique).join(',');
+  return combineLanguageSelectors(combineLegacyAnySelectors(unique)).join(',');
 }
 
 /**
@@ -199,6 +188,7 @@ export const minifyCSS = function (input) {
   const context = createMinifyContext();
 
   if (ast?.stylesheet?.rules) {
+    ast.stylesheet.rules = removeInvalidSelectorRules(ast.stylesheet.rules);
     // Every later pass reads selectors, so they are written the one canonical
     // way before any of them runs.
     normalizeRuleSelectors(ast.stylesheet.rules);
@@ -227,24 +217,7 @@ export const minifyCSS = function (input) {
     );
     ast.stylesheet.rules = filterRedundantCharsets(ast.stylesheet.rules);
 
-    ast.stylesheet.rules = expandPureNestedRules(ast.stylesheet.rules);
-    ast.stylesheet.rules = mergeLayerRules(ast.stylesheet.rules, mergeSelectorRules);
-    ast.stylesheet.rules = mergeMediaRules(ast.stylesheet.rules, mergeSelectorRules);
-    ast.stylesheet.rules = deduplicateKeyframes(ast.stylesheet.rules);
-
-    const mergedRules = mergeSelectorRules(ast.stylesheet.rules);
-    const overrideCleanedRules = removeOverriddenMultiSelectorProperties(mergedRules);
-    const selectorPrunedRules = removeFullyOverriddenSelectors(overrideCleanedRules);
-    const preCleanedRules = removeEmptyRules(selectorPrunedRules);
-    const declarationMergedRules = mergeByDeclarations(preCleanedRules);
-    const nestedRules = nestFlatRules(declarationMergedRules);
-    const nonEmptyRules = removeEmptyRules(nestedRules);
-    // Nesting is what reveals that two rules style the same thing: until their
-    // descendants have moved inside them, the rules only share a declaration.
-    const nestingMergedRules = mergeByDeclarations(nonEmptyRules);
-    const factoredRules = factorCommonParents(nestingMergedRules);
-    const nestedFinalRules = nestFlatRules(factoredRules);
-    const finalRules = mergeIdenticalNestedRules(nestedFinalRules);
+    const finalRules = optimizeRuleList(ast.stylesheet.rules);
 
     for (const rule of finalRules) {
       output.push(stringifyRule(rule, context));

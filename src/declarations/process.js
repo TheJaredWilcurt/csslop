@@ -7,7 +7,7 @@ import { hasInvalidQuotesCount } from '../value/quotes.js';
 
 import { absorbBackgroundLonghandsIntoShorthand } from './background.js';
 import {
-  collapseBorderTrioWithPerEdgeColor,
+  collapseBorderTrioWithPerEdgeOverrides,
   splitBorderEdgesIntoTrio
 } from './border.js';
 import {
@@ -449,7 +449,7 @@ function processDeclarations (declarations, context) {
   result = foldLonghandOverridesIntoShorthands(result, context);
   result = hoistCssWideKeywordsIntoShorthands(result, context);
   result = splitBorderEdgesIntoTrio(result);
-  result = collapseBorderTrioWithPerEdgeColor(result, context);
+  result = collapseBorderTrioWithPerEdgeOverrides(result, context);
 
   return orderDeclarations(result);
 }

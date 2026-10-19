@@ -719,9 +719,50 @@ function flattenNestingParentIsSelector (selector) {
   return parts;
 }
 
+/**
+ * Replaces matching legacy any-functions only when multiple vendor variants
+ * supply the same selector. A lone vendor-specific selector stays scoped to
+ * the browsers that understand it.
+ *
+ * @param  {Array} selectors  Selectors with identical declarations.
+ * @return {Array}            The selectors with redundant legacy forms combined.
+ */
+function combineLegacyAnySelectors (selectors) {
+  const legacyFunctions = [':-moz-any(', ':-webkit-any(', ':matches('];
+  const groups = new Map();
+  const entries = selectors.map((selector) => {
+    let canonical = selector;
+    const variants = new Set();
+    for (const functionCall of legacyFunctions) {
+      let position = findNextFunctionCallOutsideStrings(canonical, functionCall, 0);
+      while (position !== -1) {
+        variants.add(functionCall);
+        canonical = canonical.slice(0, position) + ':is(' + canonical.slice(position + functionCall.length);
+        position = findNextFunctionCallOutsideStrings(canonical, functionCall, position + 4);
+      }
+    }
+    let group = groups.get(canonical);
+    if (!group) {
+      group = new Set();
+      groups.set(canonical, group);
+    }
+    const variant = variants.size === 1 ? [...variants][0] : null;
+    if (variant) {
+      group.add(variant);
+    }
+    return { selector, canonical, variant };
+  });
+  return [...new Set(entries.map((entry) => {
+    return entry.variant && groups.get(entry.canonical).size > 1 ? entry.canonical : entry.selector;
+  }))];
+}
+
 export {
+  combineLegacyAnySelectors,
+  containsPseudoElement,
   findNextFunctionCallOutsideStrings,
   flattenNestingParentIsSelector,
+  isUniversallyRecognizableSelector,
   mergeAdjacentWherePseudoClasses,
   processIsSelector
 };
