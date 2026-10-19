@@ -11,12 +11,17 @@ import {
   findMatchingParenthesis,
   splitTopLevelCommaList
 } from '../parser/source-search.js';
+import { tokenizeCssValue } from '../parser/tokenizer.js';
 import { escapeRegexString } from '../utilities.js';
 
 import {
   normalizeLayerNames,
   normalizeMedia
 } from './normalize.js';
+import {
+  containsPseudoElement,
+  isUniversallyRecognizableSelector
+} from './selectors.js';
 
 /**
  * Reports whether an entry of a rule's body is itself a nested rule rather
@@ -44,11 +49,65 @@ function expandNestedRuleBodies (rules) {
     if (rule.type !== 'rule' || !(rule.declarations || []).some(isNestedRule)) {
       return rule;
     }
+    const declarations = expandPureNestedRules(rule.declarations);
+    const canFlattenSelf = selectorsShareSpecificity(rule.selectors) && !rule.selectors.some(containsPseudoElement);
+    let encounteredNestedContent = false;
+    const flattened = declarations.flatMap((entry) => {
+      const isSelfRule = entry.type === 'rule' && entry.selectors?.length === 1 && entry.selectors[0].trim() === '&';
+      if (canFlattenSelf && isSelfRule && !encounteredNestedContent) {
+        return entry.declarations || [];
+      }
+      if (entry.type !== 'declaration' && entry.type !== 'whitespace' && entry.type !== 'comment') {
+        encounteredNestedContent = true;
+      }
+      if (entry.type === 'rule' && rule.selectors.length === 1) {
+        entry.selectors = entry.selectors.map((selector) => {
+          return shortenRepeatedNestingSelector(rule.selectors[0], selector);
+        });
+      }
+      return [entry];
+    });
     return {
       ...rule,
-      declarations: expandPureNestedRules(rule.declarations)
+      declarations: flattened
     };
   });
+}
+
+/**
+ * Replaces repetitions of a simple class or ID beside a leading nesting
+ * selector. Token comparisons keep longer names and escaped text intact.
+ *
+ * @param  {string} parentSelector  The sole parent selector.
+ * @param  {string} childSelector   The nested selector.
+ * @return {string}                 The shorter equivalent selector.
+ */
+function shortenRepeatedNestingSelector (parentSelector, childSelector) {
+  const parentTokens = tokenizeCssValue(parentSelector);
+  const isClass = parentTokens.length === 2 && parentTokens[0].text === '.' && parentTokens[1].type === 'ident';
+  const isIdentifier = parentTokens.length === 1 && parentTokens[0].type === 'hash';
+  if (!isClass && !isIdentifier) {
+    return childSelector;
+  }
+  const childTokens = tokenizeCssValue(childSelector);
+  if (childTokens[0]?.text !== '&') {
+    return childSelector;
+  }
+  let index = 1;
+  let result = '&';
+  while (index < childTokens.length) {
+    const matchesParent = parentTokens.every((token, position) => {
+      return childTokens[index + position]?.text === token.text;
+    });
+    if (!matchesParent) {
+      break;
+    }
+    result += '&';
+    index += parentTokens.length;
+  }
+  return result + childTokens.slice(index).map((token) => {
+    return token.text;
+  }).join('');
 }
 
 /**
@@ -437,6 +496,26 @@ function factorCommonParents (rules) {
   let index = 0;
   while (index < rules.length) {
     const rule = rules[index];
+    if (rule.type === 'rule' && rule.selectors?.length > 1) {
+      const candidateParent = extractLeadingCompound(rule.selectors[0]);
+      if (candidateParent) {
+        const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
+        const childSelectors = rule.selectors.map(matchNestedSelector);
+        const allMatch = childSelectors.every((selector) => {
+          return selector !== null;
+        });
+        const wrapperLength = candidateParent.length + 2 + childSelectors.join(',').length;
+        if (allMatch && !containsPseudoElement(candidateParent) && wrapperLength < rule.selectors.join(',').length) {
+          result.push({
+            type: 'rule',
+            selectors: [candidateParent],
+            declarations: [{ ...rule, selectors: childSelectors }]
+          });
+          index++;
+          continue;
+        }
+      }
+    }
     // Only single-selector style rules can act as a factoring candidate.
     if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
       result.push(rule);
@@ -489,6 +568,42 @@ function factorCommonParents (rules) {
     }
   }
   return result;
+}
+
+/**
+ * Shares a descendant prefix through `:is()` when the parent itself is also
+ * in the selector list, preventing a nesting wrapper from saving space.
+ *
+ * @param {object} rule  The style rule whose selector list may be shortened.
+ */
+function factorSelectorBranches (rule) {
+  if (rule.type !== 'rule' || !rule.selectors?.length) {
+    return;
+  }
+  for (const parent of [...rule.selectors]) {
+    const prefix = parent + ' ';
+    const branches = rule.selectors.filter((selector) => {
+      return selector.startsWith(prefix);
+    });
+    const children = branches.map((selector) => {
+      return selector.slice(prefix.length);
+    });
+    if (children.length < 2 || !children.every(isUniversallyRecognizableSelector) || !selectorsShareSpecificity(children)) {
+      continue;
+    }
+    const grouped = prefix + ':is(' + children.sort().join(',') + ')';
+    if (grouped.length >= branches.join(',').length) {
+      continue;
+    }
+    const branchSet = new Set(branches);
+    const firstIndex = rule.selectors.indexOf(branches[0]);
+    rule.selectors = rule.selectors.flatMap((selector, index) => {
+      if (index === firstIndex) {
+        return [grouped];
+      }
+      return branchSet.has(selector) ? [] : [selector];
+    });
+  }
 }
 
 /**
@@ -1469,7 +1584,7 @@ function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPos
  * @param  {Array} rules  The AST rule nodes to merge.
  * @return {Array}        A new array of rules with same-selector rules combined.
  */
-function mergeSelectorRules (rules) {
+function mergeSelectorRulePass (rules) {
   // A rule merged at the later of the two positions moves to the end of the
   // output. Its old slot is emptied instead of spliced out so that every
   // recorded position stays valid, and the position map locates that slot
@@ -1522,6 +1637,24 @@ function mergeSelectorRules (rules) {
   return slots.filter((slot) => {
     return slot !== null;
   });
+}
+
+/**
+ * Reconsiders blocked pairs after merges relocate the rules that blocked them.
+ * Each productive pass removes a rule, so this reaches a fixed point without
+ * rerunning parsing or unrelated optimizations.
+ *
+ * @param  {Array} rules  The sibling rules to merge.
+ * @return {Array}        Rules with all currently safe same-selector merges.
+ */
+function mergeSelectorRules (rules) {
+  let previousRules = rules;
+  let mergedRules = mergeSelectorRulePass(previousRules);
+  while (mergedRules.length < previousRules.length) {
+    previousRules = mergedRules;
+    mergedRules = mergeSelectorRulePass(previousRules);
+  }
+  return mergedRules;
 }
 
 /**
@@ -1847,6 +1980,37 @@ function removeOverriddenMultiSelectorProperties (rules) {
   return rules;
 }
 
+/**
+ * Applies the structural optimization pipeline to a stylesheet or grouping
+ * block, so merging at-rules does not leave their children unoptimized.
+ *
+ * @param  {Array} rules  The sibling AST entries.
+ * @return {Array}        The optimized sibling entries.
+ */
+function optimizeRuleList (rules) {
+  let result = expandPureNestedRules(rules);
+  result = mergeLayerRules(result, mergeSelectorRules);
+  result = mergeMediaRules(result, mergeSelectorRules);
+  result = deduplicateKeyframes(result);
+  for (const rule of result) {
+    if (rule.rules) {
+      rule.rules = optimizeRuleList(rule.rules);
+    }
+  }
+  result = mergeSelectorRules(result);
+  result = removeOverriddenMultiSelectorProperties(result);
+  result = removeFullyOverriddenSelectors(result);
+  result = removeEmptyRules(result);
+  result = mergeByDeclarations(result);
+  result = nestFlatRules(result);
+  result = removeEmptyRules(result);
+  result = mergeByDeclarations(result);
+  result = factorCommonParents(result);
+  result = nestFlatRules(result);
+  result.forEach(factorSelectorBranches);
+  return mergeIdenticalNestedRules(result);
+}
+
 export {
   deduplicateKeyframes,
   expandPureNestedRules,
@@ -1857,6 +2021,7 @@ export {
   mergeMediaRules,
   mergeSelectorRules,
   nestFlatRules,
+  optimizeRuleList,
   removeEmptyRules,
   removeFullyOverriddenSelectors,
   removeOverriddenMultiSelectorProperties

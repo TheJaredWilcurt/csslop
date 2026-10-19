@@ -22,6 +22,7 @@ import {
   rgbaToHex,
   shortestColor
 } from './colors.js';
+import { minifyFontShorthand } from './font.js';
 import { minifyGradients } from './gradients.js';
 import { simplifyEquivalentLightDarkFunctions } from './light-dark.js';
 import {
@@ -45,7 +46,10 @@ import {
   roundCompactNumber
 } from './shared.js';
 import { minifySvgDataUri } from './svg-data-uri.js';
-import { elideRedundantSeparators } from './tokens.js';
+import {
+  elideRedundantSeparators,
+  shortenDimensionNumbers
+} from './tokens.js';
 import { minifyTransformValue } from './transforms.js';
 import { optimizeUnicodeRange } from './unicode-range.js';
 
@@ -480,7 +484,7 @@ function normalizeWhitespaceAndQuotes (val, property) {
   });
 
   // Strip quotes from simple strings (like "Custom", "image.png"), but not for content where quoted strings are semantically distinct
-  if (property !== 'content' && property !== 'font-feature-settings' && property !== 'font-variation-settings') {
+  if (property !== 'content' && property !== 'font' && property !== 'font-feature-settings' && property !== 'font-variation-settings') {
     // Match a boundary (start, whitespace, comma, open-paren), then a quoted simple value (alphanumeric, dots, slashes, hyphens), then a boundary lookahead
     val = val.replace(/(^|\s|,|\()("|')([a-zA-Z0-9_./-]+)\2(?=\s|,|$|\)|!)/g, (match, before, quote, inner) => {
       // Keep quotes around CSS generic font-family keywords — unquoted they mean something different
@@ -988,6 +992,11 @@ const LENGTHY_INITIAL_KEYWORDS = new Map([
   ['background-clip', 'border-box'],
   ['background-origin', 'padding-box'],
   ['border-collapse', 'separate'],
+  ['border-color', 'currentcolor'],
+  ['border-top-color', 'currentcolor'],
+  ['border-right-color', 'currentcolor'],
+  ['border-bottom-color', 'currentcolor'],
+  ['border-left-color', 'currentcolor'],
   ['box-sizing', 'content-box'],
   ['mask-clip', 'border-box'],
   ['mask-origin', 'border-box'],
@@ -1115,7 +1124,7 @@ const BORDER_STYLE_KEYWORD_SOURCE = 'solid|dashed|dotted|double|groove|ridge|ins
  *
  * @type {string}
  */
-const BORDER_WIDTH_SOURCE = 'thin|medium|thick|[+-]?(?:\\d+|\\d*\\.\\d+)[a-z]*|(?:calc|min|max|clamp)\\([^()]*\\)';
+const BORDER_WIDTH_SOURCE = 'thin|medium|thick|[+-]?(?:\\d+|\\d*\\.\\d+)(?:e[+-]?\\d+)?[a-z]*|(?:calc|min|max|clamp)\\([^()]*\\)';
 
 /**
  * Matches a `border` value that states its line style in front of its line
@@ -1408,10 +1417,12 @@ function applyPropertyOptimizations (val, property, urlTokens) {
     return rgbaToHex(r, r, r, parseAlphaString(alphaStr));
   });
 
-  // Shorten all color tokens (second pass after property-specific color evaluations)
-  val = replaceOutsideStringsAndUrls(val, (segment) => {
-    return shortenColorValues(segment);
-  });
+  // Font families may contain color names, but never color values.
+  if (property !== 'font' && property !== 'font-family') {
+    val = replaceOutsideStringsAndUrls(val, (segment) => {
+      return shortenColorValues(segment);
+    });
+  }
 
   if (!PUNCTUATED_COMPONENT_PROPERTIES.has(property)) {
     // Restore space after close-paren when followed by an alphanumeric, hash, or hyphen
@@ -1420,17 +1431,7 @@ function applyPropertyOptimizations (val, property, urlTokens) {
   val = restoreSpaceBeforeMathOperators(val);
 
   if (property === 'font') {
-    // Split font shorthand on whitespace
-    const parts = val.split(/\s+/);
-    // Find the font-size part: contains a digit and a recognized CSS length/percentage unit
-    const sizeIndex = parts.findIndex((part) => {
-      return /\d/.test(part) && /(?:px|em|rem|%|pt|pc|vw|vh|vmin|vmax|ch|ex|cm|mm|in|lh|rlh)/i.test(part);
-    });
-    if (sizeIndex > 0) {
-      val = [...parts.slice(0, sizeIndex).filter((part) => {
-        return part !== 'normal' && part !== '400';
-      }), ...parts.slice(sizeIndex)].join(' ');
-    }
+    val = minifyFontShorthand(val);
   }
 
   if (property === 'background' && val !== 'none') {
@@ -1577,18 +1578,22 @@ function computeMinifiedValue (declaration) {
     // character budget a number is written within
     if (/^[+-]?(?:\d+|\d*\.\d+)([a-z%]+)?$/i.test(val)) {
       const [, rawNumber, rawUnit = ''] = val.match(/^([+-]?(?:\d+|\d*\.\d+))([a-z%]+)?$/i);
-      val = formatResolvedNumber(rawNumber) + rawUnit;
+      const scientificValue = isCustomProperty(declaration.property) ? val : shortenDimensionNumbers(val);
+      const roundedNumber = formatResolvedNumber(rawNumber);
+      const losesPrecision = Number(roundedNumber) !== Number(rawNumber);
+      // Preserve tiny dimensions whose significant digits would otherwise be
+      // rounded away before their shorter exponent form can be considered.
+      val = losesPrecision && scientificValue !== val ? scientificValue : roundedNumber + rawUnit;
     }
 
     val = lowercaseHexColors(val);
 
-    // Convert color functions to hex equivalents
-    val = convertColorsToHex(val);
-
-    // Shorten all color tokens (hex and named) to their shortest representation
-    val = replaceOutsideStringsAndUrls(val, (segment) => {
-      return shortenColorValues(segment);
-    });
+    if (declaration.property !== 'font' && declaration.property !== 'font-family') {
+      val = convertColorsToHex(val);
+      val = replaceOutsideStringsAndUrls(val, (segment) => {
+        return shortenColorValues(segment);
+      });
+    }
 
     // Collapse light-dark() when both normalized branches are identical
     val = simplifyEquivalentLightDarkFunctions(val);
@@ -1627,6 +1632,7 @@ function computeMinifiedValue (declaration) {
     !isCustomProperty(declaration.property)
   );
   if (elidesRedundantSeparators) {
+    val = shortenDimensionNumbers(val);
     // A property that punctuates its own components already had the whitespace
     // after its closing parentheses taken out, and only the separators its
     // grammar still needs put back, so those are the ones left alone here.
