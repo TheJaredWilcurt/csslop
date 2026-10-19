@@ -107,7 +107,8 @@ const knownBad = [
   'vitepress-v1.6.4.css',
   'water-v2.1.1.css',
   'webgradients-v0.0.0.css',
-  'wikipedia-dark-v3.7.9.css'
+  'wikipedia-dark-v3.7.9.css',
+  'zotero-dark-theme-v0.0.0.css'
 ];
 
 const foundBad = [];
