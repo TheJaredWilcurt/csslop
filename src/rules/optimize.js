@@ -262,6 +262,9 @@ function createNestedSelectorMatcher (parentSelector) {
 
   return (childSelector) => {
     const child = childSelector.trim();
+    if (child === parent) {
+      return '&';
+    }
     if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
       return '&' + child.slice(parent.length);
     }
@@ -497,7 +500,7 @@ function factorCommonParents (rules) {
   while (index < rules.length) {
     const rule = rules[index];
     if (rule.type === 'rule' && rule.selectors?.length > 1) {
-      const candidateParent = extractLeadingCompound(rule.selectors[0]);
+      const candidateParent = extractLeadingCompound(rule.selectors[0]) || rule.selectors[0];
       if (candidateParent) {
         const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
         const childSelectors = rule.selectors.map(matchNestedSelector);
@@ -571,8 +574,8 @@ function factorCommonParents (rules) {
 }
 
 /**
- * Shares a descendant prefix through `:is()` when the parent itself is also
- * in the selector list, preventing a nesting wrapper from saving space.
+ * Shares a descendant prefix through `:is()` when a nesting wrapper did not
+ * save enough space to factor the parent out of the selector list.
  *
  * @param {object} rule  The style rule whose selector list may be shortened.
  */

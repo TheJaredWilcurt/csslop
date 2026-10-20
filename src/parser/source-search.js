@@ -162,8 +162,8 @@ function startsUrlToken (source, index) {
 
 /**
  * Finds the first of several delimiter characters that is written at the top
- * level of the text, meaning it is not escaped, quoted, or nested inside a
- * group.
+ * level of the text, meaning it is not escaped, quoted, inside a comment, or
+ * nested inside a group.
  *
  * @param  {string} source      The raw CSS text being scanned.
  * @param  {string} delimiters  The delimiter characters to look for.
@@ -174,6 +174,11 @@ function findTopLevelDelimiter (source, delimiters, startIndex) {
   let index = startIndex;
   while (index < source.length) {
     const character = source[index];
+    if (character === '/' && source[index + 1] === '*') {
+      const closingIndex = source.indexOf('*/', index + 2);
+      index = closingIndex === -1 ? source.length : closingIndex + 2;
+      continue;
+    }
     if (character === '\\') {
       index += 2;
       continue;

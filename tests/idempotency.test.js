@@ -1,7 +1,6 @@
 /**
  * @file Real world test for idempotency.
  */
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import getRealWorldCSS from 'real-world-css-libraries';
@@ -187,7 +186,7 @@ function run () {
       );
 
       if (first !== second) {
-        foundBad.push(fileName)
+        foundBad.push(fileName);
         const log = {
           'Failed idempotency for': filePath,
           'Original File': file,
