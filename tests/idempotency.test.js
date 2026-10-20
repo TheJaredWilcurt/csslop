@@ -10,6 +10,7 @@ import { minifyCSS } from '../index.js';
 const __dirname = import.meta.dirname;
 
 const knownBad = [
+  '30days30submits-18-v0.0.0.css',
   '3dtransforms-v0.0.0.css',
   '960.gs-v0.0.0.css',
   '98-v0.1.18.css',
@@ -17,6 +18,7 @@ const knownBad = [
   'adminhub-v1.0.0.css',
   'amoled-cord-v5.0.11.css',
   'animating-hamburger-icons-v0.1.0.css',
+  'animsition-v4.0.2.css',
   'awesome-bootstrap-checkbox-v0.3.7.css',
   'basscss-v8.1.0.css',
   'beercss-v4.0.21.css',
@@ -92,6 +94,7 @@ const knownBad = [
   'mini-v3.0.1.css',
   'missing-v1.3.0.css',
   'mobi-v3.1.1.css',
+  'mocka-v1.0.1.css',
   'mvp-v1.17.3.css',
   'nes-v2.3.0.css',
   'object-fit-polyfill-v0.3.4.css',
@@ -134,9 +137,12 @@ const knownBad = [
   'swagger-ui-themes-3-v3.0.1.css',
   'system-v0.1.11.css',
   'tablecloth-v1.0.0.css',
+  'tachyons-v4.12.0.css',
   'tailwind-cards-v0.0.0.css',
   'tailwind-v2.2.19.css',
+  'the-50-front-end-project-44-v0.0.0.css',
   'tocas-v5.7.0.css',
+  'tooltip-twispy-v1.0.6.css',
   'tootik-v1.0.2.css',
   'tufte-v1.8.0.css',
   'tui-v2.1.2.css',
