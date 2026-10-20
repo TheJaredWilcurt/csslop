@@ -3,8 +3,15 @@
  */
 
 import { processDeclarations } from '../declarations/process.js';
-import { splitTopLevelCommaList } from '../parser/source-search.js';
+import {
+  skipParenthesizedGroup,
+  skipQuotedString,
+  splitTopLevelCommaList,
+  startsUrlToken
+} from '../parser/source-search.js';
+import { tokenizeCssValue } from '../parser/tokenizer.js';
 import { minifyValueForOutput } from '../value/minify.js';
+import { elideRedundantSeparators } from '../value/tokens.js';
 
 import {
   collapseCustomPropertyWhitespace,
@@ -109,6 +116,67 @@ function minifyFunctionPrelude (prelude) {
     return parameter.replace(/\s*:\s*/, ':');
   });
   return functionName + '(' + minifiedParameters.join(',') + ')';
+}
+
+/**
+ * Removes comments between namespace tokens while leaving strings, URLs, and
+ * escaped characters intact.
+ *
+ * @param  {string} prelude  The namespace prelude as written.
+ * @return {string}          The prelude with comments replaced by separators.
+ */
+function removeNamespaceComments (prelude) {
+  let result = '';
+  let index = 0;
+  while (index < prelude.length) {
+    if (prelude.startsWith('/*', index)) {
+      const closingIndex = prelude.indexOf('*/', index + 2);
+      index = closingIndex === -1 ? prelude.length : closingIndex + 2;
+      result += ' ';
+      continue;
+    }
+    let end = index + 1;
+    if (prelude[index] === '"' || prelude[index] === '\'') {
+      end = skipQuotedString(prelude, index);
+    } else if (prelude[index] === '\\') {
+      end = Math.min(index + 2, prelude.length);
+    } else if (startsUrlToken(prelude, index)) {
+      end = skipParenthesizedGroup(prelude, index + 3);
+    }
+    result += prelude.slice(index, end);
+    index = end;
+  }
+  return result;
+}
+
+/**
+ * Unwraps quoted namespace URLs and removes token separators without changing
+ * whitespace or escapes inside the namespace name's string.
+ *
+ * @param  {string} prelude  The optional namespace prefix and its URL.
+ * @return {string}          The minified namespace statement.
+ */
+function stringifyNamespace (prelude) {
+  const tokens = tokenizeCssValue(removeNamespaceComments(prelude)).filter((token) => {
+    return token.type !== 'whitespace';
+  });
+  const parts = ['@namespace'];
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    const isQuotedUrl = (
+      token.type === 'function' &&
+      token.text.toLowerCase() === 'url(' &&
+      tokens[index + 1]?.type === 'string' &&
+      tokens[index + 2]?.text === ')'
+    );
+    if (isQuotedUrl) {
+      parts.push(tokens[index + 1].text);
+      index += 2;
+    } else {
+      parts.push(token.text);
+    }
+  }
+  return elideRedundantSeparators(parts.join(' ')) + ';';
 }
 
 /**
@@ -464,6 +532,10 @@ function stringifyRule (rule, context) {
 
   if (rule.type === 'charset') {
     return '@charset ' + rule.charset + ';';
+  }
+
+  if (rule.type === 'namespace') {
+    return stringifyNamespace(rule.namespace);
   }
 
   if (rule.type === 'import') {
