@@ -4,6 +4,7 @@
 
 import { processDeclarations } from '../declarations/process.js';
 import {
+  findMatchingParenthesis,
   skipParenthesizedGroup,
   skipQuotedString,
   splitTopLevelCommaList,
@@ -74,12 +75,66 @@ const LAYER_STATEMENT_PATTERN = /^@layer [^{}();'"]*;$/;
  */
 function removeRedundantLayerStatementSemicolon (ruleStrings) {
   const lastIndex = ruleStrings.length - 1;
-  if (lastIndex < 0 || !LAYER_STATEMENT_PATTERN.test(ruleStrings[lastIndex])) {
+  if (lastIndex < 0) {
+    return ruleStrings;
+  }
+  const lastRule = ruleStrings[lastIndex];
+  const isTrailingLayerStatement = LAYER_STATEMENT_PATTERN.test(lastRule);
+  const isTrailingImportStatement = (
+    lastRule.endsWith(';') &&
+    (
+      lastRule.startsWith('@import ') ||
+      lastRule.startsWith('@import"') ||
+      lastRule.startsWith('@import\'')
+    )
+  );
+  if (!isTrailingLayerStatement && !isTrailingImportStatement) {
     return ruleStrings;
   }
   const result = [...ruleStrings];
   result[lastIndex] = result[lastIndex].slice(0, -1);
   return result;
+}
+
+/**
+ * Normalizes every `supports()` condition in an import prelude while leaving
+ * nested functions and quoted strings to the condition parser.
+ *
+ * @param  {string} importStatement  The import prelude being minified.
+ * @return {string}                  The import prelude with normalized conditions.
+ */
+function normalizeImportSupports (importStatement) {
+  let result = '';
+  let index = 0;
+  const normalizedStatement = importStatement.toLowerCase();
+  while (index < importStatement.length) {
+    let supportsIndex = -1;
+    let scanIndex = index;
+    while (scanIndex < importStatement.length) {
+      if (importStatement[scanIndex] === '"' || importStatement[scanIndex] === '\'') {
+        scanIndex = skipQuotedString(importStatement, scanIndex);
+        continue;
+      }
+      if (normalizedStatement.startsWith('supports(', scanIndex)) {
+        supportsIndex = scanIndex;
+        break;
+      }
+      scanIndex++;
+    }
+    if (supportsIndex === -1) {
+      break;
+    }
+    const openIndex = supportsIndex + 'supports'.length;
+    const closeIndex = findMatchingParenthesis(importStatement, openIndex);
+    if (closeIndex === -1) {
+      break;
+    }
+    const condition = importStatement.slice(openIndex + 1, closeIndex);
+    result += importStatement.slice(index, openIndex + 1);
+    result += normalizeSupports(condition) + ')';
+    index = closeIndex + 1;
+  }
+  return result + importStatement.slice(index);
 }
 
 /**
@@ -550,13 +605,7 @@ function stringifyRule (rule, context) {
     importStatement = importStatement.replace(/^(".*?"|'.*?') /, '$1');
     // Remove space between closing paren and next at-rule condition keyword
     importStatement = importStatement.replace(/\) ([a-zA-Z])/g, ')$1');
-    // Minify property:value pairs inside supports() by removing whitespace around colons
-    importStatement = importStatement.replace(
-      /supports\(([^()]*)\)/g,
-      (fullMatch, content) => {
-        return 'supports(' + content.replace(/\s*:\s*/g, ':') + ')';
-      }
-    );
+    importStatement = normalizeImportSupports(importStatement);
     const startsWithQuote = importStatement.startsWith('"') || importStatement.startsWith('\'');
     let importSeparator;
     if (startsWithQuote) {

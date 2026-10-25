@@ -66,17 +66,29 @@ const MAXIMUM_NESTING_DEPTH = 32;
  * length is held as the pixels it measures, since every length stating the
  * same measurement then totals under the same unit.
  *
- * @param  {number} number  The number the quantity is written from.
- * @param  {string} unit    The unit the quantity is written with, or the empty string when it is a plain number.
- * @return {Map}            The unit totals the quantity states.
+ * @param  {number}  number                   The number the quantity is written from.
+ * @param  {string}  unit                     The unit the quantity is written with, or the empty string when it is a plain number.
+ * @param  {boolean} preserveWrittenQuantity  Whether to retain the original spelling for a standalone quantity.
+ * @return {Map}                              The unit totals the quantity states.
  */
-function createUnitTotals (number, unit) {
+function createUnitTotals (number, unit, preserveWrittenQuantity = false) {
   const lowercasedUnit = unit.toLowerCase();
   const pixels = convertAbsoluteLengthToPx(number, lowercasedUnit);
+  let totals;
   if (pixels === null) {
-    return new Map([[lowercasedUnit, number]]);
+    totals = new Map([[lowercasedUnit, number]]);
+  } else {
+    totals = new Map([['px', pixels]]);
   }
-  return new Map([['px', pixels]]);
+  if (preserveWrittenQuantity) {
+    totals.writtenQuantity = {
+      number,
+      unit: lowercasedUnit,
+      canonicalUnit: pixels === null ? lowercasedUnit : 'px',
+      canonicalNumber: pixels === null ? number : pixels
+    };
+  }
+  return totals;
 }
 
 /**
@@ -162,6 +174,16 @@ function multiplyUnitTotals (left, right) {
   if (isPlainNumber(left)) {
     return scaleUnitTotals(right, left.get(UNITLESS));
   }
+  const leftQuantity = readSingleQuantity(left);
+  const rightQuantity = readSingleQuantity(right);
+  if (leftQuantity && rightQuantity) {
+    if (leftQuantity.unit.startsWith('reciprocal:') && leftQuantity.unit.slice('reciprocal:'.length) === rightQuantity.unit) {
+      return createUnitTotals(leftQuantity.number * rightQuantity.number, UNITLESS);
+    }
+    if (rightQuantity.unit.startsWith('reciprocal:') && rightQuantity.unit.slice('reciprocal:'.length) === leftQuantity.unit) {
+      return createUnitTotals(leftQuantity.number * rightQuantity.number, UNITLESS);
+    }
+  }
   return null;
 }
 
@@ -175,14 +197,28 @@ function multiplyUnitTotals (left, right) {
  * @return {Map|null}        The totals of the quotient, or null when the division cannot be worked out.
  */
 function divideUnitTotals (left, right) {
-  if (!isPlainNumber(right)) {
+  if (isPlainNumber(right)) {
+    const divisor = right.get(UNITLESS);
+    if (divisor === 0) {
+      return null;
+    }
+    return scaleUnitTotals(left, 1 / divisor);
+  }
+  const dividendQuantity = readSingleQuantity(left);
+  const divisorQuantity = readSingleQuantity(right);
+  if (!dividendQuantity || !divisorQuantity || divisorQuantity.number === 0) {
     return null;
   }
-  const divisor = right.get(UNITLESS);
-  if (divisor === 0) {
-    return null;
+  if (dividendQuantity.unit === divisorQuantity.unit) {
+    return createUnitTotals(dividendQuantity.number / divisorQuantity.number, UNITLESS);
   }
-  return scaleUnitTotals(left, 1 / divisor);
+  if (dividendQuantity.unit === UNITLESS) {
+    return createUnitTotals(
+      dividendQuantity.number / divisorQuantity.number,
+      'reciprocal:' + divisorQuantity.unit
+    );
+  }
+  return null;
 }
 
 /**
@@ -478,7 +514,7 @@ function parseOperand (reader) {
   }
   if (token.type === 'number') {
     reader.index++;
-    return createUnitTotals(token.number, token.unit);
+    return createUnitTotals(token.number, token.unit, true);
   }
   if (token.type === 'identifier') {
     reader.index++;
@@ -661,7 +697,8 @@ function evaluateMinimum (argumentList) {
   if (!comparable) {
     return null;
   }
-  return createUnitTotals(Math.min(...comparable.numbers), comparable.unit);
+  const winningIndex = comparable.numbers.indexOf(Math.min(...comparable.numbers));
+  return argumentList[winningIndex].value;
 }
 
 /**
@@ -675,7 +712,8 @@ function evaluateMaximum (argumentList) {
   if (!comparable) {
     return null;
   }
-  return createUnitTotals(Math.max(...comparable.numbers), comparable.unit);
+  const winningIndex = comparable.numbers.indexOf(Math.max(...comparable.numbers));
+  return argumentList[winningIndex].value;
 }
 
 /**
@@ -1043,7 +1081,22 @@ function writeTermNumber (total) {
  * @return {string|null}         The value the calculation resolved to, or null when it cannot be written faithfully.
  */
 function formatUnitTotals (totals) {
+  const writtenQuantity = totals.writtenQuantity;
+  if (
+    writtenQuantity &&
+    totals.size === 1 &&
+    totals.has(writtenQuantity.canonicalUnit) &&
+    totals.get(writtenQuantity.canonicalUnit) === writtenQuantity.canonicalNumber
+  ) {
+    return formatResolvedNumber(writtenQuantity.number) + writtenQuantity.unit;
+  }
   const mergedTotals = mergeUnitsOfSameKind(totals);
+  const hasUnrepresentableReciprocalUnit = [...mergedTotals.keys()].some((unit) => {
+    return unit.startsWith('reciprocal:');
+  });
+  if (hasUnrepresentableReciprocalUnit) {
+    return null;
+  }
   const outputTerms = collectOutputTerms(mergedTotals);
   if (dropsPercentageBasis(mergedTotals, outputTerms)) {
     return null;
