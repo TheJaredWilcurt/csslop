@@ -454,12 +454,44 @@ const NON_NEGATIVE_PROPERTIES = new Set([
 ]);
 
 /**
+ * Properties whose computed math values must be integers.
+ *
+ * @type {Set<string>}
+ */
+const INTEGER_VALUE_PROPERTIES = new Set([
+  'column-count',
+  'order',
+  'orphans',
+  'widows',
+  'z-index'
+]);
+
+/**
+ * The inclusive bounds that CSS applies to numeric property values after
+ * resolving a math expression.
+ *
+ * @type {Map<string, {minimum?: number, maximum?: number}>}
+ */
+const NUMERIC_PROPERTY_RANGES = new Map([
+  ['column-count', { minimum: 1 }],
+  ['opacity', { minimum: 0, maximum: 1 }]
+]);
+
+/**
  * Matches a value written as a single negative number, with or without the
  * unit or percent sign that follows its digits.
  *
  * @type {RegExp}
  */
 const NEGATIVE_NUMBER_VALUE = /^-(?:\d+|\d*\.\d+)(?:[a-z]+|%)?$/i;
+
+/**
+ * Matches a resolved unitless number whose value can be rounded or clamped by
+ * a property's numeric range.
+ *
+ * @type {RegExp}
+ */
+const UNIT_LESS_NUMBER_VALUE = /^[+-]?(?:\d+|\d*\.\d+)$/;
 
 /**
  * Clamps what a math function resolved to into the range its property
@@ -475,11 +507,39 @@ const NEGATIVE_NUMBER_VALUE = /^-(?:\d+|\d*\.\d+)(?:[a-z]+|%)?$/i;
  * @return {string}                The resolved value, held inside the property's range.
  */
 function clampResolvedValueToPropertyRange (resolvedValue, property) {
-  const acceptsNegativeValues = !NON_NEGATIVE_PROPERTIES.has(String(property).toLowerCase());
-  if (acceptsNegativeValues || !NEGATIVE_NUMBER_VALUE.test(resolvedValue)) {
+  const normalizedProperty = String(property).toLowerCase();
+  const acceptsNegativeValues = !NON_NEGATIVE_PROPERTIES.has(normalizedProperty);
+  const hasPropertyRange = NUMERIC_PROPERTY_RANGES.has(normalizedProperty);
+  const range = NUMERIC_PROPERTY_RANGES.get(normalizedProperty) || {};
+  const isNegativeNonNegativeValue = !acceptsNegativeValues && NEGATIVE_NUMBER_VALUE.test(resolvedValue);
+  if (isNegativeNonNegativeValue) {
+    const isUnitlessNumber = UNIT_LESS_NUMBER_VALUE.test(resolvedValue);
+    if (!isUnitlessNumber) {
+      return formatResolvedNumber(range.minimum === undefined ? 0 : range.minimum);
+    }
+    if (!hasPropertyRange && !INTEGER_VALUE_PROPERTIES.has(normalizedProperty)) {
+      return '0';
+    }
+  }
+  if (!hasPropertyRange && !INTEGER_VALUE_PROPERTIES.has(normalizedProperty)) {
     return resolvedValue;
   }
-  return '0';
+  if (!UNIT_LESS_NUMBER_VALUE.test(resolvedValue)) {
+    return resolvedValue;
+  }
+
+  const shouldRoundToInteger = INTEGER_VALUE_PROPERTIES.has(normalizedProperty);
+  let numericValue = Number(resolvedValue);
+  if (shouldRoundToInteger) {
+    numericValue = Math.round(numericValue);
+  }
+  if (range.minimum !== undefined) {
+    numericValue = Math.max(range.minimum, numericValue);
+  }
+  if (range.maximum !== undefined) {
+    numericValue = Math.min(range.maximum, numericValue);
+  }
+  return formatResolvedNumber(numericValue);
 }
 
 /**

@@ -38,6 +38,7 @@ import {
 import {
   collapseShorthandParts,
   convertAbsoluteLengthToPx,
+  formatCompactNumber,
   formatResolvedNumber,
   hasSubstitutedParts,
   normalizeScaleComponent,
@@ -624,6 +625,40 @@ function isCssDigit (character) {
 }
 
 /**
+ * Converts OKLCH lightness and chroma percentages when doing so is shorter,
+ * including the separator each spelling needs before the hue.
+ *
+ * @param  {string} value  The normalized arguments of an `oklch()` function.
+ * @return {string}        The arguments with shorter percentage spellings.
+ */
+function minifyOklchPercentages (value) {
+  const slashIndex = value.indexOf('/');
+  const componentsText = slashIndex === -1 ? value : value.slice(0, slashIndex);
+  const alphaText = slashIndex === -1 ? '' : value.slice(slashIndex + 1);
+  const components = componentsText.trim().split(' ');
+  if (components.length !== 3) {
+    return value;
+  }
+
+  let [lightness, chroma, hue] = components;
+  if (lightness.endsWith('%')) {
+    lightness = formatCompactNumber(Number.parseFloat(lightness) / 100);
+  }
+  if (chroma.endsWith('%')) {
+    const convertedChroma = formatCompactNumber(
+      Number.parseFloat(chroma) / 100 * OKLCH_CHROMA_PERCENT_REFERENCE
+    );
+    const convertedWithHueSeparator = convertedChroma.length + 1;
+    if (chroma.length < convertedWithHueSeparator) {
+      return [lightness, chroma + hue].join(' ') + (slashIndex === -1 ? '' : '/' + alphaText);
+    }
+    chroma = convertedChroma;
+  }
+
+  return [lightness, chroma, hue].join(' ') + (slashIndex === -1 ? '' : '/' + alphaText);
+}
+
+/**
  * Converts `oklch()` colors that fall inside the sRGB gamut to their hex
  * equivalent when that is shorter. Out-of-gamut colors have no sRGB
  * representation, so they are left in their native color space.
@@ -747,6 +782,9 @@ function convertColorsToHex (val) {
       return integer;
     });
     minified = compactNegativeColorChannelSpacing(func, minified);
+    if (func.toLowerCase() === 'oklch') {
+      minified = minifyOklchPercentages(minified);
+    }
     return func + '(' + minified.trim() + ')';
   });
 

@@ -182,7 +182,7 @@ function collapseBorderTrioWithPerEdgeOverrides (declarations, context) {
   const borderValue = buildBorderShorthandValue(
     widthComponents.length === 1 ? width : '',
     styleComponents.length === 1 ? style : '',
-    colorComponents[0]
+    colorComponents.length === 1 ? colorComponents[0] : ''
   ) + importantSuffix;
   const overrides = BORDER_TRIO_PROPERTIES.flatMap((property, index) => {
     if (componentsByProperty[index].length === 1) {
