@@ -39,7 +39,7 @@
     "fflate": "^0.8.3",
     "globals": "^17.13.0",
     "pretty-ms": "^10.0.0",
-    "real-world-css-libraries": "^1.0.8",
+    "real-world-css-libraries": "^1.0.9",
     "vite": "^8.3.5"
   },
   "author": "The Jared Wilcurt",
