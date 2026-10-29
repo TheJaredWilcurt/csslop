@@ -2,7 +2,9 @@
  * @file Normalizes CSS selectors, `@media` queries, and `@supports` conditions by unescaping identifiers and collapsing whitespace.
  */
 
+import { tokenizeCssValue } from '../parser/tokenizer.js';
 import { resolveUnicodeEscape } from '../utilities.js';
+import { shortenNumericText } from '../value/numbers.js';
 
 /**
  * Converts CSS Unicode escape sequences in an identifier to their literal characters, preserving control characters that must remain escaped.
@@ -161,7 +163,38 @@ function normalizeMedia (media) {
       return fullMatch;
     }
   );
-  return compactLogicalOperators(media.trim());
+  return compactLogicalOperators(shortenRatioNumbers(media.trim()));
+}
+
+/**
+ * Shortens the numbers of every `<ratio>` in a media query, such as the
+ * `1000000/1` of `(min-aspect-ratio:1000000/1)`. A ratio is made of
+ * `<number>`s rather than `<integer>`s, so its terms may use scientific
+ * notation.
+ *
+ * @param  {string} media  A normalized `@media` query string.
+ * @return {string}        The query with shorter ratio numbers.
+ */
+function shortenRatioNumbers (media) {
+  const tokens = tokenizeCssValue(media);
+  const ratioTermIndexes = new Set();
+  tokens.forEach((token, index) => {
+    const isRatioSlash = (
+      token.text === '/' &&
+      tokens[index - 1]?.type === 'number' &&
+      tokens[index + 1]?.type === 'number'
+    );
+    if (isRatioSlash) {
+      ratioTermIndexes.add(index - 1);
+      ratioTermIndexes.add(index + 1);
+    }
+  });
+  return tokens.map((token, index) => {
+    if (ratioTermIndexes.has(index)) {
+      return shortenNumericText(token.text, true);
+    }
+    return token.text;
+  }).join('');
 }
 
 /**

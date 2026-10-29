@@ -76,6 +76,25 @@ function shortenNumericToken (tokenText) {
   if (shortened.includes('e')) {
     return tokenText;
   }
+  return preserveNumberType(shortened, unit);
+}
+
+/**
+ * Keeps a unitless number that was written with a decimal point typed as a
+ * `<number>`. Shedding its zeros could leave only digits, which reads as an
+ * `<integer>`, and a custom property substituted into, or registered with, an
+ * `<integer>` grammar would then accept a value it used to reject.
+ *
+ * @param  {string} shortened  The shortened number, without its unit.
+ * @param  {string} unit       The unit written after the number, if any.
+ * @return {string}            The shortened token, still typed as a `<number>`.
+ */
+function preserveNumberType (shortened, unit) {
+  // An optional sign followed by nothing but digits reads as an integer
+  const isIntegerSpelling = /^[+-]?\d+$/.test(shortened);
+  if (!unit && isIntegerSpelling) {
+    return shortened + '.0';
+  }
   return shortened + unit;
 }
 

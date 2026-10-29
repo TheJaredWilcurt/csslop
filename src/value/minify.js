@@ -9,6 +9,7 @@ import {
   skipQuotedString,
   startsUrlToken
 } from '../parser/source-search.js';
+import { tokenizeCssValue } from '../parser/tokenizer.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 
 import { evaluateColorMix } from './color-mix.js';
@@ -30,6 +31,12 @@ import {
   simplifyStandaloneCalc
 } from './math.js';
 import { namedColors } from './named-colors.js';
+import {
+  formatShortestNumber,
+  parseNumericParts,
+  scaleByPowerOfTen,
+  shortenNumericText
+} from './numbers.js';
 import { isQuotesNoneEquivalent } from './quotes.js';
 import {
   evaluateRelativeColor,
@@ -918,26 +925,89 @@ function convertBackgroundPositionKeywords (value) {
 }
 
 /**
- * Converts millisecond time values to seconds when the result is a
- * shorter string. Values of 0ms become 0s (time must keep a unit),
- * and values at or below 99ms stay in milliseconds (shorter representation).
+ * The power of ten that separates a time in seconds from the same time in
+ * milliseconds, keyed by the lowercased time unit.
  *
- * @param  {string} value  The CSS value string potentially containing ms time values.
- * @return {string}        The value with eligible ms times converted to seconds.
+ * @type {{[unit: string]: number}}
  */
-function convertMillisecondsToSeconds (value) {
-  // Match numeric values followed by the "ms" unit at word boundaries
-  return value.replace(/\b(\d+(?:\.\d+)?)ms\b/gi, (match, amount) => {
-    const milliseconds = parseFloat(amount);
-    if (milliseconds === 0) {
-      return '0s';
+const TIME_UNIT_POWERS = {
+  s: 0,
+  ms: -3
+};
+
+/**
+ * Rewrites one time token in whichever of seconds or milliseconds spells it
+ * shortest, scientific notation included. Every conversion moves the exponent
+ * of the exact digits, so no precision is lost however large the time is.
+ * Seconds win a tie, and a zero time becomes `0s`.
+ *
+ * @param  {string} text  The text of a dimension token.
+ * @return {string}       The shortest spelling of the same time.
+ */
+function shortenTimeToken (text) {
+  const parts = parseNumericParts(text);
+  const writtenUnit = parts?.unit.toLowerCase();
+  if (!parts || !(writtenUnit in TIME_UNIT_POWERS)) {
+    return text;
+  }
+  if (!parts.digits) {
+    return '0s';
+  }
+  const writtenSpelling = shortenNumericText(text, true);
+  const secondsSpelling = formatShortestNumber(
+    scaleByPowerOfTen(parts, TIME_UNIT_POWERS[writtenUnit], 's'),
+    true
+  );
+  const millisecondsSpelling = formatShortestNumber(
+    scaleByPowerOfTen(parts, TIME_UNIT_POWERS[writtenUnit] - TIME_UNIT_POWERS.ms, 'ms'),
+    true
+  );
+  // Seconds are the conventional unit, so they win a tie with milliseconds
+  const convertedSpelling = millisecondsSpelling.length < secondsSpelling.length ? millisecondsSpelling : secondsSpelling;
+  return convertedSpelling.length <= writtenSpelling.length ? convertedSpelling : writtenSpelling;
+}
+
+/**
+ * Reports whether rewriting a number keeps its numeric type. A number written
+ * with a decimal point or an exponent has the `<number>` type, while one
+ * written with digits alone is an `<integer>`. A custom property can be
+ * substituted into, or registered with, a grammar that tells the two apart, so
+ * `100.0` cannot become `100` there.
+ *
+ * @param  {string}  originalNumber   The number as it was written.
+ * @param  {string}  rewrittenNumber  The number as it would be rewritten.
+ * @return {boolean}                  True when both spellings have the same type.
+ */
+function keepsNumberType (originalNumber, rewrittenNumber) {
+  return isIntegerSpelling(originalNumber) === isIntegerSpelling(rewrittenNumber);
+}
+
+/**
+ * Reports whether a number is spelled as an `<integer>`: digits with an
+ * optional sign, and no decimal point or exponent.
+ *
+ * @param  {string}  number  The number as written.
+ * @return {boolean}         True when the spelling is an integer.
+ */
+function isIntegerSpelling (number) {
+  // An optional sign followed by nothing but digits
+  return /^[+-]?\d+$/.test(number);
+}
+
+/**
+ * Converts each time in a value between seconds and milliseconds, whichever
+ * is the shorter string.
+ *
+ * @param  {string} value  The CSS value string potentially containing time values.
+ * @return {string}        The value with each time in its shortest unit.
+ */
+function convertTimesToShortestUnit (value) {
+  return tokenizeCssValue(value).map((token) => {
+    if (token.type !== 'dimension') {
+      return token.text;
     }
-    // Keep ms for values at or below 99ms (ms representation is shorter)
-    if (milliseconds <= 99) {
-      return match;
-    }
-    return roundCompactNumber(milliseconds / 1000) + 's';
-  });
+    return shortenTimeToken(token.text);
+  }).join('');
 }
 
 /**
@@ -1304,7 +1374,7 @@ function applyPropertyOptimizations (val, property, urlTokens) {
 
   // Convert ms to s for time-related properties when the seconds form is shorter
   if (TIME_PROPERTIES.has(property)) {
-    val = convertMillisecondsToSeconds(val);
+    val = convertTimesToShortestUnit(val);
   }
 
   // Transition: remove " 0s" duration (transition: all 0s -> transition: all)
@@ -1616,12 +1686,17 @@ function computeMinifiedValue (declaration) {
     // character budget a number is written within
     if (/^[+-]?(?:\d+|\d*\.\d+)([a-z%]+)?$/i.test(val)) {
       const [, rawNumber, rawUnit = ''] = val.match(/^([+-]?(?:\d+|\d*\.\d+))([a-z%]+)?$/i);
-      const scientificValue = isCustomProperty(declaration.property) ? val : shortenDimensionNumbers(val);
+      const isCustom = isCustomProperty(declaration.property);
+      const scientificValue = isCustom ? val : shortenDimensionNumbers(val, declaration.property);
       const roundedNumber = formatResolvedNumber(rawNumber);
       const losesPrecision = Number(roundedNumber) !== Number(rawNumber);
       // Preserve tiny dimensions whose significant digits would otherwise be
       // rounded away before their shorter exponent form can be considered.
-      val = losesPrecision && scientificValue !== val ? scientificValue : roundedNumber + rawUnit;
+      if (losesPrecision && scientificValue !== val) {
+        val = scientificValue;
+      } else if (!isCustom || keepsNumberType(rawNumber, roundedNumber)) {
+        val = roundedNumber + rawUnit;
+      }
     }
 
     val = lowercaseHexColors(val);
@@ -1670,7 +1745,7 @@ function computeMinifiedValue (declaration) {
     !isCustomProperty(declaration.property)
   );
   if (elidesRedundantSeparators) {
-    val = shortenDimensionNumbers(val);
+    val = shortenDimensionNumbers(val, declaration.property);
     // A property that punctuates its own components already had the whitespace
     // after its closing parentheses taken out, and only the separators its
     // grammar still needs put back, so those are the ones left alone here.

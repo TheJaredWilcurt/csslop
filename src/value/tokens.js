@@ -4,6 +4,8 @@
 
 import { tokenizeCssValue } from '../parser/tokenizer.js';
 
+import { shortenNumericText } from './numbers.js';
+
 /**
  * One token of a value, as the tokenizer reads it.
  *
@@ -142,36 +144,92 @@ function elideRedundantSeparators (value, elidesAfterSelfEndingTokens = true) {
 }
 
 /**
- * Shortens decimal dimension and percentage tokens without changing their
- * digits. Unitless numbers stay untouched because integer grammars reject
+ * Properties whose whole value is a unitless `<number>` rather than an
+ * `<integer>`, so a number written directly in them may use scientific
+ * notation.
+ *
+ * @type {Set<string>}
+ */
+const NUMBER_VALUED_PROPERTIES = new Set([
+  'animation-iteration-count',
+  'fill-opacity',
+  'flex-grow',
+  'flex-shrink',
+  'flood-opacity',
+  'opacity',
+  'stop-opacity',
+  'stroke-miterlimit',
+  'stroke-opacity',
+  'tab-size'
+]);
+
+/**
+ * Functions whose arguments are unitless `<number>`s rather than `<integer>`s,
+ * so the numbers written directly inside them may use scientific notation.
+ *
+ * @type {Set<string>}
+ */
+const NUMBER_ARGUMENT_FUNCTIONS = new Set([
+  'matrix',
+  'matrix3d',
+  'scale',
+  'scale3d',
+  'scalex',
+  'scaley',
+  'scalez'
+]);
+
+/**
+ * Reports whether a unitless number token sits where only a `<number>` is
+ * accepted, either directly in a number-valued property or directly inside a
+ * function that takes number arguments.
+ *
+ * @param  {string|null} enclosingFunction  The lowercased name of the innermost function holding the token, or null at the top level.
+ * @param  {string}      property           The lowercased property the value belongs to.
+ * @return {boolean}                        Whether the number may use scientific notation.
+ */
+function isNumberTypedPosition (enclosingFunction, property) {
+  if (enclosingFunction === null) {
+    return NUMBER_VALUED_PROPERTIES.has(property);
+  }
+  return NUMBER_ARGUMENT_FUNCTIONS.has(enclosingFunction);
+}
+
+/**
+ * Shortens the numeric tokens of a value into their shortest spelling,
+ * including scientific notation. Dimensions and percentages are always
+ * `<number>` based, but a unitless number is only shortened where its grammar
+ * is known to take a `<number>`, because `<integer>` grammars reject
  * scientific notation.
  *
- * @param  {string} value  The CSS value.
- * @return {string}        The value with shorter numeric spellings.
+ * @param  {string} value       The CSS value.
+ * @param  {string} [property]  The property the value belongs to.
+ * @return {string}             The value with shorter numeric spellings.
  */
-function shortenDimensionNumbers (value) {
+function shortenDimensionNumbers (value, property = '') {
+  const normalizedProperty = property.toLowerCase();
+  const functionStack = [];
   return tokenizeCssValue(value).map((token) => {
-    if (token.type !== 'dimension' && token.type !== 'percentage') {
+    if (token.type === 'function') {
+      functionStack.push(token.text.slice(0, -1).toLowerCase());
       return token.text;
     }
-    // Capture a decimal coefficient and its unit, excluding existing exponents.
-    const match = token.text.match(/^([+-]?)(\d*\.\d+|\d+)([%a-z]+)$/i);
-    if (!match) {
+    if (token.text === '(') {
+      functionStack.push('');
       return token.text;
     }
-    const [, sign, coefficient, unit] = match;
-    const decimalIndex = coefficient.indexOf('.');
-    const fractionalDigits = decimalIndex === -1 ? 0 : coefficient.length - decimalIndex - 1;
-    const digits = coefficient.replace('.', '');
-    // Leading zeros carry no magnitude; trailing zeros move into the exponent.
-    const significantDigits = digits.replace(/^0+/, '').replace(/0+$/, '');
-    if (!significantDigits) {
+    if (token.text === ')') {
+      functionStack.pop();
       return token.text;
     }
-    const trailingZeros = digits.length - digits.replace(/0+$/, '').length;
-    const exponent = trailingZeros - fractionalDigits;
-    const scientific = sign + significantDigits + 'e' + exponent + unit;
-    return scientific.length < token.text.length ? scientific : token.text;
+    if (token.type === 'dimension' || token.type === 'percentage') {
+      return shortenNumericText(token.text, true);
+    }
+    const enclosingFunction = functionStack.length ? functionStack[functionStack.length - 1] : null;
+    if (token.type === 'number' && isNumberTypedPosition(enclosingFunction, normalizedProperty)) {
+      return shortenNumericText(token.text, true);
+    }
+    return token.text;
   }).join('');
 }
 
