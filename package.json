@@ -2,7 +2,7 @@
   "name": "@thejaredwilcurt/csslop",
   "main": "index.js",
   "type": "module",
-  "version": "0.0.47",
+  "version": "0.0.48",
   "description": "Experimental CSS minification",
   "scripts": {
     "prestart": "node ./scripts/pre/start.js",
@@ -57,7 +57,7 @@
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": "26.12.1"
+      "version": "26.13.0"
     },
     "packageManager": {
       "name": "npm",
