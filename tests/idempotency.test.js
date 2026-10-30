@@ -15,16 +15,12 @@ const knownBad = [
   '960.gs-v0.0.0.css',
   '98-v0.1.18.css',
   'admin-lte-v4.0.0.css',
-  'adminhub-v1.0.0.css',
-  'amoled-cord-v5.0.11.css',
   'animating-hamburger-icons-v0.1.0.css',
-  'animsition-v4.0.2.css',
   'awesome-bootstrap-checkbox-v0.3.7.css',
   'basscss-v8.1.0.css',
   'beercss-v4.0.21.css',
   'blooger-website-v0.0.0.css',
   'blue-topaz-obsidian-v6.0.0.css',
-  'boilerform-v1.1.2.css',
   'bojler-v3.2.1.css',
   'bootplus-v1.0.5.css',
   'bootstrap-4-v4.6.2.css',
@@ -45,6 +41,7 @@ const knownBad = [
   'cs16-v0.0.0.css',
   'css-diner-v0.0.0.css',
   'css-social-buttons-v1.4.0.css',
+  'css-spinners-v2.2.0.css',
   'cssco-v1.1.0.css',
   'cssicon-v1.0.0.css',
   'cssplot-v0.0.0.css',
@@ -59,15 +56,16 @@ const knownBad = [
   'facebook-buttons-v1.0.0.css',
   'ff-ultima-v4.3.0.css',
   'finimalism-v12.0.0.css',
+  'firefox-one-v3.7.0.css',
   'firefox-uwp-style-v0.0.0.css',
   'flakes-v1.0.1.css',
+  'flex-layout-attribute-v1.0.3.css',
   'fluentbird-v1.1.2.css',
   'fomantic-v2.9.4.css',
   'font-awesome-v7.2.0.css',
   'foundation-v6.9.0.css',
   'freebies-v0.0.0.css',
   'furatto-v3.1.1.css',
-  'gallery-v1.0.2.css',
   'github-dark-v6.3.0.css',
   'github-markdown-v5.9.0.css',
   'github-windows-v0.6.0.css',
@@ -81,8 +79,11 @@ const knownBad = [
   'hint-v3.0.0.css',
   'holmes-v6.8.12.css',
   'hover-buttons-v0.15.0.css',
+  'html-sheets-of-paper-v0.0.0.css',
   'hugo-universal-theme-v1.4.1.css',
   'jupyter-themes-v0.20.0.css',
+  'kickoff-v8.0.0.css',
+  'knacss-v8.2.0.css',
   'littlebox-v0.0.4.css',
   'load-awesome-v1.1.0.css',
   'loaders-v0.1.2.css',
@@ -91,39 +92,48 @@ const knownBad = [
   'markdown-css-v0.0.0.css',
   'material-for-bootstrap-v4.1.1.css',
   'microsoft-metro-buttons-v1.2.0.css',
+  'microtip-v0.2.2.css',
   'mini-v3.0.1.css',
   'missing-v1.3.0.css',
   'mobi-v3.1.1.css',
   'mocka-v1.0.1.css',
+  'mvcss-v4.1.0.css',
   'mvp-v1.17.3.css',
+  'my-internet-v1.0.0.css',
   'nes-v2.3.0.css',
+  'normalize-v8.0.1.css',
   'object-fit-polyfill-v0.3.4.css',
   'obsidian-colored-sidebar-v2.0.0.css',
   'obsidian-modular-css-layout-v0.10.0.css',
   'obsidian-notebook-themes-v2.2.3.css',
   'off-canvas-menu-effects-v0.0.0.css',
   'orbit-v1.4.11.css',
-  'patternbolt-v0.0.0.css',
   'patternfly-v6.5.2.css',
   'phonon-v1.5.1.css',
   'photon-v0.1.2.css',
   'picnic-v7.1.0.css',
   'pico-v2.1.1.css',
   'pills-v1.0.1.css',
+  'portfolio-template-v0.0.0.css',
   'preboot-v2.0.0.css',
   'pretty-checkbox-v3.0.3.css',
+  'progress-tracker-v3.0.0.css',
   'proxmorph-v2.7.3.css',
   'pure-v3.0.0.css',
   'ratchet-v2.0.2.css',
+  'reset-v1.0.2.css',
   'responsive-4-v4.1.4.css',
   'responsive-5-v5.0.0.css',
+  'ress-v5.0.2.css',
   'rippleui-v1.12.1.css',
+  'sanitize-v13.0.0.css',
   'sapc-apca-v0.0.0.css',
   'semantic-v2.5.0.css',
   'shards-v3.0.0.css',
   'shina-fox-v0.1.0.css',
   'sierra-v3.5.0.css',
   'simple-v2.3.7.css',
+  'simptip-v1.0.4.css',
   'slitslider-v1.1.0.css',
   'social-signin-buttons-v0.0.0.css',
   'spectre-v0.5.9.css',
@@ -140,9 +150,9 @@ const knownBad = [
   'tachyons-v4.12.0.css',
   'tailwind-cards-v0.0.0.css',
   'tailwind-v2.2.19.css',
+  'tent-v1.4.3.css',
   'the-50-front-end-project-44-v0.0.0.css',
   'tocas-v5.7.0.css',
-  'tooltip-twispy-v1.0.6.css',
   'tootik-v1.0.2.css',
   'tufte-v1.8.0.css',
   'tui-v2.1.2.css',
@@ -151,6 +161,7 @@ const knownBad = [
   'unfold-v0.0.0.css',
   'universal-v0.0.0.css',
   'uswds-v3.13.0.css',
+  'vim-css3-syntax-v2.10.0.css',
   'vitepress-v1.6.4.css',
   'voxels-v1.0.0.css',
   'w3css-v4.10.0.css',
@@ -162,11 +173,10 @@ const knownBad = [
   'windows-98-v0.0.1.css',
   'wtf-forms-v2.2.0.css',
   'yacy-v4.1.2.css',
-  'yue-v1.1.1.css',
-  'zotero-dark-theme-v0.0.0.css'
+  'yue-v1.1.1.css'
 ];
 
-const foundBad = [];
+let foundBad = [];
 
 /**
  * Runs the idempotency test.
@@ -204,6 +214,9 @@ function run () {
     }
   }
 
+  foundBad = Array.from(new Set(foundBad));
+  foundBad = foundBad.sort();
+
   if (!foundBad.length) {
     console.log('Idempotency passed');
   } else if (foundBad.length === 1) {
@@ -211,7 +224,7 @@ function run () {
     console.log(foundBad);
   } else {
     console.log(foundBad.length + ' files failed idempotency');
-    console.log(foundBad);
+    console.log(JSON.stringify(foundBad, null, 2));
   }
 }
 
