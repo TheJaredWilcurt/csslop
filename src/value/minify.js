@@ -7,6 +7,7 @@ import {
   findMatchingParenthesis,
   skipParenthesizedGroup,
   skipQuotedString,
+  splitTopLevelComponents,
   startsUrlToken
 } from '../parser/source-search.js';
 import { tokenizeCssValue } from '../parser/tokenizer.js';
@@ -1606,7 +1607,12 @@ function applyPropertyOptimizations (val, property, urlTokens) {
   // Shorthands: margin, padding, border-width, border-style, border-color, inset
   // Check if property supports box-model shorthand collapsing (4 → 3 → 2 → 1 values)
   if (/^(margin|padding|inset|border-width|border-style|border-color|gap|overflow)$/.test(property)) {
-    val = collapseShorthandParts(val.split(' ')).join(' ');
+    // Split components instead of splitting on spaces, so values that legally
+    // touch, like the adjacent hex colors of `#ddd#ddd`, count separately
+    val = collapseShorthandParts(splitTopLevelComponents(val))
+      .join(' ')
+      // A hash token may touch the component before it, so the separator space is not needed
+      .replace(/ #/g, '#');
   }
 
   if (property === 'hyphenate-limit-chars') {
