@@ -276,6 +276,143 @@ function stringifyAtRule (rule, context) {
   const separator = minifiedPrelude ? ' ' : '';
   return '@' + rule.name + separator + minifiedPrelude + '{' + body + '}';
 }
+
+/**
+ * Rewrites `:nth-*()` pseudo-classes into their shortest equivalent forms.
+ *
+ * @param  {string} selector  A selector with its whitespace already collapsed.
+ * @return {string}           The selector with simplified `:nth-*()` pseudo-classes.
+ */
+function simplifyNthPseudoClasses (selector) {
+  let minified = selector;
+  // Simplify :nth-child(2n+1) to :nth-child(odd)
+  minified = minified.replace(/:nth-child\(2n\s*\+\s*1\)/g, ':nth-child(odd)');
+  // Simplify :nth-child(2n+0) to :nth-child(2n)
+  minified = minified.replace(/:nth-child\(2n\s*\+\s*0\)/g, ':nth-child(2n)');
+  // Simplify :nth-child(1n) to :nth-child(n)
+  minified = minified.replace(/:nth-child\(1n\)/g, ':nth-child(n)');
+  // Remove unnecessary leading + sign from :nth-child()
+  minified = minified.replace(/:nth-child\(\+\s*(\d+)\)/g, ':nth-child($1)');
+  // Simplify :nth-child(0n+N) to :nth-child(N)
+  minified = minified.replace(/:nth-child\(0n\s*\+\s*(\d+)\)/g, ':nth-child($1)');
+  // Replace :nth-child(1) with :first-child
+  minified = minified.replace(/:nth-child\(1\)/g, ':first-child');
+  // Replace :nth-last-child(1) with :last-child
+  minified = minified.replace(/:nth-last-child\(1\)/g, ':last-child');
+  // Replace :nth-of-type(1) with :first-of-type
+  minified = minified.replace(/:nth-of-type\(1\)/g, ':first-of-type');
+  // Replace :nth-last-of-type(1) with :last-of-type
+  minified = minified.replace(/:nth-last-of-type\(1\)/g, ':last-of-type');
+  return minified;
+}
+
+/**
+ * Writes each attribute selector's value quoted or escaped, whichever is
+ * shorter, and removes the whitespace inside its brackets.
+ *
+ * @param  {string} selector  A selector with its whitespace already collapsed.
+ * @return {string}           The selector with minified attribute selectors.
+ */
+function minifyAttributeSelectors (selector) {
+  let minified = selector;
+  // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
+  minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
+    // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
+    let escaped = value.replace(/([ #.:/;])/g, '\\$1');
+    if (escaped.length < value.length + 2) {
+      return '[' + attribute + '=' + escaped + ']';
+    }
+    return '[' + attribute + '="' + value + '"]';
+  });
+  // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
+  minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
+    // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
+    let escaped = value.replace(/([ #.:/;])/g, '\\$1');
+    if (escaped.length < value.length + 2) {
+      return '[' + attribute + '=' + escaped + ']';
+    }
+    return '[' + attribute + '="' + value + '"]';
+  });
+  // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
+  minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
+    // Unescape special characters (spaces, #, ., :, /, ;) and compare with quoted form
+    let unescaped = value.replace(/\\([ #.:/;])/g, '$1');
+    if (unescaped.length + 2 < value.length) {
+      return '[' + attribute + '="' + unescaped + '"]';
+    }
+    return '[' + attribute + '=' + value + ']';
+  });
+  return minified;
+}
+
+/**
+ * Rewrites `:not()` pseudo-classes that negate a pseudo-class with a direct
+ * opposite, such as `:not(:enabled)`, into that opposite.
+ *
+ * @param  {string} selector  A selector with its whitespace already collapsed.
+ * @return {string}           The selector with simplified negations.
+ */
+function simplifyNegatedPseudoClasses (selector) {
+  let minified = selector;
+  // Minify logical combinations
+  // Replace :not(:invalid) with :valid, only directly after a form element type selector
+  minified = minified.replace(/(?<=\b(?:button|fieldset|form|input|select|textarea)):not\(:invalid\)/g, ':valid');
+  // Replace :not(:dir(ltr)) with :dir(rtl)
+  minified = minified.replace(/:not\(:dir\(ltr\)\)/g, ':dir(rtl)');
+  // Replace a double negation, :not(:not(X)), with the X it wraps
+  minified = minified.replace(/:not\(:not\((.*?)\)\)/g, '$1');
+  // Replace :not(:enabled) with :disabled
+  minified = minified.replace(/:not\(:enabled\)/g, ':disabled');
+  // Replace :not(:required) with :optional
+  minified = minified.replace(/:not\(:required\)/g, ':optional');
+  // Match a link element type selector at the start or after a combinator, with any attribute selectors and an optional :where( wrapper, followed by :not(:link)
+  minified = minified.replace(/(^|[\s,>+~])(a|area|link)(?:\[.*?\])*(?::where\()?:not\(:link\)\)?/g, (match) => {
+    return match.replace(':not(:link)', ':visited');
+  });
+  return minified;
+}
+
+/**
+ * Minifies a single selector's spacing, pseudo-classes, pseudo-elements, and
+ * attribute selectors. Most selectors hold none of the patterns a group of
+ * rewrites looks for, so each group only runs when its marker text is present.
+ *
+ * @param  {string} selector  A single selector from a rule's selector list.
+ * @return {string}           The minified selector.
+ */
+function minifySelector (selector) {
+  let minified = unescapeSelector(selector);
+  // Collapse whitespace to single space
+  minified = minified.replace(/\s+/g, ' ');
+  // Strip whitespace around selector combinators and commas
+  minified = minified.replace(/\s*([,>+~])\s*/g, '$1');
+  // Strip whitespace inside parentheses for pseudo-class arguments
+  minified = minified.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+  if (minified.includes(':nth-')) {
+    minified = simplifyNthPseudoClasses(minified);
+  }
+  if (minified.includes('::')) {
+    // Convert double-colon pseudo-elements to single-colon legacy form
+    minified = minified.replace(/::before/g, ':before');
+    minified = minified.replace(/::after/g, ':after');
+  }
+  if (minified.includes('*')) {
+    // Strip redundant universal selector `*` when it precedes an ID, class, or attribute selector
+    minified = minified.replace(/\*([#.[])/g, '$1');
+  }
+  if (minified.includes('[') && minified.includes('=')) {
+    minified = minifyAttributeSelectors(minified);
+  }
+  if (minified.includes(':not(')) {
+    minified = simplifyNegatedPseudoClasses(minified);
+  }
+  // Remove redundant leading "& " nesting selector
+  minified = minified.replace(/^& /, '');
+  minified = mergeAdjacentWherePseudoClasses(minified);
+  minified = minifyLanguageSelector(minified);
+  return minified;
+}
+
 /**
  * Converts a parsed CSS AST rule node into a minified CSS string, dispatching to specialized handlers for each rule type including selectors, `@media`, `@keyframes`, `@layer`, and other at-rules.
  *
@@ -305,82 +442,7 @@ function stringifyRule (rule, context) {
     if (rule.selectors?.length) {
       let uniqueSelectors = [...new Set(rule.selectors)];
       // Minify spacing within selectors (e.g. inside :is(), :where(), etc)
-      uniqueSelectors = uniqueSelectors.map((selector) => {
-        let minified = unescapeSelector(selector);
-        // Collapse whitespace to single space
-        minified = minified.replace(/\s+/g, ' ');
-        // Strip whitespace around selector combinators and commas
-        minified = minified.replace(/\s*([,>+~])\s*/g, '$1');
-        // Strip whitespace inside parentheses for pseudo-class arguments
-        minified = minified.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
-        // Simplify :nth-child(2n+1) to :nth-child(odd)
-        minified = minified.replace(/:nth-child\(2n\s*\+\s*1\)/g, ':nth-child(odd)');
-        // Simplify :nth-child(2n+0) to :nth-child(2n)
-        minified = minified.replace(/:nth-child\(2n\s*\+\s*0\)/g, ':nth-child(2n)');
-        // Simplify :nth-child(1n) to :nth-child(n)
-        minified = minified.replace(/:nth-child\(1n\)/g, ':nth-child(n)');
-        // Remove unnecessary leading + sign from :nth-child()
-        minified = minified.replace(/:nth-child\(\+\s*(\d+)\)/g, ':nth-child($1)');
-        // Simplify :nth-child(0n+N) to :nth-child(N)
-        minified = minified.replace(/:nth-child\(0n\s*\+\s*(\d+)\)/g, ':nth-child($1)');
-        // Replace :nth-child(1) with :first-child
-        minified = minified.replace(/:nth-child\(1\)/g, ':first-child');
-        // Replace :nth-last-child(1) with :last-child
-        minified = minified.replace(/:nth-last-child\(1\)/g, ':last-child');
-        // Replace :nth-of-type(1) with :first-of-type
-        minified = minified.replace(/:nth-of-type\(1\)/g, ':first-of-type');
-        // Replace :nth-last-of-type(1) with :last-of-type
-        minified = minified.replace(/:nth-last-of-type\(1\)/g, ':last-of-type');
-        // Convert double-colon pseudo-elements to single-colon legacy form
-        minified = minified.replace(/::before/g, ':before');
-        minified = minified.replace(/::after/g, ':after');
-
-        // Strip redundant universal selector `*` when it precedes an ID, class, or attribute selector
-        minified = minified.replace(/\*([#.[])/g, '$1');
-
-        // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
-        minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
-          let escaped = value.replace(/([ #.:/;])/g, '\\$1');
-          if (escaped.length < value.length + 2) {
-            return '[' + attribute + '=' + escaped + ']';
-          }
-          return '[' + attribute + '="' + value + '"]';
-        });
-        // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
-        minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
-          // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
-          let escaped = value.replace(/([ #.:/;])/g, '\\$1');
-          if (escaped.length < value.length + 2) {
-            return '[' + attribute + '=' + escaped + ']';
-          }
-          return '[' + attribute + '="' + value + '"]';
-        });
-        // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
-        minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
-          // Unescape special characters (spaces, #, ., :, /, ;) and compare with quoted form
-          let unescaped = value.replace(/\\([ #.:/;])/g, '$1');
-          if (unescaped.length + 2 < value.length) {
-            return '[' + attribute + '="' + unescaped + '"]';
-          }
-          return '[' + attribute + '=' + value + ']';
-        });
-
-        // Minify logical combinations
-        minified = minified.replace(/(?<=\b(?:button|fieldset|form|input|select|textarea)):not\(:invalid\)/g, ':valid');
-        minified = minified.replace(/:not\(:dir\(ltr\)\)/g, ':dir(rtl)');
-        minified = minified.replace(/:not\(:not\((.*?)\)\)/g, '$1');
-        minified = minified.replace(/:not\(:enabled\)/g, ':disabled');
-        minified = minified.replace(/:not\(:required\)/g, ':optional');
-        minified = minified.replace(/(^|[\s,>+~])(a|area|link)(?:\[.*?\])*(?::where\()?:not\(:link\)\)?/g, (match) => {
-          return match.replace(':not(:link)', ':visited');
-        });
-        // Remove redundant leading "& " nesting selector
-        minified = minified.replace(/^& /, '');
-        minified = mergeAdjacentWherePseudoClasses(minified);
-        minified = minifyLanguageSelector(minified);
-        return minified;
-      });
+      uniqueSelectors = uniqueSelectors.map(minifySelector);
       uniqueSelectors = combineLegacyAnySelectors(uniqueSelectors);
       // When this rule is a nesting parent, its whole selector list is treated
       // as :is() for the children's specificity, so a top-level :is() can be

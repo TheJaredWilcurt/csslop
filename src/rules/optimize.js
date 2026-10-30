@@ -12,7 +12,6 @@ import {
   splitTopLevelCommaList
 } from '../parser/source-search.js';
 import { tokenizeCssValue } from '../parser/tokenizer.js';
-import { escapeRegexString } from '../utilities.js';
 
 import {
   normalizeLayerNames,
@@ -248,34 +247,56 @@ function expandPureNestedRules (inputRules) {
 }
 
 /**
+ * Matches the part of a child selector that follows its parent when that part
+ * starts with an explicit combinator. Optional whitespace, then the combinator
+ * (`>`, `+`, or `~`) is captured, then optional whitespace, then the rest of
+ * the selector is captured.
+ *
+ * @type {RegExp}
+ */
+const LEADING_COMBINATOR_PATTERN = /^\s*([>+~])\s*(.+)$/;
+
+/**
+ * Expresses the part of a child selector that follows its parent as the
+ * selector it would be once nested inside that parent.
+ *
+ * @param  {string}      remainder  The child selector with the parent prefix removed.
+ * @return {string|null}            The nested selector, or null when the remainder cannot be nested.
+ */
+function nestSelectorRemainder (remainder) {
+  if (!remainder) {
+    return '&';
+  }
+  if (remainder.startsWith(':')) {
+    return '&' + remainder;
+  }
+  if (remainder.startsWith(' ')) {
+    return remainder.slice(1);
+  }
+  const combinatorMatch = remainder.match(LEADING_COMBINATOR_PATTERN);
+  if (combinatorMatch) {
+    return combinatorMatch[1] + combinatorMatch[2];
+  }
+  return null;
+}
+
+/**
  * Builds a reusable matcher that expresses child selectors as nested selectors
- * relative to one parent. The combinator pattern is compiled once per parent so
- * that testing many children against the same parent does not rebuild it.
+ * relative to one parent. Most children tested against a parent do not start
+ * with it at all, so that cheap prefix check runs before anything else.
  *
  * @param  {string}                          parentSelector  The parent selector string.
  * @return {function(string): (string|null)}                 A matcher returning the nested selector, or null when the child cannot be nested.
  */
 function createNestedSelectorMatcher (parentSelector) {
   const parent = parentSelector.trim();
-  // Match a child selector that starts with the parent followed by a combinator (>, +, ~)
-  const combinatorPattern = new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$');
 
   return (childSelector) => {
     const child = childSelector.trim();
-    if (child === parent) {
-      return '&';
+    if (!child.startsWith(parent)) {
+      return null;
     }
-    if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
-      return '&' + child.slice(parent.length);
-    }
-    if (child.startsWith(parent + ' ')) {
-      return child.slice(parent.length + 1);
-    }
-    const combinatorMatch = child.match(combinatorPattern);
-    if (combinatorMatch) {
-      return combinatorMatch[1] + combinatorMatch[2];
-    }
-    return null;
+    return nestSelectorRemainder(child.slice(parent.length));
   };
 }
 
@@ -760,7 +781,8 @@ function mergeMediaRules (rules, mergeSelectorRules) {
         result.push(rule);
       }
     } else {
-      if (rule.type !== 'whitespace') {
+      // Clearing a map replaces its storage, so an already empty one is left alone
+      if (rule.type !== 'whitespace' && mediaMap.size) {
         mediaMap.clear();
       }
       result.push(rule);
@@ -1009,10 +1031,38 @@ function mergeByDeclarations (rules) {
 function skipSelectorName (text, start) {
   let index = start;
   // Advance over identifier characters (letters, digits, hyphen, underscore)
-  while (index < text.length && (/[a-zA-Z0-9_-]/).test(text[index])) {
+  while (index < text.length && isSelectorNameCharacter(text.charCodeAt(index))) {
     index++;
   }
   return index;
+}
+
+/**
+ * Reports whether a character code is an ASCII letter.
+ *
+ * @param  {number}  characterCode  The UTF-16 code unit of the character.
+ * @return {boolean}                True for `a`-`z` and `A`-`Z`.
+ */
+function isAsciiLetter (characterCode) {
+  return (
+    (characterCode >= 97 && characterCode <= 122) ||
+    (characterCode >= 65 && characterCode <= 90)
+  );
+}
+
+/**
+ * Reports whether a character code can appear in a selector name, which here
+ * means an ASCII letter, digit, hyphen, or underscore. Comparing character
+ * codes avoids running a regular expression once per character.
+ *
+ * @param  {number}  characterCode  The UTF-16 code unit of the character.
+ * @return {boolean}                True when the character continues a name.
+ */
+function isSelectorNameCharacter (characterCode) {
+  const isDigit = characterCode >= 48 && characterCode <= 57;
+  const isHyphen = characterCode === 45;
+  const isUnderscore = characterCode === 95;
+  return isAsciiLetter(characterCode) || isDigit || isHyphen || isUnderscore;
 }
 
 /**
@@ -1095,7 +1145,7 @@ function computeSpecificity (selector) {
     } else if (character === '*' || character === '&') {
       // Universal selector and nesting selector add no counted specificity here
       index++;
-    } else if ((/[a-zA-Z]/).test(character)) {
+    } else if (isAsciiLetter(text.charCodeAt(index))) {
       specificity[2]++;
       index = skipSelectorName(text, index);
     } else {
@@ -1107,6 +1157,76 @@ function computeSpecificity (selector) {
 }
 
 /**
+ * Memoizes the strongest and weakest specificity of each selector list seen
+ * during the current stylesheet. The same rules are measured again on every
+ * merge pass, and a selector list always has the same specificity, so each
+ * distinct list is only split and scanned once per stylesheet.
+ *
+ * @type {Map<string, {strongest: Array, weakest: Array}>}
+ */
+const specificityRangeCache = new Map();
+
+/**
+ * Memoizes the normalized form of each selector seen during the current
+ * stylesheet.
+ *
+ * @type {Map<string, string>}
+ */
+const normalizedSelectorCache = new Map();
+
+/**
+ * Discards every memoized specificity and normalized selector. The minifier
+ * calls this around each stylesheet, so the caches do not outlive the pass that
+ * filled them.
+ */
+function clearSelectorCaches () {
+  specificityRangeCache.clear();
+  normalizedSelectorCache.clear();
+}
+
+/**
+ * Scans every selector of a comma-separated list for the strongest and the
+ * weakest specificity among them. The returned tuples are frozen because they
+ * are shared by everything that asks about the same list.
+ *
+ * @param  {string} selectorList  The selector list string.
+ * @return {object}               The `strongest` and `weakest` [ids, classes, types] tuples.
+ */
+function computeSpecificityRange (selectorList) {
+  let strongest = [0, 0, 0];
+  let weakest = null;
+  for (const selector of splitTopLevelCommaList(selectorList)) {
+    const specificity = computeSpecificity(selector);
+    if (compareSpecificity(specificity, strongest) > 0) {
+      strongest = specificity;
+    }
+    if (!weakest || compareSpecificity(specificity, weakest) < 0) {
+      weakest = specificity;
+    }
+  }
+  return {
+    strongest: Object.freeze(strongest),
+    weakest: Object.freeze(weakest || [0, 0, 0])
+  };
+}
+
+/**
+ * Returns the strongest and weakest specificity of a selector list, measuring
+ * it the first time it is asked about.
+ *
+ * @param  {string} selectorList  The selector list string.
+ * @return {object}               The `strongest` and `weakest` [ids, classes, types] tuples.
+ */
+function getSpecificityRange (selectorList) {
+  let range = specificityRangeCache.get(selectorList);
+  if (!range) {
+    range = computeSpecificityRange(selectorList);
+    specificityRangeCache.set(selectorList, range);
+  }
+  return range;
+}
+
+/**
  * Returns the maximum specificity tuple across a comma-separated selector list,
  * matching how a comma-separated group behaves as `:is()`.
  *
@@ -1114,14 +1234,7 @@ function computeSpecificity (selector) {
  * @return {Array}                The maximum [ids, classes, types] tuple.
  */
 function maxSelectorSpecificity (selectorList) {
-  let maximum = [0, 0, 0];
-  for (const selector of splitTopLevelCommaList(selectorList)) {
-    const specificity = computeSpecificity(selector);
-    if (compareSpecificity(specificity, maximum) > 0) {
-      maximum = specificity;
-    }
-  }
-  return maximum;
+  return getSpecificityRange(selectorList).strongest;
 }
 
 /**
@@ -1145,14 +1258,7 @@ function maximumRuleSpecificity (selectors) {
  * @return {Array}            The [ids, classes, types] specificity tuple.
  */
 function minimumRuleSpecificity (selectors) {
-  let minimum = null;
-  for (const selector of splitTopLevelCommaList((selectors || []).join(','))) {
-    const specificity = computeSpecificity(selector);
-    if (!minimum || compareSpecificity(specificity, minimum) < 0) {
-      minimum = specificity;
-    }
-  }
-  return minimum || [0, 0, 0];
+  return getSpecificityRange((selectors || []).join(',')).weakest;
 }
 
 /**
@@ -1431,11 +1537,11 @@ function absorbWriteProfile (profile, absorbedWrites) {
  * position grows, so the first entry past a queried position is also the
  * strongest one past it.
  *
- * @return {object} An index exposing `recordRule` and `blocksRelocation`.
+ * @param  {Map}    profileByRule  The write profiles already built for rules, shared by every pass of one merge.
+ * @return {object}                An index exposing `recordRule` and `blocksRelocation`.
  */
-function createOverrideIndex () {
+function createOverrideIndex (profileByRule) {
   const entriesByProperty = new Map();
-  const profileByRule = new Map();
 
   /**
    * Records that a property is written at a position with a given specificity.
@@ -1488,8 +1594,9 @@ function createOverrideIndex () {
 
   /**
    * Returns a rule's write profile, building it the first time it is needed.
-   * Rules only ever grow here, by absorbing another rule's declarations, so a
-   * profile stays valid for as long as the merge pass runs.
+   * Rules only ever grow here, by absorbing another rule's declarations, and
+   * `absorbRule` folds those into the profile, so a profile stays valid for
+   * every pass of the merge.
    *
    * @param  {object}           rule  The AST rule node.
    * @return {RuleWriteProfile}       The rule's write profile.
@@ -1582,6 +1689,24 @@ function buildSelectorKey (rule) {
     })
     .sort()
     .join(',');
+}
+
+/**
+ * Returns a rule's selector key, building it the first time it is needed. A
+ * merge only ever grows a rule's declarations, never its selectors, so a key
+ * stays valid for every pass of the merge.
+ *
+ * @param  {object} rule               The AST rule node.
+ * @param  {Map}    selectorKeyByRule  The selector keys already built, shared by every pass of one merge.
+ * @return {string}                    The normalized, order independent selector key.
+ */
+function getSelectorKey (rule, selectorKeyByRule) {
+  let selectorKey = selectorKeyByRule.get(rule);
+  if (selectorKey === undefined) {
+    selectorKey = buildSelectorKey(rule);
+    selectorKeyByRule.set(rule, selectorKey);
+  }
+  return selectorKey;
 }
 
 /**
@@ -1715,10 +1840,11 @@ function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPos
 /**
  * Merges rules with identical normalized selectors by combining their declarations, as long as `chooseMergePlacement` finds a spot for the combined rule that the cascade reads the same way. Non-rule entries that affect the cascade (like `@media`) break the merge window, while comments do not, since comments never influence how declarations apply.
  *
- * @param  {Array} rules  The AST rule nodes to merge.
- * @return {Array}        A new array of rules with same-selector rules combined.
+ * @param  {Array}  rules        The AST rule nodes to merge.
+ * @param  {object} mergeCaches  The write profiles and selector keys shared by every pass of one merge.
+ * @return {Array}               A new array of rules with same-selector rules combined.
  */
-function mergeSelectorRulePass (rules) {
+function mergeSelectorRulePass (rules, mergeCaches) {
   // A rule merged at the later of the two positions moves to the end of the
   // output. Its old slot is emptied instead of spliced out so that every
   // recorded position stays valid, and the position map locates that slot
@@ -1726,20 +1852,21 @@ function mergeSelectorRulePass (rules) {
   const slots = [];
   const positionByRule = new Map();
   const selectorMap = new Map();
-  const overrideIndex = createOverrideIndex();
+  const overrideIndex = createOverrideIndex(mergeCaches.profileByRule);
   for (const rule of rules) {
     if (rule.type === 'whitespace') {
       continue;
     }
     if (rule.type !== 'rule') {
       slots.push(rule);
-      if (rule.type !== 'comment') {
+      // Clearing a map replaces its storage, so already empty maps are left alone
+      if (rule.type !== 'comment' && selectorMap.size) {
         selectorMap.clear();
         positionByRule.clear();
       }
       continue;
     }
-    const selectorKey = buildSelectorKey(rule);
+    const selectorKey = getSelectorKey(rule, mergeCaches.selectorKeyByRule);
     const existingRule = selectorKey && selectorMap.get(selectorKey);
     if (existingRule) {
       const existingPosition = positionByRule.get(existingRule);
@@ -1782,11 +1909,15 @@ function mergeSelectorRulePass (rules) {
  * @return {Array}        Rules with all currently safe same-selector merges.
  */
 function mergeSelectorRules (rules) {
+  const mergeCaches = {
+    profileByRule: new Map(),
+    selectorKeyByRule: new Map()
+  };
   let previousRules = rules;
-  let mergedRules = mergeSelectorRulePass(previousRules);
+  let mergedRules = mergeSelectorRulePass(previousRules, mergeCaches);
   while (mergedRules.length < previousRules.length) {
     previousRules = mergedRules;
-    mergedRules = mergeSelectorRulePass(previousRules);
+    mergedRules = mergeSelectorRulePass(previousRules, mergeCaches);
   }
   return mergedRules;
 }
@@ -1841,13 +1972,33 @@ function mergeLayerRules (rules, mergeSelectorRules) {
  * @param  {string} selector  The raw selector string.
  * @return {string}           The normalized selector.
  */
-function normalizeSelector (selector) {
-  return selector
-    .trim()
-    .replace(/\s+/g, ' ')
+function computeNormalizedSelector (selector) {
+  // Collapse each whitespace run into a single space
+  const normalized = selector.trim().replace(/\s+/g, ' ');
+  if (!normalized.includes('::')) {
+    return normalized;
+  }
+  return normalized
     // Convert double-colon ::before/::after to single-colon legacy form
     .replace(/::before\b/g, ':before')
     .replace(/::after\b/g, ':after');
+}
+
+/**
+ * Normalizes a selector string for consistent comparison, reusing the result
+ * when the same selector was already normalized during this stylesheet. Every
+ * merge pass compares the same selectors again, so each is only rewritten once.
+ *
+ * @param  {string} selector  The raw selector string.
+ * @return {string}           The normalized selector.
+ */
+function normalizeSelector (selector) {
+  let normalized = normalizedSelectorCache.get(selector);
+  if (normalized === undefined) {
+    normalized = computeNormalizedSelector(selector);
+    normalizedSelectorCache.set(selector, normalized);
+  }
+  return normalized;
 }
 
 /**
@@ -2146,6 +2297,7 @@ function optimizeRuleList (rules) {
 }
 
 export {
+  clearSelectorCaches,
   deduplicateKeyframes,
   expandPureNestedRules,
   factorCommonParents,

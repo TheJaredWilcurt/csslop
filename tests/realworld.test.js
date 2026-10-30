@@ -57,18 +57,23 @@ function runAndReportRealWorldTests (verbose) {
     deleteOldMinifiedFiles(libraries);
 
     // Combine existing report data.
-    libraries = libraries.map((library) => {
-      const report = librariesReport.find((reportLibrary) => {
-        return (
-          reportLibrary.name === library.name &&
-          reportLibrary.version === library.version
-        );
+    libraries = libraries
+      .filter((library) => {
+        // return library.name.toLowerCase().includes('fomantic');
+        return library;
+      })
+      .map((library) => {
+        const report = librariesReport.find((reportLibrary) => {
+          return (
+            reportLibrary.name === library.name &&
+            reportLibrary.version === library.version
+          );
+        });
+        return {
+          ...library,
+          ...(report || {})
+        };
       });
-      return {
-        ...library,
-        ...(report || {})
-      };
-    });
     return libraries;
   }
 

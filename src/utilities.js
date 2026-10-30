@@ -19,19 +19,6 @@ function resolveUnicodeEscape (hex) {
   return String.fromCodePoint(codePoint);
 }
 
-/**
- * Escapes special regex metacharacters in a string so it can be safely used
- * as a literal pattern in a RegExp constructor.
- *
- * @param  {string} input  The string to escape.
- * @return {string}        The escaped string safe for use in a RegExp.
- */
-function escapeRegexString (input) {
-  // Escape all regex metacharacters: . * + ? ^ $ { } ( ) | [ ] backslash
-  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 export {
-  escapeRegexString,
   resolveUnicodeEscape
 };

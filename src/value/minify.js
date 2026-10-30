@@ -1766,12 +1766,25 @@ function computeMinifiedValue (declaration) {
  * Memoizes minified values for the current stylesheet. Minification runs many
  * passes over the same declarations (deduplication, shorthand assembly,
  * CSS-wide keyword hoisting, stringification), and the result only depends on
- * the declaration fields that make up the cache key, so each distinct
+ * the declaration's property, its value, and whether it is an assembled
+ * shorthand, so each distinct
  * property/value pair is minified once per stylesheet.
  *
- * @type {Map<string, string>}
+ * Values are filed under their property first, and assembled shorthands are
+ * kept apart from authored declarations, so a lookup reuses the property and
+ * value strings as they are instead of building a combined key on every call.
+ *
+ * @type {Map<string, Map<string, string>>}
  */
-const minifiedValueCache = new Map();
+const minifiedValuesByProperty = new Map();
+
+/**
+ * The memoized values of shorthands the minifier assembled itself, filed the
+ * same way as `minifiedValuesByProperty`.
+ *
+ * @type {Map<string, Map<string, string>>}
+ */
+const assembledMinifiedValuesByProperty = new Map();
 
 /**
  * Discards every memoized value. The minifier calls this at the start of each
@@ -1779,20 +1792,27 @@ const minifiedValueCache = new Map();
  * the cache should not outlive the pass that filled it.
  */
 function clearMinifiedValueCache () {
-  minifiedValueCache.clear();
+  minifiedValuesByProperty.clear();
+  assembledMinifiedValuesByProperty.clear();
 }
 
 /**
- * Builds the cache key for a declaration from every field the value minifier
- * reads. A null character cannot appear in a property name or in a parsed CSS
- * value, so it safely delimits the parts.
+ * Finds the memoized values for a declaration's property, creating the empty
+ * collection the first time the property is seen.
  *
- * @param  {object} declaration  The CSS declaration object.
- * @return {string}              The cache key.
+ * @param  {object}              declaration  The CSS declaration object.
+ * @return {Map<string, string>}              Map of value to its minified form for that property.
  */
-function createMinifiedValueCacheKey (declaration) {
-  const assembledFlag = declaration.isAssembledShorthand ? '1' : '0';
-  return declaration.property + '\u0000' + assembledFlag + '\u0000' + declaration.value;
+function getMinifiedValuesForProperty (declaration) {
+  const valuesByProperty = declaration.isAssembledShorthand ?
+    assembledMinifiedValuesByProperty :
+    minifiedValuesByProperty;
+  let minifiedValues = valuesByProperty.get(declaration.property);
+  if (!minifiedValues) {
+    minifiedValues = new Map();
+    valuesByProperty.set(declaration.property, minifiedValues);
+  }
+  return minifiedValues;
 }
 
 /**
@@ -1808,13 +1828,13 @@ function minifyValue (declaration) {
   if (typeof declaration.value !== 'string') {
     return computeMinifiedValue(declaration);
   }
-  const cacheKey = createMinifiedValueCacheKey(declaration);
-  const cachedValue = minifiedValueCache.get(cacheKey);
+  const minifiedValues = getMinifiedValuesForProperty(declaration);
+  const cachedValue = minifiedValues.get(declaration.value);
   if (cachedValue !== undefined) {
     return cachedValue;
   }
   const minifiedValue = computeMinifiedValue(declaration);
-  minifiedValueCache.set(cacheKey, minifiedValue);
+  minifiedValues.set(declaration.value, minifiedValue);
   return minifiedValue;
 }
 
