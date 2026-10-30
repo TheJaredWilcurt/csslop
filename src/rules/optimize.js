@@ -12,7 +12,6 @@ import {
   splitTopLevelCommaList
 } from '../parser/source-search.js';
 import { tokenizeCssValue } from '../parser/tokenizer.js';
-import { escapeRegexString } from '../utilities.js';
 
 import {
   normalizeLayerNames,
@@ -248,34 +247,56 @@ function expandPureNestedRules (inputRules) {
 }
 
 /**
+ * Matches the part of a child selector that follows its parent when that part
+ * starts with an explicit combinator. Optional whitespace, then the combinator
+ * (`>`, `+`, or `~`) is captured, then optional whitespace, then the rest of
+ * the selector is captured.
+ *
+ * @type {RegExp}
+ */
+const LEADING_COMBINATOR_PATTERN = /^\s*([>+~])\s*(.+)$/;
+
+/**
+ * Expresses the part of a child selector that follows its parent as the
+ * selector it would be once nested inside that parent.
+ *
+ * @param  {string}      remainder  The child selector with the parent prefix removed.
+ * @return {string|null}            The nested selector, or null when the remainder cannot be nested.
+ */
+function nestSelectorRemainder (remainder) {
+  if (!remainder) {
+    return '&';
+  }
+  if (remainder.startsWith(':')) {
+    return '&' + remainder;
+  }
+  if (remainder.startsWith(' ')) {
+    return remainder.slice(1);
+  }
+  const combinatorMatch = remainder.match(LEADING_COMBINATOR_PATTERN);
+  if (combinatorMatch) {
+    return combinatorMatch[1] + combinatorMatch[2];
+  }
+  return null;
+}
+
+/**
  * Builds a reusable matcher that expresses child selectors as nested selectors
- * relative to one parent. The combinator pattern is compiled once per parent so
- * that testing many children against the same parent does not rebuild it.
+ * relative to one parent. Most children tested against a parent do not start
+ * with it at all, so that cheap prefix check runs before anything else.
  *
  * @param  {string}                          parentSelector  The parent selector string.
  * @return {function(string): (string|null)}                 A matcher returning the nested selector, or null when the child cannot be nested.
  */
 function createNestedSelectorMatcher (parentSelector) {
   const parent = parentSelector.trim();
-  // Match a child selector that starts with the parent followed by a combinator (>, +, ~)
-  const combinatorPattern = new RegExp('^' + escapeRegexString(parent) + '\\s*([>+~])\\s*(.+)$');
 
   return (childSelector) => {
     const child = childSelector.trim();
-    if (child === parent) {
-      return '&';
+    if (!child.startsWith(parent)) {
+      return null;
     }
-    if (child.startsWith(parent + ':') || child.startsWith(parent + '::')) {
-      return '&' + child.slice(parent.length);
-    }
-    if (child.startsWith(parent + ' ')) {
-      return child.slice(parent.length + 1);
-    }
-    const combinatorMatch = child.match(combinatorPattern);
-    if (combinatorMatch) {
-      return combinatorMatch[1] + combinatorMatch[2];
-    }
-    return null;
+    return nestSelectorRemainder(child.slice(parent.length));
   };
 }
 
@@ -457,118 +478,249 @@ function nestFlatRules (rules) {
 }
 
 /**
- * Extracts the leading compound selector of a complex selector: everything up to
- * the first top-level combinator (descendant whitespace, `>`, `+`, or `~`).
- * Combinator characters nested inside `()` or `[]` (such as `:nth-child(2n+1)` or
- * `[a~=b]`) are ignored so only structural combinators split the selector.
+ * Splits a selector into the part before its final top-level combinator and
+ * the trailing compound that follows it, so selectors that only differ in
+ * that leading part can share the trailing compound through nesting.
  *
- * @param  {string}      selector  The selector string to inspect.
- * @return {string|null}           The leading compound selector, or null when the selector has no descendant part to factor out.
+ * @param  {string}      selector  The selector string to split.
+ * @return {object|null}           The `head`, `combinator` (`' '` for descendant), and `tail`, or null when the selector has no top-level combinator.
  */
-function extractLeadingCompound (selector) {
+function splitSelectorTail (selector) {
   const trimmed = selector.trim();
   let bracketDepth = 0;
+  let parenthesisDepth = 0;
+  let combinatorStart = -1;
+  let combinator = '';
+  let tailStart = -1;
   for (let index = 0; index < trimmed.length; index++) {
     const character = trimmed[index];
-    if (character === '(' || character === '[') {
+    if (character === '(') {
+      parenthesisDepth++;
+    } else if (character === ')') {
+      parenthesisDepth--;
+    } else if (character === '[') {
       bracketDepth++;
-    } else if (character === ')' || character === ']') {
+    } else if (character === ']') {
       bracketDepth--;
-    } else if (
-      bracketDepth === 0 &&
-      (character === ' ' || character === '>' || character === '+' || character === '~')
-    ) {
-      const compound = trimmed.slice(0, index).trim();
-      return compound.length ? compound : null;
+    } else if (parenthesisDepth === 0 && bracketDepth === 0) {
+      if (character === '>' || character === '+' || character === '~') {
+        // Whitespace written after an explicit combinator belongs to it
+        let end = index + 1;
+        while (end < trimmed.length && isSelectorWhitespace(trimmed[end])) {
+          end++;
+        }
+        combinator = character;
+        combinatorStart = index;
+        tailStart = end;
+        index = end - 1;
+      } else if (isSelectorWhitespace(character)) {
+        // Whitespace adjacent to an explicit combinator belongs to that
+        // combinator, so only a self-standing run is a descendant combinator
+        const previous = trimmed[index - 1];
+        let end = index;
+        while (end < trimmed.length && isSelectorWhitespace(trimmed[end])) {
+          end++;
+        }
+        const next = trimmed[end];
+        if (
+          next &&
+          next !== '>' && next !== '+' && next !== '~' &&
+          previous !== '>' && previous !== '+' && previous !== '~'
+        ) {
+          combinator = ' ';
+          combinatorStart = index;
+          tailStart = end;
+        }
+        index = end - 1;
+      }
     }
   }
-  return null;
+  if (!combinator || combinatorStart === 0) {
+    return null;
+  }
+  const head = trimmed.slice(0, combinatorStart).trim();
+  const tail = trimmed.slice(tailStart).trim();
+  if (!head || !tail) {
+    return null;
+  }
+  return {
+    combinator,
+    head,
+    tail
+  };
 }
 
 /**
- * Groups consecutive sibling rules that share a common leading compound selector
- * (such as `.foo` in `.foo .a`, `.foo .b`) into a synthesized parent rule with the
- * shared portion factored out, but only when nesting trims more characters from the
- * child selectors than the wrapper itself costs.
+ * Rewrites a multi-selector rule whose selectors only differ before their
+ * final combinator into a wrapper rule that nests the shared trailing
+ * compound once, such as `&:hover .x,&:focus .x` becoming
+ * `&:hover,&:focus{.x{...}}`. The heads join a comma list, which resolves
+ * like `:is()`, so they may only be grouped while they share one specificity.
  *
- * @param  {Array} rules  The flat AST rule nodes to factor.
- * @return {Array}        A new array of rules with shared parent selectors factored into nesting wrappers.
+ * @param  {object} rule  The AST rule node whose selector list may be factored.
+ * @return {object}       The rule, rewritten when factoring is valid and shorter.
  */
-function factorCommonParents (rules) {
+function factorCommonTrailingCompound (rule) {
+  if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
+    return rule;
+  }
+  const splitSelectors = rule.selectors.map(splitSelectorTail);
+  if (splitSelectors.some((split) => {
+    return split === null;
+  })) {
+    return rule;
+  }
+  const first = splitSelectors[0];
+  const allShareTrailingCompound = splitSelectors.every((split) => {
+    return split.tail === first.tail && split.combinator === first.combinator;
+  });
+  if (!allShareTrailingCompound) {
+    return rule;
+  }
+  const heads = splitSelectors.map((split) => {
+    return split.head;
+  });
+  if (!selectorsShareSpecificity(heads)) {
+    return rule;
+  }
+  const nestedSelector = first.combinator === ' ' ? first.tail : first.combinator + first.tail;
+  const flatLength = rule.selectors.join(',').length;
+  const factoredLength = heads.join(',').length + nestedSelector.length + 2;
+  if (factoredLength >= flatLength) {
+    return rule;
+  }
+  return {
+    ...rule,
+    selectors: heads,
+    declarations: [{
+      type: 'rule',
+      selectors: [nestedSelector],
+      declarations: rule.declarations
+    }]
+  };
+}
+
+/**
+ * Collects every selector prefix of a rule's first selector that could serve
+ * as a shared nesting parent, including the full selector itself, which can
+ * host sibling pseudo-class variants such as `.a` of `.a,.a:hover`.
+ *
+ * @param  {object} rule  The AST rule node whose candidates are collected.
+ * @return {Set}          The candidate parent selector strings.
+ */
+function collectSharedParentCandidates (rule) {
+  const firstSelector = rule.selectors[0].trim();
+  const candidates = collectCandidateParentSelectors(firstSelector);
+  if (firstSelector) {
+    candidates.add(firstSelector);
+  }
+  return candidates;
+}
+
+/**
+ * Counts how many characters wrapping a run behind a shared parent selector
+ * saves: the parent is written once with its braces, and every wrapped
+ * selector shrinks to its nested form.
+ *
+ * @param  {Array}  run     The rules of the run paired with their nested selectors.
+ * @param  {string} parent  The shared parent selector string.
+ * @return {number}         The character savings of the wrapper, or a non-positive number when it costs more than it saves.
+ */
+function measureWrapperSavings (run, parent) {
+  const charactersSaved = run.reduce((total, entry) => {
+    return total + entry.sibling.selectors.reduce((sum, selector, position) => {
+      return sum + selector.trim().length - entry.nestedSelectors[position].length;
+    }, 0);
+  }, 0);
+  // The wrapper writes the shared selector once plus its surrounding braces.
+  return charactersSaved - (parent.length + 2);
+}
+
+/**
+ * Groups consecutive sibling rules that share a common leading selector
+ * portion (such as `.foo` in `.foo .a`, `.foo .b`, or `.menu .item` in
+ * `.menu .item:hover .x`) into a synthesized parent rule with the shared
+ * portion factored out. Every viable prefix of the first rule's selector is
+ * tried as the parent, and the grouping that saves the most characters wins,
+ * but only when it saves more than the wrapper itself costs. Rules with a
+ * comma-separated selector list can join a run when every one of their
+ * selectors nests under the parent.
+ *
+ * @param  {Array}   rules                  The flat AST rule nodes to factor.
+ * @param  {boolean} allowTrailingCompound  True when the rules are children of a factored wrapper, whose `&`-relative selectors may share a trailing compound that can be factored out in turn.
+ * @return {Array}                          A new array of rules with shared parent selectors factored into nesting wrappers.
+ */
+function factorCommonParents (rules, allowTrailingCompound = false) {
   const result = [];
   let index = 0;
   while (index < rules.length) {
     const rule = rules[index];
-    if (rule.type === 'rule' && rule.selectors?.length > 1) {
-      const candidateParent = extractLeadingCompound(rule.selectors[0]) || rule.selectors[0];
-      if (candidateParent) {
-        const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
-        const childSelectors = rule.selectors.map(matchNestedSelector);
-        const allMatch = childSelectors.every((selector) => {
-          return selector !== null;
-        });
-        const wrapperLength = candidateParent.length + 2 + childSelectors.join(',').length;
-        if (allMatch && !containsPseudoElement(candidateParent) && wrapperLength < rule.selectors.join(',').length) {
-          result.push({
-            type: 'rule',
-            selectors: [candidateParent],
-            declarations: [{ ...rule, selectors: childSelectors }]
-          });
-          index++;
-          continue;
+    if (rule.type !== 'rule' || !rule.selectors?.length) {
+      result.push(rule);
+      index++;
+      continue;
+    }
+    let bestGrouping = null;
+    for (const candidateParent of collectSharedParentCandidates(rule)) {
+      if (!candidateParent || containsPseudoElement(candidateParent)) {
+        continue;
+      }
+      const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
+      // Collect the run of consecutive rules whose selectors can all nest under the candidate.
+      const run = [];
+      let lookahead = index;
+      while (lookahead < rules.length) {
+        const sibling = rules[lookahead];
+        if (sibling.type !== 'rule' || !sibling.selectors?.length) {
+          break;
         }
+        const nestedSelectors = sibling.selectors.map((selector) => {
+          return matchNestedSelector(selector.trim());
+        });
+        if (nestedSelectors.some((nestedSelector) => {
+          return nestedSelector === null;
+        })) {
+          break;
+        }
+        run.push({ sibling, nestedSelectors });
+        lookahead++;
+      }
+      const selectorCount = run.reduce((total, entry) => {
+        return total + entry.nestedSelectors.length;
+      }, 0);
+      // A lone single-selector rule has nothing to share its parent with.
+      if (run.length < 2 && selectorCount < 2) {
+        continue;
+      }
+      const savings = measureWrapperSavings(run, candidateParent);
+      if (savings > 0 && (!bestGrouping || savings > bestGrouping.savings)) {
+        bestGrouping = {
+          lookahead,
+          parent: candidateParent,
+          run,
+          savings
+        };
       }
     }
-    // Only single-selector style rules can act as a factoring candidate.
-    if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
-      result.push(rule);
+    if (!bestGrouping) {
+      if (allowTrailingCompound) {
+        result.push(factorCommonTrailingCompound(rule));
+      } else {
+        result.push(rule);
+      }
       index++;
       continue;
     }
-    const candidateParent = extractLeadingCompound(rule.selectors[0]);
-    if (candidateParent === null) {
-      result.push(rule);
-      index++;
-      continue;
-    }
-    // Collect the run of consecutive rules that can all nest under the candidate.
-    const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
-    const run = [];
-    const nestedForms = [];
-    let lookahead = index;
-    while (lookahead < rules.length) {
-      const sibling = rules[lookahead];
-      if (sibling.type !== 'rule' || sibling.selectors?.length !== 1) {
-        break;
-      }
-      const nestedSelector = matchNestedSelector(sibling.selectors[0]);
-      if (nestedSelector === null) {
-        break;
-      }
-      run.push(sibling);
-      nestedForms.push(nestedSelector);
-      lookahead++;
-    }
-    // The wrapper writes the shared selector once plus its surrounding braces.
-    const wrapperCost = candidateParent.length + 2;
-    const charactersSaved = run.reduce((total, sibling, position) => {
-      return total + sibling.selectors[0].trim().length - nestedForms[position].length;
-    }, 0);
-    if (run.length >= 2 && charactersSaved > wrapperCost) {
-      const children = run.map((sibling, position) => {
-        return { ...sibling, selectors: [nestedForms[position]] };
-      });
-      result.push({
-        type: 'rule',
-        selectors: [candidateParent],
-        // Recurse so deeper shared prefixes among the children also factor out.
-        declarations: factorCommonParents(children)
-      });
-      index = lookahead;
-    } else {
-      result.push(rule);
-      index++;
-    }
+    const children = bestGrouping.run.map((entry) => {
+      return { ...entry.sibling, selectors: entry.nestedSelectors };
+    });
+    result.push({
+      type: 'rule',
+      selectors: [bestGrouping.parent],
+      // Recurse so deeper shared prefixes among the children also factor out.
+      declarations: factorCommonParents(children, true)
+    });
+    index = bestGrouping.lookahead;
   }
   return result;
 }
@@ -629,7 +781,8 @@ function mergeMediaRules (rules, mergeSelectorRules) {
         result.push(rule);
       }
     } else {
-      if (rule.type !== 'whitespace') {
+      // Clearing a map replaces its storage, so an already empty one is left alone
+      if (rule.type !== 'whitespace' && mediaMap.size) {
         mediaMap.clear();
       }
       result.push(rule);
@@ -878,10 +1031,38 @@ function mergeByDeclarations (rules) {
 function skipSelectorName (text, start) {
   let index = start;
   // Advance over identifier characters (letters, digits, hyphen, underscore)
-  while (index < text.length && (/[a-zA-Z0-9_-]/).test(text[index])) {
+  while (index < text.length && isSelectorNameCharacter(text.charCodeAt(index))) {
     index++;
   }
   return index;
+}
+
+/**
+ * Reports whether a character code is an ASCII letter.
+ *
+ * @param  {number}  characterCode  The UTF-16 code unit of the character.
+ * @return {boolean}                True for `a`-`z` and `A`-`Z`.
+ */
+function isAsciiLetter (characterCode) {
+  return (
+    (characterCode >= 97 && characterCode <= 122) ||
+    (characterCode >= 65 && characterCode <= 90)
+  );
+}
+
+/**
+ * Reports whether a character code can appear in a selector name, which here
+ * means an ASCII letter, digit, hyphen, or underscore. Comparing character
+ * codes avoids running a regular expression once per character.
+ *
+ * @param  {number}  characterCode  The UTF-16 code unit of the character.
+ * @return {boolean}                True when the character continues a name.
+ */
+function isSelectorNameCharacter (characterCode) {
+  const isDigit = characterCode >= 48 && characterCode <= 57;
+  const isHyphen = characterCode === 45;
+  const isUnderscore = characterCode === 95;
+  return isAsciiLetter(characterCode) || isDigit || isHyphen || isUnderscore;
 }
 
 /**
@@ -964,7 +1145,7 @@ function computeSpecificity (selector) {
     } else if (character === '*' || character === '&') {
       // Universal selector and nesting selector add no counted specificity here
       index++;
-    } else if ((/[a-zA-Z]/).test(character)) {
+    } else if (isAsciiLetter(text.charCodeAt(index))) {
       specificity[2]++;
       index = skipSelectorName(text, index);
     } else {
@@ -976,6 +1157,76 @@ function computeSpecificity (selector) {
 }
 
 /**
+ * Memoizes the strongest and weakest specificity of each selector list seen
+ * during the current stylesheet. The same rules are measured again on every
+ * merge pass, and a selector list always has the same specificity, so each
+ * distinct list is only split and scanned once per stylesheet.
+ *
+ * @type {Map<string, {strongest: Array, weakest: Array}>}
+ */
+const specificityRangeCache = new Map();
+
+/**
+ * Memoizes the normalized form of each selector seen during the current
+ * stylesheet.
+ *
+ * @type {Map<string, string>}
+ */
+const normalizedSelectorCache = new Map();
+
+/**
+ * Discards every memoized specificity and normalized selector. The minifier
+ * calls this around each stylesheet, so the caches do not outlive the pass that
+ * filled them.
+ */
+function clearSelectorCaches () {
+  specificityRangeCache.clear();
+  normalizedSelectorCache.clear();
+}
+
+/**
+ * Scans every selector of a comma-separated list for the strongest and the
+ * weakest specificity among them. The returned tuples are frozen because they
+ * are shared by everything that asks about the same list.
+ *
+ * @param  {string} selectorList  The selector list string.
+ * @return {object}               The `strongest` and `weakest` [ids, classes, types] tuples.
+ */
+function computeSpecificityRange (selectorList) {
+  let strongest = [0, 0, 0];
+  let weakest = null;
+  for (const selector of splitTopLevelCommaList(selectorList)) {
+    const specificity = computeSpecificity(selector);
+    if (compareSpecificity(specificity, strongest) > 0) {
+      strongest = specificity;
+    }
+    if (!weakest || compareSpecificity(specificity, weakest) < 0) {
+      weakest = specificity;
+    }
+  }
+  return {
+    strongest: Object.freeze(strongest),
+    weakest: Object.freeze(weakest || [0, 0, 0])
+  };
+}
+
+/**
+ * Returns the strongest and weakest specificity of a selector list, measuring
+ * it the first time it is asked about.
+ *
+ * @param  {string} selectorList  The selector list string.
+ * @return {object}               The `strongest` and `weakest` [ids, classes, types] tuples.
+ */
+function getSpecificityRange (selectorList) {
+  let range = specificityRangeCache.get(selectorList);
+  if (!range) {
+    range = computeSpecificityRange(selectorList);
+    specificityRangeCache.set(selectorList, range);
+  }
+  return range;
+}
+
+/**
  * Returns the maximum specificity tuple across a comma-separated selector list,
  * matching how a comma-separated group behaves as `:is()`.
  *
@@ -983,14 +1234,7 @@ function computeSpecificity (selector) {
  * @return {Array}                The maximum [ids, classes, types] tuple.
  */
 function maxSelectorSpecificity (selectorList) {
-  let maximum = [0, 0, 0];
-  for (const selector of splitTopLevelCommaList(selectorList)) {
-    const specificity = computeSpecificity(selector);
-    if (compareSpecificity(specificity, maximum) > 0) {
-      maximum = specificity;
-    }
-  }
-  return maximum;
+  return getSpecificityRange(selectorList).strongest;
 }
 
 /**
@@ -1014,14 +1258,7 @@ function maximumRuleSpecificity (selectors) {
  * @return {Array}            The [ids, classes, types] specificity tuple.
  */
 function minimumRuleSpecificity (selectors) {
-  let minimum = null;
-  for (const selector of splitTopLevelCommaList((selectors || []).join(','))) {
-    const specificity = computeSpecificity(selector);
-    if (!minimum || compareSpecificity(specificity, minimum) < 0) {
-      minimum = specificity;
-    }
-  }
-  return minimum || [0, 0, 0];
+  return getSpecificityRange((selectors || []).join(',')).weakest;
 }
 
 /**
@@ -1300,11 +1537,11 @@ function absorbWriteProfile (profile, absorbedWrites) {
  * position grows, so the first entry past a queried position is also the
  * strongest one past it.
  *
- * @return {object} An index exposing `recordRule` and `blocksRelocation`.
+ * @param  {Map}    profileByRule  The write profiles already built for rules, shared by every pass of one merge.
+ * @return {object}                An index exposing `recordRule` and `blocksRelocation`.
  */
-function createOverrideIndex () {
+function createOverrideIndex (profileByRule) {
   const entriesByProperty = new Map();
-  const profileByRule = new Map();
 
   /**
    * Records that a property is written at a position with a given specificity.
@@ -1357,8 +1594,9 @@ function createOverrideIndex () {
 
   /**
    * Returns a rule's write profile, building it the first time it is needed.
-   * Rules only ever grow here, by absorbing another rule's declarations, so a
-   * profile stays valid for as long as the merge pass runs.
+   * Rules only ever grow here, by absorbing another rule's declarations, and
+   * `absorbRule` folds those into the profile, so a profile stays valid for
+   * every pass of the merge.
    *
    * @param  {object}           rule  The AST rule node.
    * @return {RuleWriteProfile}       The rule's write profile.
@@ -1451,6 +1689,24 @@ function buildSelectorKey (rule) {
     })
     .sort()
     .join(',');
+}
+
+/**
+ * Returns a rule's selector key, building it the first time it is needed. A
+ * merge only ever grows a rule's declarations, never its selectors, so a key
+ * stays valid for every pass of the merge.
+ *
+ * @param  {object} rule               The AST rule node.
+ * @param  {Map}    selectorKeyByRule  The selector keys already built, shared by every pass of one merge.
+ * @return {string}                    The normalized, order independent selector key.
+ */
+function getSelectorKey (rule, selectorKeyByRule) {
+  let selectorKey = selectorKeyByRule.get(rule);
+  if (selectorKey === undefined) {
+    selectorKey = buildSelectorKey(rule);
+    selectorKeyByRule.set(rule, selectorKey);
+  }
+  return selectorKey;
 }
 
 /**
@@ -1584,10 +1840,11 @@ function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPos
 /**
  * Merges rules with identical normalized selectors by combining their declarations, as long as `chooseMergePlacement` finds a spot for the combined rule that the cascade reads the same way. Non-rule entries that affect the cascade (like `@media`) break the merge window, while comments do not, since comments never influence how declarations apply.
  *
- * @param  {Array} rules  The AST rule nodes to merge.
- * @return {Array}        A new array of rules with same-selector rules combined.
+ * @param  {Array}  rules        The AST rule nodes to merge.
+ * @param  {object} mergeCaches  The write profiles and selector keys shared by every pass of one merge.
+ * @return {Array}               A new array of rules with same-selector rules combined.
  */
-function mergeSelectorRulePass (rules) {
+function mergeSelectorRulePass (rules, mergeCaches) {
   // A rule merged at the later of the two positions moves to the end of the
   // output. Its old slot is emptied instead of spliced out so that every
   // recorded position stays valid, and the position map locates that slot
@@ -1595,20 +1852,21 @@ function mergeSelectorRulePass (rules) {
   const slots = [];
   const positionByRule = new Map();
   const selectorMap = new Map();
-  const overrideIndex = createOverrideIndex();
+  const overrideIndex = createOverrideIndex(mergeCaches.profileByRule);
   for (const rule of rules) {
     if (rule.type === 'whitespace') {
       continue;
     }
     if (rule.type !== 'rule') {
       slots.push(rule);
-      if (rule.type !== 'comment') {
+      // Clearing a map replaces its storage, so already empty maps are left alone
+      if (rule.type !== 'comment' && selectorMap.size) {
         selectorMap.clear();
         positionByRule.clear();
       }
       continue;
     }
-    const selectorKey = buildSelectorKey(rule);
+    const selectorKey = getSelectorKey(rule, mergeCaches.selectorKeyByRule);
     const existingRule = selectorKey && selectorMap.get(selectorKey);
     if (existingRule) {
       const existingPosition = positionByRule.get(existingRule);
@@ -1651,11 +1909,15 @@ function mergeSelectorRulePass (rules) {
  * @return {Array}        Rules with all currently safe same-selector merges.
  */
 function mergeSelectorRules (rules) {
+  const mergeCaches = {
+    profileByRule: new Map(),
+    selectorKeyByRule: new Map()
+  };
   let previousRules = rules;
-  let mergedRules = mergeSelectorRulePass(previousRules);
+  let mergedRules = mergeSelectorRulePass(previousRules, mergeCaches);
   while (mergedRules.length < previousRules.length) {
     previousRules = mergedRules;
-    mergedRules = mergeSelectorRulePass(previousRules);
+    mergedRules = mergeSelectorRulePass(previousRules, mergeCaches);
   }
   return mergedRules;
 }
@@ -1710,13 +1972,33 @@ function mergeLayerRules (rules, mergeSelectorRules) {
  * @param  {string} selector  The raw selector string.
  * @return {string}           The normalized selector.
  */
-function normalizeSelector (selector) {
-  return selector
-    .trim()
-    .replace(/\s+/g, ' ')
+function computeNormalizedSelector (selector) {
+  // Collapse each whitespace run into a single space
+  const normalized = selector.trim().replace(/\s+/g, ' ');
+  if (!normalized.includes('::')) {
+    return normalized;
+  }
+  return normalized
     // Convert double-colon ::before/::after to single-colon legacy form
     .replace(/::before\b/g, ':before')
     .replace(/::after\b/g, ':after');
+}
+
+/**
+ * Normalizes a selector string for consistent comparison, reusing the result
+ * when the same selector was already normalized during this stylesheet. Every
+ * merge pass compares the same selectors again, so each is only rewritten once.
+ *
+ * @param  {string} selector  The raw selector string.
+ * @return {string}           The normalized selector.
+ */
+function normalizeSelector (selector) {
+  let normalized = normalizedSelectorCache.get(selector);
+  if (normalized === undefined) {
+    normalized = computeNormalizedSelector(selector);
+    normalizedSelectorCache.set(selector, normalized);
+  }
+  return normalized;
 }
 
 /**
@@ -2015,6 +2297,7 @@ function optimizeRuleList (rules) {
 }
 
 export {
+  clearSelectorCaches,
   deduplicateKeyframes,
   expandPureNestedRules,
   factorCommonParents,

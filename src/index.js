@@ -23,7 +23,10 @@ import {
 import { preprocessDeclarationBlocks } from './preprocess.js';
 import { combineLanguageSelectors } from './rules/lang.js';
 import { normalizeRuleSelectors } from './rules/normalize.js';
-import { optimizeRuleList } from './rules/optimize.js';
+import {
+  clearSelectorCaches,
+  optimizeRuleList
+} from './rules/optimize.js';
 import { combineLegacyAnySelectors } from './rules/selectors.js';
 import {
   removeRedundantLayerStatementSemicolon,
@@ -137,14 +140,15 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
 
 /**
  * Prepares the module-level state a single minification pass relies on: the
- * active charset, and an empty value cache, since a value memoized under a
- * different charset may no longer minify the same way.
+ * active charset, and empty value and selector caches, since a value
+ * memoized under a different charset may no longer minify the same way.
  *
  * @param {string} charset  The `@charset` value detected in the source.
  */
 function beginMinificationPass (charset) {
   setActiveCharset(charset);
   clearMinifiedValueCache();
+  clearSelectorCaches();
 }
 
 /**
@@ -154,6 +158,7 @@ function beginMinificationPass (charset) {
 function endMinificationPass () {
   clearActiveCharset();
   clearMinifiedValueCache();
+  clearSelectorCaches();
 }
 
 /**

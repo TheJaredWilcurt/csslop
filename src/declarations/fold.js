@@ -7,9 +7,13 @@ import { splitTopLevelComponents } from '../parser/source-search.js';
 import {
   CSS_WIDE_KEYWORDS,
   expandToLeafProperties,
+  getLonghandsOf,
   shorthandMap
 } from './config.js';
-import { describeDeclaration } from './lookup.js';
+import {
+  collectDeclaredProperties,
+  describeDeclaration
+} from './lookup.js';
 import { canMergeVarValue } from './merge.js';
 import { buildShorthandValue } from './shorthand-values.js';
 
@@ -107,7 +111,7 @@ function belongsToFamily (property, familyWords) {
  * @return {FoldCandidate|null}                The declarations to fold, or null when there are none.
  */
 function findFoldCandidate (declarations, shorthandName) {
-  const longhandProperties = new Set(shorthandMap[shorthandName]);
+  const longhandProperties = getLonghandsOf(shorthandName);
   const shorthandEntries = [];
   const overrideEntries = [];
   const overriddenProperties = new Set();
@@ -332,9 +336,15 @@ function foldOverridesIntoShorthand (declarations, shorthandName, context) {
  * @return {Array}                The declarations, with eligible families folded.
  */
 function foldLonghandOverridesIntoShorthands (declarations, context) {
+  // A fold only ever rewrites its own shorthand and drops that shorthand's
+  // longhands, so the shorthands a rule declares are gathered once up front,
+  // and every family without its shorthand present is skipped.
+  const declaredProperties = collectDeclaredProperties(declarations);
   let result = declarations;
   for (const shorthandName of POSITIONAL_SHORTHAND_NAMES) {
-    result = foldOverridesIntoShorthand(result, shorthandName, context);
+    if (declaredProperties.has(shorthandName)) {
+      result = foldOverridesIntoShorthand(result, shorthandName, context);
+    }
   }
   return result;
 }

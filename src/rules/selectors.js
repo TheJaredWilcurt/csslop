@@ -33,6 +33,11 @@ const COMPOUND_SELECTOR_BOUNDARIES = '>+~ \t\n\r\f';
  * @return {number}               The index of the next top-level occurrence, or -1 if none remains.
  */
 function findNextFunctionCallOutsideStrings (text, functionCall, start) {
+  // A token that appears nowhere in the selector cannot appear at its top
+  // level either, and one search rules that out without walking every character
+  if (!text.toLowerCase().includes(functionCall)) {
+    return -1;
+  }
   let index = start;
   while (index < text.length) {
     const character = text[index];
@@ -655,6 +660,10 @@ function readWholeSelectorIsParts (selector) {
  * @return {Array}                        An array of one or more processed selector strings.
  */
 function processIsSelector (selector, hasSiblingSelectors) {
+  // Every rewrite below starts from an `:is(`, so a selector without one is left as it is
+  if (!selector.toLowerCase().includes(':is(')) {
+    return [selector];
+  }
   // Replace :is(:link,:visited) and :is(:visited,:link) with :any-link
   selector = selector.replace(/:is\(:link,:visited\)/g, ':any-link');
   selector = selector.replace(/:is\(:visited,:link\)/g, ':any-link');

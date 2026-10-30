@@ -39,6 +39,57 @@ import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
 const MIXED_IMPORTANT_SHORTHANDS = new Set(['margin', 'padding', 'inset']);
 
 /**
+ * Every shorthand paired with its longhands, in declaration order. The
+ * shorthand tables never change, so the pairs are listed once rather than on
+ * every pass over every rule.
+ *
+ * @type {Array}
+ */
+const SHORTHAND_ENTRIES = Object.entries(shorthandMap);
+
+/**
+ * Lists, for each longhand, every shorthand it belongs to.
+ *
+ * @return {Map<string, Array<string>>} Map of longhand name to the shorthand names that include it.
+ */
+function indexShorthandsByLonghand () {
+  const shorthandsByLonghand = new Map();
+  for (const [shorthand, longhands] of SHORTHAND_ENTRIES) {
+    for (const longhand of longhands) {
+      const shorthands = shorthandsByLonghand.get(longhand) || [];
+      shorthands.push(shorthand);
+      shorthandsByLonghand.set(longhand, shorthands);
+    }
+  }
+  return shorthandsByLonghand;
+}
+
+/**
+ * The shorthands each longhand belongs to. The shorthand tables never change,
+ * so the index is built once.
+ *
+ * @type {Map<string, Array<string>>}
+ */
+const SHORTHANDS_BY_LONGHAND = indexShorthandsByLonghand();
+
+/**
+ * Collects the shorthands a rule declares at least one longhand of, which are
+ * the only shorthands that could be assembled from its declarations.
+ *
+ * @param  {Set} declaredProperties  The property names the rule currently declares.
+ * @return {Set}                     The names of the shorthands worth trying.
+ */
+function collectCandidateShorthands (declaredProperties) {
+  const candidateShorthands = new Set();
+  for (const property of declaredProperties) {
+    for (const shorthand of SHORTHANDS_BY_LONGHAND.get(property) || []) {
+      candidateShorthands.add(shorthand);
+    }
+  }
+  return candidateShorthands;
+}
+
+/**
  * Functions and syntaxes that an older browser fails to parse, which makes it
  * discard the whole declaration and use the preceding one for that property
  * instead. An earlier declaration in front of one of these is therefore an
@@ -386,20 +437,22 @@ function mergeLonghandsIntoShorthands (declarations, context) {
     // set of declared properties is gathered once per pass rather than rescanned
     // for each of the dozens of shorthand families.
     const declaredProperties = collectDeclaredProperties(result);
+    // Most rules declare none of a given shorthand's longhands, so those
+    // shorthands are skipped before any of their merge checks run.
+    const candidateShorthands = collectCandidateShorthands(declaredProperties);
 
-    for (const [shorthand, longhands] of Object.entries(shorthandMap)) {
-      if (declaredProperties.has(shorthand)) {
+    for (const [shorthand, longhands] of SHORTHAND_ENTRIES) {
+      if (!candidateShorthands.has(shorthand) || declaredProperties.has(shorthand)) {
+        continue;
+      }
+      const mergeableProperties = getMergeProps(shorthand, longhands, declaredProperties);
+      if (!mergeableProperties) {
         continue;
       }
       // Assembling a shorthand also resets the properties it cannot express, so
       // a rule only collapses into one when nothing else in the stylesheet
       // relies on a value that reset would discard.
       if (resetsPropertyDeclaredElsewhere(shorthand, declaredProperties, context)) {
-        continue;
-      }
-
-      const mergeableProperties = getMergeProps(shorthand, longhands, declaredProperties);
-      if (!mergeableProperties) {
         continue;
       }
       const mergeablePropertySet = new Set(mergeableProperties);

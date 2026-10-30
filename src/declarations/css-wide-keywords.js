@@ -2,6 +2,8 @@
  * @file Rewrites longhand declarations that share a CSS-wide keyword into a shorthand carrying that keyword, followed by the longhands that override it.
  */
 
+import { minifyValue } from '../value/minify.js';
+
 import {
   CSS_WIDE_KEYWORDS,
   expandToLeafProperties,
@@ -14,6 +16,14 @@ import {
   describeDeclaration
 } from './lookup.js';
 import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
+
+/**
+ * Every shorthand name, in declaration order. The shorthand tables never
+ * change, so the names are listed once rather than once per rule.
+ *
+ * @type {Array<string>}
+ */
+const SHORTHAND_NAMES = Object.keys(shorthandMap);
 
 /**
  * Checks whether a group of longhands sets every leaf longhand that the
@@ -228,6 +238,29 @@ function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredPr
 }
 
 /**
+ * Checks whether any declaration of a rule could be set to a CSS-wide keyword.
+ * Every rewrite needs a longhand holding one, and a rewrite only adds the
+ * keyword that was already there, so a rule without any has nothing to hoist
+ * and every shorthand family can be skipped at once. A value that is not a
+ * string cannot be judged here, so it is assumed to hold a keyword.
+ *
+ * @param  {Array}   declarations  The declarations of a single rule.
+ * @return {boolean}               False when no declaration holds a CSS-wide keyword.
+ */
+function mayDeclareCssWideKeyword (declarations) {
+  return declarations.some((declaration) => {
+    if (!declaration.property) {
+      return false;
+    }
+    if (typeof declaration.value !== 'string') {
+      return true;
+    }
+    const value = minifyValue(declaration).replace('!important', '').trim();
+    return CSS_WIDE_KEYWORDS.has(value.toLowerCase());
+  });
+}
+
+/**
  * Hoists a CSS-wide keyword such as `inherit` out of a group of longhands into
  * their shorthand. A CSS-wide keyword is only valid as a declaration's whole
  * value, so `border-style:inherit;border-color:inherit;border-width:2px` cannot
@@ -240,6 +273,9 @@ function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredPr
  * @return {Array}                The declarations, with eligible groups rewritten.
  */
 function hoistCssWideKeywordsIntoShorthands (declarations, context) {
+  if (!mayDeclareCssWideKeyword(declarations)) {
+    return declarations;
+  }
   let result = declarations;
   // Every shorthand needs to know which properties the rule declares, so that
   // set is kept alongside the declarations and only rebuilt after a rewrite
@@ -247,7 +283,7 @@ function hoistCssWideKeywordsIntoShorthands (declarations, context) {
   let declaredProperties = collectDeclaredProperties(result);
   // Shorthands are visited in declaration order, so the widest shorthand of a
   // family is rewritten before the narrower shorthands it contains.
-  for (const shorthandName of Object.keys(shorthandMap)) {
+  for (const shorthandName of SHORTHAND_NAMES) {
     const rewritten = rewriteGroupAsKeywordShorthand(result, shorthandName, declaredProperties, context);
     if (rewritten) {
       result = rewritten;

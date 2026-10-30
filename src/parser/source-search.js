@@ -157,6 +157,12 @@ function skipBracketedGroup (source, openIndex) {
  * @return {boolean}         Whether a `url()` token starts here.
  */
 function startsUrlToken (source, index) {
+  // Only a `u` can begin the token, so every other character is ruled out
+  // before anything is sliced or lowercased
+  const character = source[index];
+  if (character !== 'u' && character !== 'U') {
+    return false;
+  }
   return source.slice(index, index + 4).toLowerCase() === 'url(';
 }
 
