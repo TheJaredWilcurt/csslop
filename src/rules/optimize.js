@@ -382,6 +382,11 @@ function collectCandidateParentSelectors (childSelector) {
   for (let index = 1; index < childSelector.length; index++) {
     const character = childSelector[index];
     if (character === ':' || isSelectorWhitespace(character)) {
+      // The second colon of a pseudo-element is part of its `::` introducer,
+      // not a boundary between a potential parent and nested child.
+      if (character === ':' && childSelector[index - 1] === ':') {
+        continue;
+      }
       candidates.add(childSelector.slice(0, index));
       continue;
     }
@@ -637,6 +642,20 @@ function measureWrapperSavings (run, parent) {
 }
 
 /**
+ * Restores the source order of rules that are being moved under their own
+ * selector. Their relative order can affect the cascade when nested rules
+ * overlap, so it must not depend on an earlier grouping optimization.
+ *
+ * @param  {Array} rules  The nested rules to order.
+ * @return {Array}        A source-ordered copy of the rules.
+ */
+function orderRulesBySourcePosition (rules) {
+  return [...rules].sort((firstRule, secondRule) => {
+    return firstRule.position?.start?.offset - secondRule.position?.start?.offset;
+  });
+}
+
+/**
  * Groups consecutive sibling rules that share a common leading selector
  * portion (such as `.foo` in `.foo .a`, `.foo .b`, or `.menu .item` in
  * `.menu .item:hover .x`) into a synthesized parent rule with the shared
@@ -711,14 +730,39 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       index++;
       continue;
     }
-    const children = bestGrouping.run.map((entry) => {
+    const firstEntry = bestGrouping.run[0];
+    const firstSelectorIsParent = (
+      firstEntry.nestedSelectors.length === 1 &&
+      firstEntry.nestedSelectors[0] === '&'
+    );
+    const directDeclarations = firstSelectorIsParent ?
+      firstEntry.sibling.declarations :
+      [];
+    const entriesToNest = firstSelectorIsParent ?
+      bestGrouping.run.slice(1) :
+      bestGrouping.run;
+    const children = entriesToNest.map((entry) => {
       return { ...entry.sibling, selectors: entry.nestedSelectors };
     });
+    let declarations;
+    if (firstSelectorIsParent) {
+      const directNestedRules = directDeclarations.filter((declaration) => {
+        return declaration.type === 'rule';
+      });
+      const directEntries = directDeclarations.filter((declaration) => {
+        return declaration.type !== 'rule';
+      });
+      declarations = [
+        ...directEntries,
+        ...orderRulesBySourcePosition([...directNestedRules, ...children])
+      ];
+    } else {
+      declarations = factorCommonParents(children, true);
+    }
     result.push({
       type: 'rule',
       selectors: [bestGrouping.parent],
-      // Recurse so deeper shared prefixes among the children also factor out.
-      declarations: factorCommonParents(children, true)
+      declarations
     });
     index = bestGrouping.lookahead;
   }
