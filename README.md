@@ -321,6 +321,5 @@ Two different cases:
    * Ensure arrow functions always take up at least 3 lines, with explicit returns when needed.
    * Always comment regex if used.
 1. After all other code edits, run `npm run lint` and ensure the linter passes.
-1. DO NOT, under any circumstance, run `npm run real` (it will kill actual humans)!
 1. When all done, run the `beep` command to alert me you finished.
 ```
