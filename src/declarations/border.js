@@ -3,8 +3,8 @@
  */
 
 import { splitTopLevelComponents } from '../parser/source-search.js';
+import { namedColors } from '../value/color/named.js';
 import { minifyValue } from '../value/minify.js';
-import { namedColors } from '../value/named-colors.js';
 import {
   collapseShorthandParts,
   hasSubstitutedParts

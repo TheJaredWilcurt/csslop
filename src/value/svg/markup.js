@@ -6,7 +6,7 @@ import {
   namedColors,
   parseColor,
   rgbaToHex
-} from './colors.js';
+} from '../color/conversion.js';
 
 const COLOR_ATTRIBUTE_NAMES = new Set([
   'color',

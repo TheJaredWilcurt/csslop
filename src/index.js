@@ -14,19 +14,19 @@ import {
 import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
 import { parse } from './parser/index.js';
 import { splitTopLevelCommaList } from './parser/source-search.js';
-import {
-  analyzePositionTryRules,
-  cleanPositionTryRules,
-  collectRuleMetadata,
-  filterUnusedPositionTry
-} from './position-try.js';
 import { preprocessDeclarationBlocks } from './preprocess.js';
 import { combineLanguageSelectors } from './rules/lang.js';
 import { normalizeRuleSelectors } from './rules/normalize.js';
 import {
   clearSelectorCaches,
   optimizeRuleList
-} from './rules/optimize.js';
+} from './rules/optimize/index.js';
+import {
+  analyzePositionTryRules,
+  cleanPositionTryRules,
+  collectRuleMetadata,
+  filterUnusedPositionTry
+} from './rules/position-try.js';
 import { combineLegacyAnySelectors } from './rules/selectors.js';
 import {
   removeRedundantLayerStatementSemicolon,

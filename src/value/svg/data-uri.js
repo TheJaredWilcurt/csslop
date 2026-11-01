@@ -2,7 +2,7 @@
  * @file Decodes, minifies, and safely reserializes SVG data URLs.
  */
 
-import { minifySvgMarkup } from './svg-markup.js';
+import { minifySvgMarkup } from './markup.js';
 
 const SVG_MEDIA_TYPE = 'data:image/svg+xml';
 
