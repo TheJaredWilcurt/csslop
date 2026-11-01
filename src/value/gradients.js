@@ -10,7 +10,7 @@ import {
 import {
   parseHex,
   shortestColor
-} from './colors.js';
+} from './color/conversion.js';
 
 /**
  * Checks whether a string is a valid gradient stop position consisting of one

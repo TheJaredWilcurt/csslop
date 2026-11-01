@@ -7,7 +7,7 @@ import {
   skipQuotedString,
   splitTopLevelCommaList,
   startsUrlToken
-} from '../parser/source-search.js';
+} from '../../parser/source-search.js';
 
 /**
  * Determines whether a character can appear inside a CSS identifier.

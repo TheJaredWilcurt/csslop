@@ -19,6 +19,20 @@ function resolveUnicodeEscape (hex) {
   return String.fromCodePoint(codePoint);
 }
 
+/**
+ * Reports whether a property is a custom property. A custom property holds an
+ * arbitrary token stream rather than a typed value, so every one of its tokens,
+ * whitespace included, is part of what it stores, and neither shorthands nor
+ * `all` ever reset it.
+ *
+ * @param  {string}  property  The CSS property name.
+ * @return {boolean}           Whether the property is a custom property.
+ */
+function isCustomProperty (property) {
+  return Boolean(property) && property.startsWith('--');
+}
+
 export {
+  isCustomProperty,
   resolveUnicodeEscape
 };

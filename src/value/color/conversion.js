@@ -2,8 +2,9 @@
  * @file Provides color parsing, color space conversion (sRGB, OKLab, OKLCH, HSL, HWB), and hex formatting for CSS value minification.
  */
 
-import { namedColors } from './named-colors.js';
-import { parseAlphaString } from './shared.js';
+import { parseAlphaString } from '../shared.js';
+
+import { namedColors } from './named.js';
 
 /**
  * Reverse lookup from "r,g,b" to the shortest CSS named color keyword.

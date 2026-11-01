@@ -2,7 +2,7 @@
  * @file Handles `@position-try` rule analysis, usage tracking, and dead-rule elimination during CSS minification.
  */
 
-import { registersCustomProperty } from './rules/property.js';
+import { registersCustomProperty } from './property.js';
 
 /**
  * Scans top-level rules to register `@property` custom properties in the context and collect `@position-try` rule declarations and initial usage counts.

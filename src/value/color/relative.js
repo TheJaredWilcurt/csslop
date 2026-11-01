@@ -6,14 +6,14 @@ import {
   findMatchingParenthesis,
   findTopLevelDelimiter,
   splitTopLevelComponents
-} from '../parser/source-search.js';
+} from '../../parser/source-search.js';
+import { parseAlphaString } from '../shared.js';
 
 import {
   parseColor,
   rgbaToHex,
   shortestColor
-} from './colors.js';
-import { parseAlphaString } from './shared.js';
+} from './conversion.js';
 
 /**
  * Handle color(from ...) relative color syntax for simple identity cases.

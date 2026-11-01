@@ -146,8 +146,36 @@ function scaleByPowerOfTen (parts, power, unit) {
   };
 }
 
+/**
+ * Reports whether rewriting a number keeps its numeric type. A number written
+ * with a decimal point or an exponent has the `<number>` type, while one
+ * written with digits alone is an `<integer>`. A custom property can be
+ * substituted into, or registered with, a grammar that tells the two apart, so
+ * `100.0` cannot become `100` there.
+ *
+ * @param  {string}  originalNumber   The number as it was written.
+ * @param  {string}  rewrittenNumber  The number as it would be rewritten.
+ * @return {boolean}                  True when both spellings have the same type.
+ */
+function keepsNumberType (originalNumber, rewrittenNumber) {
+  return isIntegerSpelling(originalNumber) === isIntegerSpelling(rewrittenNumber);
+}
+
+/**
+ * Reports whether a number is spelled as an `<integer>`: digits with an
+ * optional sign, and no decimal point or exponent.
+ *
+ * @param  {string}  number  The number as written.
+ * @return {boolean}         True when the spelling is an integer.
+ */
+function isIntegerSpelling (number) {
+  // An optional sign followed by nothing but digits
+  return /^[+-]?\d+$/.test(number);
+}
+
 export {
   formatShortestNumber,
+  keepsNumberType,
   parseNumericParts,
   scaleByPowerOfTen,
   shortenNumericText

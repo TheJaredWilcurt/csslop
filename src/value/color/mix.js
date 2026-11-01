@@ -5,7 +5,8 @@
 import {
   findMatchingParenthesis,
   splitTopLevelCommaList
-} from '../parser/source-search.js';
+} from '../../parser/source-search.js';
+import { roundCompactNumber } from '../shared.js';
 
 import {
   convertOklchToHex,
@@ -14,8 +15,7 @@ import {
   rgbToOklab,
   rgbToOklch,
   rgbaToHex
-} from './colors.js';
-import { roundCompactNumber } from './shared.js';
+} from './conversion.js';
 
 /**
  * Interpolates between two hue angles along the shorter arc, per the CSS Color specification.
