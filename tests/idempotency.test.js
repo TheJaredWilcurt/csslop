@@ -33,13 +33,10 @@ const knownBad = [
   'concise-v4.0.1.css',
   'crookedstylesheets-v0.0.0.css',
   'cs16-v0.0.0.css',
-  'css-diner-v0.0.0.css',
-  'css-social-buttons-v1.4.0.css',
   'cssco-v1.1.0.css',
   'cssicon-v1.0.0.css',
   'cssplot-v0.0.0.css',
   'csszengarden-215-v0.0.0.css',
-  'cutestrap1-v1.3.1.css',
   'cutestrap2-v2.0.0.css',
   'destyle-v4.0.1.css',
   'devices-v0.2.0.css',
@@ -61,7 +58,6 @@ const knownBad = [
   'github-dark-v6.3.0.css',
   'github-markdown-v5.9.0.css',
   'gitweb-theme-v0.0.0.css',
-  'google-type-v0.0.0.css',
   'gridism-v0.2.2.css',
   'gridlex-v2.7.1.css',
   'gumby-v2.6.4.css',
@@ -100,7 +96,6 @@ const knownBad = [
   'responsive-5-v5.0.0.css',
   'rippleui-v1.12.1.css',
   'sanitize-v13.0.0.css',
-  'sapc-apca-v0.0.0.css',
   'semantic-v2.5.0.css',
   'shards-v3.0.0.css',
   'shina-fox-v0.1.0.css',
@@ -135,7 +130,8 @@ const knownBad = [
   'wenk-v1.0.8.css',
   'wikipedia-dark-v3.7.9.css',
   'wtf-forms-v2.2.0.css',
-  'yacy-v4.1.2.css'
+  'yacy-v4.1.2.css',
+  'zxx-lib-v2.10.0.css'
 ];
 
 let foundBad = [];
