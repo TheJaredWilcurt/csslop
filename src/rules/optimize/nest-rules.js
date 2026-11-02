@@ -163,19 +163,56 @@ function nestFlatRules (rules) {
   const result = [];
   const indexBySelector = new Map();
   for (const rule of rules) {
-    if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
+    if (rule.type !== 'rule') {
       result.push(rule);
       continue;
     }
-    const childSelector = rule.selectors[0].trim();
-    const nesting = findNestingParent(result, indexBySelector, childSelector);
-    if (nesting) {
-      const parentRule = result[nesting.parentIndex];
-      parentRule.declarations = parentRule.declarations || [];
-      parentRule.declarations.push({ ...rule, selectors: [nesting.nestedSelector] });
+    if (rule.selectors?.length === 1) {
+      const childSelector = rule.selectors[0].trim();
+      const nesting = findNestingParent(result, indexBySelector, childSelector);
+      if (nesting) {
+        const parentRule = result[nesting.parentIndex];
+        parentRule.declarations = parentRule.declarations || [];
+        parentRule.declarations.push({ ...rule, selectors: [nesting.nestedSelector] });
+        continue;
+      }
+      indexBySelector.set(childSelector, result.length);
+      result.push(rule);
       continue;
     }
-    indexBySelector.set(childSelector, result.length);
+    if (rule.selectors?.length > 1) {
+      const nestedSelectors = [];
+      let commonParentIndex = null;
+      let canNestAll = true;
+
+      for (const childSelector of rule.selectors) {
+        const nesting = findNestingParent(result, indexBySelector, childSelector.trim());
+        if (!nesting) {
+          canNestAll = false;
+          break;
+        }
+        if (commonParentIndex === null) {
+          commonParentIndex = nesting.parentIndex;
+        } else if (nesting.parentIndex !== commonParentIndex) {
+          canNestAll = false;
+          break;
+        }
+        nestedSelectors.push(nesting.nestedSelector);
+      }
+
+      if (canNestAll && commonParentIndex !== null) {
+        const parentRule = result[commonParentIndex];
+        parentRule.declarations = parentRule.declarations || [];
+        parentRule.declarations.push({ ...rule, selectors: nestedSelectors });
+        continue;
+      }
+
+      for (const selector of rule.selectors) {
+        indexBySelector.set(selector.trim(), result.length);
+      }
+      result.push(rule);
+      continue;
+    }
     result.push(rule);
   }
   for (const rule of result) {
