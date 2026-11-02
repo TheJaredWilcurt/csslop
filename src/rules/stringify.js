@@ -465,6 +465,19 @@ function stringifyRule (rule, context) {
 
     declarations = processDeclarations(declarations, context);
 
+    // Check if the rule is now effectively empty after processing declarations
+    const isEffectivelyEmptyAfterProcessing = (
+      declarations.length === 0 ||
+      declarations.every((declaration) => {
+        return (
+          declaration.type === 'comment' && !declaration.comment?.startsWith('!')
+        );
+      })
+    );
+    if (isEffectivelyEmptyAfterProcessing) {
+      return '';
+    }
+
     // We need to properly output nested rules vs normal declarations.
     // Wait, the processDeclarations will now correctly keep 'rule' types because we push them in processDeclarations.
     // If we have `.foo { .bar { color: red; } }`, the inner rule is a declaration of type 'rule' with selectors: ['.bar'].
