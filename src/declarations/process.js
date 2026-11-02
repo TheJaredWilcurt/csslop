@@ -107,6 +107,33 @@ function collectCandidateShorthands (declaredProperties) {
 const PARSE_TIME_FALLBACK_MARKERS = ['calc(', 'env(', '-webkit-'];
 
 /**
+ * Vendor-prefixed gradient functions that should be removed when the standard
+ * version is present. These are obsolete as all modern browsers support the
+ * unprefixed versions.
+ *
+ * @type {Array}
+ */
+const VENDOR_PREFIXED_GRADIENTS = [
+  '-moz-linear-gradient',
+  '-webkit-linear-gradient',
+  '-o-linear-gradient',
+  '-ms-linear-gradient'
+];
+
+/**
+ * Vendor-prefixed display values that should be removed when the standard
+ * version is present. These are obsolete as all modern browsers support the
+ * unprefixed versions.
+ *
+ * @type {Array}
+ */
+const VENDOR_PREFIXED_DISPLAY_VALUES = [
+  '-webkit-box',
+  '-ms-flexbox',
+  '-webkit-flex'
+];
+
+/**
  * Determines whether a value relies on syntax that older browsers cannot parse,
  * which means a preceding declaration for the same property is an intentional
  * fallback rather than a redundant duplicate.
@@ -118,6 +145,61 @@ function needsParseTimeFallback (value) {
   return PARSE_TIME_FALLBACK_MARKERS.some((marker) => {
     return value.includes(marker);
   });
+}
+
+/**
+ * Determines whether a value uses a vendor-prefixed gradient function.
+ *
+ * @param  {string}  value  The minified CSS value string.
+ * @return {boolean}        Whether the value contains a vendor-prefixed gradient.
+ */
+function usesVendorPrefixedGradient (value) {
+  return VENDOR_PREFIXED_GRADIENTS.some((gradient) => {
+    return value.includes(gradient);
+  });
+}
+
+/**
+ * Extracts the standard gradient from a vendor-prefixed gradient value by
+ * replacing the vendor prefix with the standard name.
+ *
+ * @param  {string} value  The minified CSS value string.
+ * @return {string}        The value with vendor prefixes replaced.
+ */
+function normalizeVendorPrefixedGradient (value) {
+  let normalized = value;
+  for (const prefixedGradient of VENDOR_PREFIXED_GRADIENTS) {
+    normalized = normalized.replace(prefixedGradient, 'linear-gradient');
+  }
+  return normalized;
+}
+
+/**
+ * Determines whether a value uses a vendor-prefixed display value.
+ *
+ * @param  {string}  value  The minified CSS value string.
+ * @return {boolean}        Whether the value contains a vendor-prefixed display value.
+ */
+function usesVendorPrefixedDisplayValue (value) {
+  return VENDOR_PREFIXED_DISPLAY_VALUES.some((displayValue) => {
+    return value === displayValue;
+  });
+}
+
+/**
+ * Normalizes a vendor-prefixed display value to its standard equivalent.
+ *
+ * @param  {string} value  The minified CSS value string.
+ * @return {string}        The normalized display value.
+ */
+function normalizeVendorPrefixedDisplayValue (value) {
+  // Map vendor-prefixed display values to their standard equivalents
+  const displayValueMap = {
+    '-webkit-box': 'flex',
+    '-ms-flexbox': 'flex',
+    '-webkit-flex': 'flex'
+  };
+  return displayValueMap[value] || value;
 }
 
 /**
@@ -198,6 +280,21 @@ function findLastPositionOfProperty (survivors, property) {
 }
 
 /**
+ * Finds all surviving declarations that set a given property, in source order.
+ *
+ * @param  {object} survivors  The surviving-declaration bookkeeping.
+ * @param  {string} property   The property name to look for.
+ * @return {Array}             The positions of all matching declarations, in source order.
+ */
+function findAllPositionsOfProperty (survivors, property) {
+  const positions = survivors.positionsByProperty.get(property);
+  if (!positions?.length) {
+    return [];
+  }
+  return [...positions];
+}
+
+/**
  * Finds the surviving vendor-prefixed declarations that set a prefixed form of
  * a property, such as `-webkit-transform` for `transform`, including legacy
  * spellings like `-webkit-box-flex` for `flex`. Only the prefixed declarations
@@ -264,6 +361,11 @@ function deduplicateDeclarations (declarations) {
 
     const minifiedValue = minifyValue(declaration);
 
+    // IE6 hack properties starting with * are obsolete and should be removed
+    if (propertyName.startsWith('*')) {
+      continue;
+    }
+
     // A vendor-prefixed property that repeats the value of its unprefixed
     // form is dead code for browsers that read the unprefixed one
     if (propertyName.startsWith('-') && !propertyName.startsWith('--')) {
@@ -273,7 +375,7 @@ function deduplicateDeclarations (declarations) {
       }
     }
 
-    const previousPosition = findLastPositionOfProperty(survivors, propertyName);
+    let previousPosition = findLastPositionOfProperty(survivors, propertyName);
 
     // An unprefixed property with the same value also replaces every prefixed form of it
     let prefixedPositions = [];
@@ -288,10 +390,62 @@ function deduplicateDeclarations (declarations) {
       }
     }
 
+    // For display property, remove vendor-prefixed values when standard version is present
+    if (propertyName === 'display' && !usesVendorPrefixedDisplayValue(minifiedValue)) {
+      const allPositions = findAllPositionsOfProperty(survivors, propertyName);
+      for (const position of allPositions) {
+        const existingValue = minifyValue(survivors.slots[position]);
+        if (
+          usesVendorPrefixedDisplayValue(existingValue) &&
+          normalizeVendorPrefixedDisplayValue(existingValue) === minifiedValue
+        ) {
+          dropDeclaration(survivors, position);
+        }
+      }
+      // Recalculate previous position after dropping declarations
+      previousPosition = findLastPositionOfProperty(survivors, propertyName);
+    }
+
     if (previousPosition !== -1) {
       const previousValue = minifyValue(survivors.slots[previousPosition]);
 
       if (previousValue.includes('!important') && !minifiedValue.includes('!important')) {
+        continue;
+      }
+
+      // When the current value is a simple value that all browsers understand,
+      // remove ALL previous declarations of the same property since the current
+      // one works everywhere and makes all earlier ones redundant
+      if (!needsParseTimeFallback(minifiedValue)) {
+        const allPositions = findAllPositionsOfProperty(survivors, propertyName);
+        for (const position of allPositions) {
+          dropDeclaration(survivors, position);
+        }
+        keepDeclaration(survivors, declaration);
+        continue;
+      }
+
+      // When the current value is a standard gradient and the previous value
+      // is a vendor-prefixed version of the same gradient, remove the prefixed one
+      if (
+        !usesVendorPrefixedGradient(minifiedValue) &&
+        usesVendorPrefixedGradient(previousValue) &&
+        normalizeVendorPrefixedGradient(previousValue) === minifiedValue
+      ) {
+        dropDeclaration(survivors, previousPosition);
+        keepDeclaration(survivors, declaration);
+        continue;
+      }
+
+      // When the current value is a standard display value and the previous value
+      // is a vendor-prefixed version that maps to the same standard value, remove the prefixed one
+      if (
+        !usesVendorPrefixedDisplayValue(minifiedValue) &&
+        usesVendorPrefixedDisplayValue(previousValue) &&
+        normalizeVendorPrefixedDisplayValue(previousValue) === minifiedValue
+      ) {
+        dropDeclaration(survivors, previousPosition);
+        keepDeclaration(survivors, declaration);
         continue;
       }
 
