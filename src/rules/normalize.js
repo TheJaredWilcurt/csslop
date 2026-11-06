@@ -142,6 +142,17 @@ function normalizeLayerNames (layerNames) {
 }
 
 /**
+ * Checks if a media query contains the IE10/IE11 exclusive `\0` hack.
+ *
+ * @param  {string}  media  The media query string to check.
+ * @return {boolean}        True if the media query contains the IE hack.
+ */
+function containsIEHack (media) {
+  // Match the \0 character which is used as an IE10/IE11 exclusive hack
+  return /\\0/.test(media);
+}
+
+/**
  * Normalizes a `@media` query string by collapsing whitespace, stripping the default "all and" prefix, and converting min/max-width to range syntax.
  *
  * @param  {string} media  The raw `@media` query string.
@@ -236,6 +247,7 @@ function canUnwrapSupports (supports) {
 
 export {
   canUnwrapSupports,
+  containsIEHack,
   normalizeLayerNames,
   normalizeMedia,
   normalizeRuleSelectors,

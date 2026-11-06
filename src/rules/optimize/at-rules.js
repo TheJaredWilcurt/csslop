@@ -3,9 +3,25 @@
  */
 
 import {
+  containsIEHack,
   normalizeLayerNames,
   normalizeMedia
 } from '../normalize.js';
+
+/**
+ * Removes `@media` rules that contain IE10/IE11 exclusive hacks (the `\0` character).
+ *
+ * @param  {Array} rules  The AST rule nodes to process.
+ * @return {Array}        A new array of rules with IE-exclusive media queries removed.
+ */
+function removeIEMediaRules (rules) {
+  return rules.filter((rule) => {
+    if (rule.type === 'media' && containsIEHack(rule.media)) {
+      return false;
+    }
+    return true;
+  });
+}
 
 /**
  * Merges adjacent `@media` rules that share an identical normalized query string and deduplicates their child selector rules.
@@ -109,5 +125,6 @@ function mergeLayerRules (rules, mergeSelectorRules) {
 export {
   deduplicateKeyframes,
   mergeLayerRules,
-  mergeMediaRules
+  mergeMediaRules,
+  removeIEMediaRules
 };

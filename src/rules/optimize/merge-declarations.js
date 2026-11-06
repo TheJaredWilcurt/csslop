@@ -175,7 +175,193 @@ function mergeRuleIntoPredecessor (previousRule, rule) {
 }
 
 /**
- * Merges consecutive rules whose declarations are a subset of the following rule, combining their selectors and splitting out any extra declarations.
+ * Finds properties that are present in all adjacent rules with matching values.
+ *
+ * @param  {Array} adjacentRules  The consecutive rule nodes to compare.
+ * @return {Map}                  Map of property name to value for properties common to all rules.
+ */
+function findCommonProperties (adjacentRules) {
+  if (adjacentRules.length < 2) {
+    return new Map();
+  }
+
+  const firstRuleBody = partitionRuleBody(adjacentRules[0].declarations);
+  const commonProperties = new Map(
+    firstRuleBody.plainDeclarations.map((declaration) => {
+      return [declaration.property, (declaration.value || '').trim()];
+    })
+  );
+
+  for (let ruleIndex = 1; ruleIndex < adjacentRules.length; ruleIndex++) {
+    const currentRuleBody = partitionRuleBody(adjacentRules[ruleIndex].declarations);
+    const currentValueByProperty = new Map(
+      currentRuleBody.plainDeclarations.map((declaration) => {
+        return [declaration.property, (declaration.value || '').trim()];
+      })
+    );
+
+    for (const [property, value] of commonProperties) {
+      if (currentValueByProperty.get(property) !== value) {
+        commonProperties.delete(property);
+      }
+    }
+  }
+
+  return commonProperties;
+}
+
+/**
+ * Checks if a rule contains the `all` property, which resets all other properties.
+ *
+ * @param  {object}  rule  The rule node to check.
+ * @return {boolean}       True if the rule contains the `all` property.
+ */
+function hasAllProperty (rule) {
+  const ruleBody = partitionRuleBody(rule.declarations);
+  return ruleBody.plainDeclarations.some((declaration) => {
+    return declaration.property === 'all';
+  });
+}
+
+/**
+ * Checks if any rule in a list contains the `all` property.
+ *
+ * @param  {Array}   rules  The rule nodes to check.
+ * @return {boolean}        True if any rule contains the `all` property.
+ */
+function anyRuleHasAllProperty (rules) {
+  return rules.some(hasAllProperty);
+}
+
+/**
+ * Checks if any rule has nested blocks.
+ *
+ * @param  {Array}   rules  The rule nodes to check.
+ * @return {boolean}        True if any rule has nested blocks.
+ */
+function anyRuleHasNestedBlocks (rules) {
+  return rules.some((rule) => {
+    const ruleBody = partitionRuleBody(rule.declarations);
+    return ruleBody.nestedBlocks.length > 0;
+  });
+}
+
+/**
+ * Combines adjacent rules that share common properties by creating a merged rule
+ * with all properties from the first rule, and keeping only the differing properties
+ * in each subsequent rule.
+ *
+ * @param  {Array} adjacentRules  The consecutive rule nodes to merge.
+ * @param  {Map}   commonProps    The properties common to all rules.
+ * @return {Array}                The rules after merging common properties.
+ */
+function mergeCommonProperties (adjacentRules, commonProps) {
+  if (commonProps.size === 0) {
+    return adjacentRules;
+  }
+
+  // Skip merging if any rule has the `all` property
+  if (anyRuleHasAllProperty(adjacentRules)) {
+    return adjacentRules;
+  }
+
+  // Skip merging if any rule has nested blocks
+  if (anyRuleHasNestedBlocks(adjacentRules)) {
+    return adjacentRules;
+  }
+
+  const firstRuleBody = partitionRuleBody(adjacentRules[0].declarations);
+
+  const combinedSelectors = [];
+  for (const rule of adjacentRules) {
+    combinedSelectors.push(...rule.selectors);
+  }
+
+  const mergedRule = {
+    ...adjacentRules[0],
+    selectors: deduplicateSelectors(combinedSelectors),
+    declarations: firstRuleBody.plainDeclarations
+  };
+
+  const result = [mergedRule];
+
+  for (let ruleIndex = 1; ruleIndex < adjacentRules.length; ruleIndex++) {
+    const rule = adjacentRules[ruleIndex];
+    const ruleBody = partitionRuleBody(rule.declarations);
+    const differingDeclarations = ruleBody.plainDeclarations.filter((declaration) => {
+      const firstRuleValue = firstRuleBody.plainDeclarations.find((decl) => {
+        return decl.property === declaration.property;
+      });
+      if (!firstRuleValue) {
+        return true;
+      }
+      return (declaration.value || '').trim() !== (firstRuleValue.value || '').trim();
+    });
+
+    if (differingDeclarations.length > 0) {
+      result.push({
+        ...rule,
+        declarations: differingDeclarations
+      });
+    }
+  }
+
+  // Check if the merge actually reduces size
+  const originalSize = adjacentRules.reduce((sum, rule) => {
+    return sum + calculateRuleSize(rule);
+  }, 0);
+
+  const mergedSize = result.reduce((sum, rule) => {
+    return sum + calculateRuleSize(rule);
+  }, 0);
+
+  if (mergedSize >= originalSize) {
+    return adjacentRules;
+  }
+
+  return result;
+}
+
+/**
+ * Calculates the approximate character size of a rule's selectors.
+ *
+ * @param  {object} rule  The rule node.
+ * @return {number}       The total character count of all selectors.
+ */
+function calculateSelectorSize (rule) {
+  if (!rule.selectors) {
+    return 0;
+  }
+  return rule.selectors.join(',').length;
+}
+
+/**
+ * Calculates the approximate character size of a rule's declarations.
+ *
+ * @param  {object} rule  The rule node.
+ * @return {number}       The total character count of all declarations.
+ */
+function calculateDeclarationSize (rule) {
+  const ruleBody = partitionRuleBody(rule.declarations);
+  let size = 0;
+  for (const declaration of ruleBody.plainDeclarations) {
+    size += declaration.property.length + 1 + (declaration.value || '').length;
+  }
+  return size;
+}
+
+/**
+ * Calculates the approximate character size of a rule.
+ *
+ * @param  {object} rule  The rule node.
+ * @return {number}       The total character count of the rule.
+ */
+function calculateRuleSize (rule) {
+  return calculateSelectorSize(rule) + calculateDeclarationSize(rule);
+}
+
+/**
+ * Merges consecutive rules whose declarations are a subset of the following rule, combining their selectors and splitting out any extra declarations. Also combines common properties across adjacent rules.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
  * @return {Array}        A new array of rules with declaration-compatible consecutive rules combined.
@@ -191,7 +377,36 @@ function mergeByDeclarations (rules) {
     }
     result.push(rule);
   }
-  return result;
+
+  // Pass to combine common properties across adjacent rules
+  const finalResult = [];
+  let adjacentRules = [];
+
+  for (const rule of result) {
+    if (rule.type === 'rule' && rule.selectors?.length) {
+      adjacentRules.push(rule);
+    } else {
+      if (adjacentRules.length >= 2) {
+        const commonProps = findCommonProperties(adjacentRules);
+        const merged = mergeCommonProperties(adjacentRules, commonProps);
+        finalResult.push(...merged);
+      } else if (adjacentRules.length === 1) {
+        finalResult.push(adjacentRules[0]);
+      }
+      adjacentRules = [];
+      finalResult.push(rule);
+    }
+  }
+
+  if (adjacentRules.length >= 2) {
+    const commonProps = findCommonProperties(adjacentRules);
+    const merged = mergeCommonProperties(adjacentRules, commonProps);
+    finalResult.push(...merged);
+  } else if (adjacentRules.length === 1) {
+    finalResult.push(adjacentRules[0]);
+  }
+
+  return finalResult;
 }
 
 export {
