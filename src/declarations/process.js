@@ -187,6 +187,17 @@ function usesVendorPrefixedDisplayValue (value) {
 }
 
 /**
+ * Checks if a declaration value contains the IE6-IE9 double !important hack.
+ *
+ * @param  {string}  value  The minified CSS value string.
+ * @return {boolean}        Whether the value contains double !important.
+ */
+function hasDoubleImportant (value) {
+  // Match !important appearing twice in the value
+  return /!important.*!important/.test(value);
+}
+
+/**
  * Normalizes a vendor-prefixed display value to its standard equivalent.
  *
  * @param  {string} value  The minified CSS value string.
@@ -363,6 +374,11 @@ function deduplicateDeclarations (declarations) {
 
     // IE6 hack properties starting with * are obsolete and should be removed
     if (propertyName.startsWith('*')) {
+      continue;
+    }
+
+    // IE6-IE9 double !important properties are invalid and should be removed
+    if (hasDoubleImportant(minifiedValue)) {
       continue;
     }
 
