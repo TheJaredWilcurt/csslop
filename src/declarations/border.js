@@ -12,12 +12,33 @@ import {
 
 import {
   BORDER_EDGE_PROPERTIES,
-  CSS_WIDE_KEYWORDS
+  CSS_WIDE_KEYWORDS,
+  expandToLeafProperties
 } from './config.js';
 import { collectDeclaredProperties } from './lookup.js';
 import { resetsPropertyDeclaredElsewhere } from './reset-hazards.js';
 
 const BORDER_TRIO_PROPERTIES = ['border-width', 'border-style', 'border-color'];
+
+/**
+ * Every property the `border` shorthand sets: the physical edge shorthands, such
+ * as `border-top`, and the longhands they expand into, such as `border-top-width`.
+ * A declaration of one of them beside the trio competes with the shorthand.
+ *
+ * @type {Set<string>}
+ */
+const BORDER_SHORTHAND_PROPERTIES = new Set([
+  ...BORDER_EDGE_PROPERTIES,
+  ...expandToLeafProperties('border')
+]);
+
+/**
+ * Matches the logical border longhands, such as `border-inline-start-color`
+ * and `border-block-width`, which set the same edges as the physical ones.
+ *
+ * @type {RegExp}
+ */
+const LOGICAL_BORDER_PATTERN = /^border-(?:inline|block)(?:-|$)/;
 
 /**
  * The keywords that state a border line style.
@@ -140,7 +161,7 @@ function collapseBorderTrioWithPerEdgeOverrides (declarations, context) {
         return entry.property === property;
       }).length !== 1;
     }
-    return property === 'border' || (property.startsWith('border-') && !property.startsWith('border-image'));
+    return property === 'border' || BORDER_SHORTHAND_PROPERTIES.has(property) || LOGICAL_BORDER_PATTERN.test(property);
   });
   if (hasCompetingBorderWrites) {
     return declarations;
@@ -179,10 +200,14 @@ function collapseBorderTrioWithPerEdgeOverrides (declarations, context) {
   }
 
   const [widthComponents, styleComponents, colorComponents] = componentsByProperty;
+  // The `border` shorthand resets its color to currentcolor, so a color that
+  // states currentcolor is left out of the shorthand rather than repeated.
+  const statesShorthandColor = colorComponents.length === 1 &&
+    colorComponents[0].toLowerCase() !== INITIAL_BORDER_EDGE_PARTS['border-color'];
   const borderValue = buildBorderShorthandValue(
     widthComponents.length === 1 ? width : '',
     styleComponents.length === 1 ? style : '',
-    colorComponents.length === 1 ? colorComponents[0] : ''
+    statesShorthandColor ? colorComponents[0] : ''
   ) + importantSuffix;
   const overrides = BORDER_TRIO_PROPERTIES.flatMap((property, index) => {
     if (componentsByProperty[index].length === 1) {
