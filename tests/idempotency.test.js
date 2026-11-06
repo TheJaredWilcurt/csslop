@@ -176,10 +176,6 @@ run();
 
 /*
 
-Run `npm run idem` to test a single CSS file that fails at idempotency. Isolate
-the output that changes from the first run to the rerun. Identify any patterns
-that could be turned into a generic test similar to those in the /copiedTests
-folder. Do not make any changes to any files in the repo. Run `beep` when done
-to alert me you finished.
+Run `npm run idem` to test a single CSS file that fails at idempotency. Isolate the output that changes from the first run to the rerun. Identify any patterns that could be turned into a generic test similar to those in the /copiedTests folder. Do not make any changes to any files in the repo. Run `beep` when done to alert me you finished.
 
  */
