@@ -155,22 +155,78 @@ function collectSharedParentCandidates (rule) {
 }
 
 /**
- * Counts how many characters wrapping a run behind a shared parent selector
- * saves: the parent is written once with its braces, and every wrapped
- * selector shrinks to its nested form.
+ * Counts the characters a list of rules takes up as selector text. Each rule
+ * counts its selectors, its braces, and every rule nested within it, while
+ * plain declarations count for nothing.
  *
- * @param  {Array}  run     The rules of the run paired with their nested selectors.
- * @param  {string} parent  The shared parent selector string.
- * @return {number}         The character savings of the wrapper, or a non-positive number when it costs more than it saves.
+ * @param  {Array}  rules  The AST entries to measure.
+ * @return {number}        The number of characters the rules take up.
  */
-function measureWrapperSavings (run, parent) {
-  const charactersSaved = run.reduce((total, entry) => {
-    return total + entry.sibling.selectors.reduce((sum, selector, position) => {
-      return sum + selector.trim().length - entry.nestedSelectors[position].length;
-    }, 0);
+function measureRuleCharacters (rules) {
+  return rules.reduce((total, rule) => {
+    if (rule.type !== 'rule') {
+      return total;
+    }
+    const selectorText = (rule.selectors || []).map((selector) => {
+      return selector.trim();
+    }).join(',');
+    const nestedRules = (rule.declarations || []).filter((declaration) => {
+      return declaration.type === 'rule';
+    });
+    // The two braces wrap the rule's declarations
+    return total + selectorText.length + 2 + measureRuleCharacters(nestedRules);
   }, 0);
+}
+
+/**
+ * Counts how many characters wrapping a run behind a shared parent selector
+ * saves: the run is measured as it is written, against the declarations the
+ * wrapper would hold plus the parent written once with its braces.
+ *
+ * @param  {Array}  run           The rules of the run paired with their nested selectors.
+ * @param  {Array}  declarations  The declarations the wrapper would hold, including any factoring of the nested rules.
+ * @param  {string} parent        The shared parent selector string.
+ * @return {number}               The character savings of the wrapper, or a non-positive number when it costs more than it saves.
+ */
+function measureWrapperSavings (run, declarations, parent) {
+  const charactersBefore = measureRuleCharacters(run.map((entry) => {
+    return entry.sibling;
+  }));
   // The wrapper writes the shared selector once plus its surrounding braces.
-  return charactersSaved - (parent.length + 2);
+  const charactersAfter = measureRuleCharacters(declarations) + parent.length + 2;
+  return charactersBefore - charactersAfter;
+}
+
+/**
+ * Expresses every selector of a sibling rule relative to a candidate parent.
+ * A nested selector must be shorter than the selector it replaces, so each
+ * factoring pass leaves the rules smaller and factoring them again terminates.
+ *
+ * @param  {object}                          rule                 The sibling rule whose selectors are nested.
+ * @param  {function(string): (string|null)} matchNestedSelector  The matcher built for the candidate parent.
+ * @return {Array|null}                                           The nested selectors, or null when any selector cannot nest under the parent.
+ */
+function nestSelectorsUnderParent (rule, matchNestedSelector) {
+  const nestedSelectors = [];
+  for (const selector of rule.selectors) {
+    const trimmedSelector = selector.trim();
+    const nestedSelector = matchNestedSelector(trimmedSelector);
+    if (nestedSelector === null || nestedSelector.length >= trimmedSelector.length) {
+      return null;
+    }
+    nestedSelectors.push(nestedSelector);
+  }
+  return nestedSelectors;
+}
+
+/**
+ * Re-expresses a run entry as a rule whose selectors are the nested selectors.
+ *
+ * @param  {object} entry  A run entry pairing a sibling rule with its nested selectors.
+ * @return {object}        The rule, with its selectors replaced by the nested ones.
+ */
+function createNestedChild (entry) {
+  return { ...entry.sibling, selectors: entry.nestedSelectors };
 }
 
 /**
@@ -188,14 +244,48 @@ function orderRulesBySourcePosition (rules) {
 }
 
 /**
+ * Builds the declarations of a wrapper that holds a run of sibling rules nested
+ * under their shared parent. A first rule whose only nested selector is `&` is
+ * the parent itself, so its declarations are hoisted into the wrapper. Otherwise
+ * the nested rules are factored again, so the selectors they still share can be
+ * wrapped in turn.
+ *
+ * @param  {Array} run  The rules of the run paired with their nested selectors.
+ * @return {Array}      The declarations of the wrapper rule.
+ */
+function createWrapperDeclarations (run) {
+  const firstEntry = run[0];
+  const firstSelectorIsParent = (
+    firstEntry.nestedSelectors.length === 1 &&
+    firstEntry.nestedSelectors[0] === '&'
+  );
+  if (!firstSelectorIsParent) {
+    return factorCommonParents(run.map(createNestedChild), true);
+  }
+  const directDeclarations = firstEntry.sibling.declarations;
+  const directNestedRules = directDeclarations.filter((declaration) => {
+    return declaration.type === 'rule';
+  });
+  const directEntries = directDeclarations.filter((declaration) => {
+    return declaration.type !== 'rule';
+  });
+  const children = run.slice(1).map(createNestedChild);
+  return [
+    ...directEntries,
+    ...orderRulesBySourcePosition([...directNestedRules, ...children])
+  ];
+}
+
+/**
  * Groups consecutive sibling rules that share a common leading selector
  * portion (such as `.foo` in `.foo .a`, `.foo .b`, or `.menu .item` in
  * `.menu .item:hover .x`) into a synthesized parent rule with the shared
  * portion factored out. Every viable prefix of the first rule's selector is
  * tried as the parent, and the grouping that saves the most characters wins,
- * but only when it saves more than the wrapper itself costs. Rules with a
- * comma-separated selector list can join a run when every one of their
- * selectors nests under the parent.
+ * measured with the rules nested under it factored in turn, but only when it
+ * saves more than the wrapper itself costs. Rules with a comma-separated
+ * selector list can join a run when every one of their selectors nests under
+ * the parent.
  *
  * @param  {Array}   rules                  The flat AST rule nodes to factor.
  * @param  {boolean} allowTrailingCompound  True when the rules are children of a factored wrapper, whose `&`-relative selectors may share a trailing compound that can be factored out in turn.
@@ -225,12 +315,8 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
         if (sibling.type !== 'rule' || !sibling.selectors?.length) {
           break;
         }
-        const nestedSelectors = sibling.selectors.map((selector) => {
-          return matchNestedSelector(selector.trim());
-        });
-        if (nestedSelectors.some((nestedSelector) => {
-          return nestedSelector === null;
-        })) {
+        const nestedSelectors = nestSelectorsUnderParent(sibling, matchNestedSelector);
+        if (!nestedSelectors) {
           break;
         }
         run.push({ sibling, nestedSelectors });
@@ -243,12 +329,13 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       if (run.length < 2 && selectorCount < 2) {
         continue;
       }
-      const savings = measureWrapperSavings(run, candidateParent);
+      const declarations = createWrapperDeclarations(run);
+      const savings = measureWrapperSavings(run, declarations, candidateParent);
       if (savings > 0 && (!bestGrouping || savings > bestGrouping.savings)) {
         bestGrouping = {
+          declarations,
           lookahead,
           parent: candidateParent,
-          run,
           savings
         };
       }
@@ -262,39 +349,10 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       index++;
       continue;
     }
-    const firstEntry = bestGrouping.run[0];
-    const firstSelectorIsParent = (
-      firstEntry.nestedSelectors.length === 1 &&
-      firstEntry.nestedSelectors[0] === '&'
-    );
-    const directDeclarations = firstSelectorIsParent ?
-      firstEntry.sibling.declarations :
-      [];
-    const entriesToNest = firstSelectorIsParent ?
-      bestGrouping.run.slice(1) :
-      bestGrouping.run;
-    const children = entriesToNest.map((entry) => {
-      return { ...entry.sibling, selectors: entry.nestedSelectors };
-    });
-    let declarations;
-    if (firstSelectorIsParent) {
-      const directNestedRules = directDeclarations.filter((declaration) => {
-        return declaration.type === 'rule';
-      });
-      const directEntries = directDeclarations.filter((declaration) => {
-        return declaration.type !== 'rule';
-      });
-      declarations = [
-        ...directEntries,
-        ...orderRulesBySourcePosition([...directNestedRules, ...children])
-      ];
-    } else {
-      declarations = factorCommonParents(children, true);
-    }
     result.push({
       type: 'rule',
       selectors: [bestGrouping.parent],
-      declarations
+      declarations: bestGrouping.declarations
     });
     index = bestGrouping.lookahead;
   }

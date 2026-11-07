@@ -30,10 +30,8 @@ const knownBad = [
   'cleanslate-v0.10.1.css',
   'codyframe-v4.0.9.css',
   'concise-v4.0.1.css',
-  'crookedstylesheets-v0.0.0.css',
   'cs16-v0.0.0.css',
   'cssco-v1.1.0.css',
-  'cssicon-v1.0.0.css',
   'cssplot-v0.0.0.css',
   'csszengarden-215-v0.0.0.css',
   'destyle-v4.0.1.css',
@@ -70,7 +68,6 @@ const knownBad = [
   'microtip-v0.2.2.css',
   'mini-v3.0.1.css',
   'missing-v1.3.0.css',
-  'my-internet-v1.0.0.css',
   'nes-v2.3.0.css',
   'obsidian-colored-sidebar-v2.0.0.css',
   'obsidian-modular-css-layout-v0.10.0.css',
@@ -102,7 +99,6 @@ const knownBad = [
   'swagger-ui-themes-2-v2.1.0.css',
   'tailwind-cards-v0.0.0.css',
   'tailwind-v2.2.19.css',
-  'the-50-front-end-project-44-v0.0.0.css',
   'tocas-v5.7.0.css',
   'tootik-v1.0.2.css',
   'tw-animate-css-v1.4.0.css',
@@ -111,7 +107,6 @@ const knownBad = [
   'universal-v0.0.0.css',
   'uswds-v3.13.0.css',
   'vitepress-v1.6.4.css',
-  'voxels-v1.0.0.css',
   'water-v2.1.1.css',
   'webgradients-v0.0.0.css',
   'wenk-v1.0.8.css',
@@ -176,10 +171,6 @@ run();
 
 /*
 
-Run `npm run idem` to test a single CSS file that fails at idempotency. Isolate
-the output that changes from the first run to the rerun. Identify any patterns
-that could be turned into a generic test similar to those in the /copiedTests
-folder. Do not make any changes to any files in the repo. Run `beep` when done
-to alert me you finished.
+Run `npm run idem` to test a single CSS file that fails at idempotency. Isolate the output that changes from the first run to the rerun. Identify any patterns that could be turned into a generic test similar to those in the /copiedTests folder. Do not make any changes to any files in the repo. Run `beep` when done to alert me you finished.
 
  */
