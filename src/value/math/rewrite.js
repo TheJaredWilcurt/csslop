@@ -48,8 +48,13 @@ function rewriteMathFunctionContents (rewriteExpression, value) {
       break;
     }
     const functionName = value.slice(findFunctionNameStart(value, openIndex), openIndex).toLowerCase();
+    if (!MATH_FUNCTION_NAMES.has(functionName)) {
+      result += value.slice(index, openIndex + 1);
+      index = openIndex + 1;
+      continue;
+    }
     const closeIndex = findMatchingParenthesis(value, openIndex);
-    if (!MATH_FUNCTION_NAMES.has(functionName) || closeIndex === -1) {
+    if (closeIndex === -1) {
       result += value.slice(index, openIndex + 1);
       index = openIndex + 1;
       continue;

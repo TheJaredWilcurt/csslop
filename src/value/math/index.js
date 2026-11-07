@@ -169,15 +169,17 @@ function simplifyMathFunctionsOnce (value, property) {
  */
 function normalizeMathFunctions (value, property, originalValue = '') {
   let result = value;
-  let previous;
+  if (value.includes('(')) {
+    let previous;
 
-  do {
-    previous = result;
-    // Resolving a math function leaves a plain value where it stood, which can
-    // bring the function it was nested in within reach of the next pass, so
-    // the value is simplified until it settles
-    result = simplifyMathFunctionsOnce(result, property);
-  } while (result !== previous);
+    do {
+      previous = result;
+      // Resolving a math function leaves a plain value where it stood, which can
+      // bring the function it was nested in within reach of the next pass, so
+      // the value is simplified until it settles
+      result = simplifyMathFunctionsOnce(result, property);
+    } while (result !== previous);
+  }
 
   // When calc() folded to an absolute-length unit (pt, pc, in, cm, mm, q), convert to pixels
   if (originalValue.includes('calc(') && /^-?(?:\d+|\d*\.\d+)(pt|pc|in|cm|mm|q)$/i.test(result)) {
