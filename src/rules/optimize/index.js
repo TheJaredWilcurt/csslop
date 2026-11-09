@@ -6,7 +6,8 @@ import {
   deduplicateKeyframes,
   mergeLayerRules,
   mergeMediaRules,
-  removeIEMediaRules
+  removeIEMediaRules,
+  simplifyNestedMediaRules
 } from './at-rules.js';
 import { removeEmptyRules } from './empty-rules.js';
 import { expandPureNestedRules } from './expand-nesting.js';
@@ -45,6 +46,7 @@ function clearSelectorCaches () {
 function optimizeRuleList (rules) {
   let result = expandPureNestedRules(rules);
   result = removeIEMediaRules(result);
+  result = simplifyNestedMediaRules(result);
   result = mergeLayerRules(result, mergeSelectorRules);
   result = mergeMediaRules(result, mergeSelectorRules);
   result = deduplicateKeyframes(result);
