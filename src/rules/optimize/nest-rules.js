@@ -2,6 +2,8 @@
  * @file Nests flat rules under a preceding rule whose selector their own selector starts with, so CSS nesting writes the shared part once.
  */
 
+import { findTopLevelDelimiter } from '../../parser/source-search.js';
+
 /**
  * Matches the part of a child selector that follows its parent when that part
  * starts with an explicit combinator. Optional whitespace, then the combinator
@@ -79,6 +81,46 @@ function isSelectorWhitespace (character) {
 }
 
 /**
+ * The characters that can end a parent selector: the colon of a pseudo-class,
+ * the whitespace of a descendant combinator, and the explicit combinators.
+ *
+ * @type {string}
+ */
+const PARENT_BOUNDARY_CHARACTERS = ':>+~ \t\n\r\f';
+
+/**
+ * Records the parent selector that a boundary character would end, when it
+ * ends one. Boundaries are only found at the top level of the selector, so
+ * whitespace inside an attribute selector or a pseudo-class argument, and
+ * characters escaped with a backslash, never end a parent.
+ *
+ * @param {string} childSelector  The trimmed child selector.
+ * @param {number} boundaryIndex  The index of the boundary character within the child selector.
+ * @param {Set}    candidates     The set the candidate parent selector is added to.
+ */
+function addCandidateParentSelector (childSelector, boundaryIndex, candidates) {
+  const character = childSelector[boundaryIndex];
+  if (character === ':' || isSelectorWhitespace(character)) {
+    // The second colon of a pseudo-element is part of its `::` introducer,
+    // not a boundary between a potential parent and nested child.
+    if (character === ':' && childSelector[boundaryIndex - 1] === ':') {
+      return;
+    }
+    candidates.add(childSelector.slice(0, boundaryIndex));
+    return;
+  }
+  // A combinator may be separated from its parent by whitespace, which
+  // belongs to neither side, so the parent ends where that run begins.
+  let boundary = boundaryIndex;
+  while (boundary > 0 && isSelectorWhitespace(childSelector[boundary - 1])) {
+    boundary--;
+  }
+  if (boundary > 0) {
+    candidates.add(childSelector.slice(0, boundary));
+  }
+}
+
+/**
  * Collects every prefix of a child selector that could act as its nesting
  * parent. A parent always ends immediately before a pseudo-class colon, a
  * descendant whitespace run, or the whitespace run leading into a combinator,
@@ -91,29 +133,10 @@ function isSelectorWhitespace (character) {
  */
 function collectCandidateParentSelectors (childSelector) {
   const candidates = new Set();
-  for (let index = 1; index < childSelector.length; index++) {
-    const character = childSelector[index];
-    if (character === ':' || isSelectorWhitespace(character)) {
-      // The second colon of a pseudo-element is part of its `::` introducer,
-      // not a boundary between a potential parent and nested child.
-      if (character === ':' && childSelector[index - 1] === ':') {
-        continue;
-      }
-      candidates.add(childSelector.slice(0, index));
-      continue;
-    }
-    if (character !== '>' && character !== '+' && character !== '~') {
-      continue;
-    }
-    // A combinator may be separated from its parent by whitespace, which
-    // belongs to neither side, so the parent ends where that run begins.
-    let boundary = index;
-    while (boundary > 0 && isSelectorWhitespace(childSelector[boundary - 1])) {
-      boundary--;
-    }
-    if (boundary > 0) {
-      candidates.add(childSelector.slice(0, boundary));
-    }
+  let boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, 1);
+  while (boundaryIndex !== -1) {
+    addCandidateParentSelector(childSelector, boundaryIndex, candidates);
+    boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, boundaryIndex + 1);
   }
   return candidates;
 }
