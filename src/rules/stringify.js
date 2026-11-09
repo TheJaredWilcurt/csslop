@@ -307,6 +307,83 @@ function simplifyNthPseudoClasses (selector) {
 }
 
 /**
+ * Matches an attribute selector's brackets: the attribute name, the matcher
+ * (such as `=` or `^=`), the value, and the optional case-sensitivity flag `i`
+ * or `s`. The value is a double-quoted string, a single-quoted string, or a run
+ * of unquoted characters in which escapes may stand in for spaces.
+ *
+ * @type {RegExp}
+ */
+const ATTRIBUTE_SELECTOR_PATTERN = /\[\s*([^\s=\]]+?)\s*([~|^$*]?=)\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:\\.|[^\s"'\\\]])+)(?:\s*([is]))?\s*\]/gi;
+
+/**
+ * Matches a value that can be written without quotes: an identifier made of
+ * letters, digits, hyphens, underscores, and escapes. It cannot start with a
+ * digit, or with a hyphen followed by a digit.
+ *
+ * @type {RegExp}
+ */
+const UNQUOTED_ATTRIBUTE_VALUE_PATTERN = /^(?:-?[a-zA-Z_]|\\.)(?:[\w-]|\\.)*$/;
+
+/**
+ * Writes the text of a quoted attribute value without its quotes, escaping the
+ * characters that would otherwise end an unquoted identifier.
+ *
+ * @param  {string}      content  The value's text, without its quotes.
+ * @return {string|null}          The unquoted value, or null when it cannot be written without quotes.
+ */
+function escapeAttributeValue (content) {
+  if (content.includes('\\')) {
+    return null;
+  }
+  // Escape special characters that require quoting (spaces, #, ., :, /, ;)
+  const escaped = content.replace(/([ #.:/;])/g, '\\$1');
+  if (!UNQUOTED_ATTRIBUTE_VALUE_PATTERN.test(escaped)) {
+    return null;
+  }
+  return escaped;
+}
+
+/**
+ * Writes an attribute value with double quotes, removing the escapes that only
+ * an unquoted value needs. A value that already has quotes keeps them, unless
+ * a single-quoted value holds a double quote that would have to be escaped.
+ *
+ * @param  {string} rawValue  The value as written, with or without quotes.
+ * @return {string}           The value wrapped in double quotes.
+ */
+function quoteAttributeValue (rawValue) {
+  if (rawValue[0] === '"' || rawValue[0] === '\'') {
+    const content = rawValue.slice(1, -1);
+    return content.includes('"') ? rawValue : '"' + content + '"';
+  }
+  // Unescape the characters that only an unquoted value needs escaped
+  return '"' + rawValue.replace(/\\([ #.:/;])/g, '$1') + '"';
+}
+
+/**
+ * Writes an attribute value and its case-sensitivity flag in whichever form is
+ * shorter. A value written with quotes stays quoted on a tie, and a value written
+ * without quotes stays unquoted. A flag after an unquoted value needs a space,
+ * but a flag after a quoted value does not.
+ *
+ * @param  {string}      rawValue  The value as written, including its quotes when it has them.
+ * @param  {string|null} flag      The flag as written, or null when there is none.
+ * @return {string}                The value followed by the flag, in its shortest form.
+ */
+function formatAttributeValue (rawValue, flag) {
+  const isQuoted = rawValue[0] === '"' || rawValue[0] === '\'';
+  const quotedForm = quoteAttributeValue(rawValue) + (flag || '');
+  const unquotedValue = isQuoted ? escapeAttributeValue(rawValue.slice(1, -1)) : rawValue;
+  if (unquotedValue === null) {
+    return quotedForm;
+  }
+  const unquotedForm = unquotedValue + (flag ? ' ' + flag : '');
+  const useUnquoted = isQuoted ? unquotedForm.length < quotedForm.length : unquotedForm.length <= quotedForm.length;
+  return useUnquoted ? unquotedForm : quotedForm;
+}
+
+/**
  * Writes each attribute selector's value quoted or escaped, whichever is
  * shorter, and removes the whitespace inside its brackets.
  *
@@ -314,35 +391,9 @@ function simplifyNthPseudoClasses (selector) {
  * @return {string}           The selector with minified attribute selectors.
  */
 function minifyAttributeSelectors (selector) {
-  let minified = selector;
-  // Minify double-quoted attribute selectors: remove inner whitespace and escape when shorter
-  minified = minified.replace(/\[\s*([^=]+)\s*=\s*"(.*?)"\s*\]/g, (match, attribute, value) => {
-    // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
-    let escaped = value.replace(/([ #.:/;])/g, '\\$1');
-    if (escaped.length < value.length + 2) {
-      return '[' + attribute + '=' + escaped + ']';
-    }
-    return '[' + attribute + '="' + value + '"]';
+  return selector.replace(ATTRIBUTE_SELECTOR_PATTERN, (match, attribute, matcher, rawValue, flag) => {
+    return '[' + attribute + matcher + formatAttributeValue(rawValue, flag) + ']';
   });
-  // Minify single-quoted attribute selectors: remove inner whitespace and escape when shorter
-  minified = minified.replace(/\[\s*([^=]+)\s*=\s*'(.*?)'\s*\]/g, (match, attribute, value) => {
-    // Escape special characters that require quoting (spaces, #, ., :, /, ;), and compare lengths
-    let escaped = value.replace(/([ #.:/;])/g, '\\$1');
-    if (escaped.length < value.length + 2) {
-      return '[' + attribute + '=' + escaped + ']';
-    }
-    return '[' + attribute + '="' + value + '"]';
-  });
-  // Minify unquoted attribute selectors: quote when unescaping produces a shorter result
-  minified = minified.replace(/\[\s*([^=]+)\s*=\s*([^"'].*?)\s*\]/g, (match, attribute, value) => {
-    // Unescape special characters (spaces, #, ., :, /, ;) and compare with quoted form
-    let unescaped = value.replace(/\\([ #.:/;])/g, '$1');
-    if (unescaped.length + 2 < value.length) {
-      return '[' + attribute + '="' + unescaped + '"]';
-    }
-    return '[' + attribute + '=' + value + ']';
-  });
-  return minified;
 }
 
 /**
