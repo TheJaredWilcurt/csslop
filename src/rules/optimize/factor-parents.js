@@ -277,6 +277,40 @@ function createWrapperDeclarations (run) {
 }
 
 /**
+ * Collects the run of consecutive sibling rules, starting at a given index,
+ * whose selectors can all nest under a candidate parent. Comments never affect
+ * the cascade, so they are passed over instead of ending the run.
+ *
+ * @param  {Array}                           rules                The sibling AST entries.
+ * @param  {number}                          startIndex           The index the run starts at.
+ * @param  {function(string): (string|null)} matchNestedSelector  The matcher built for the candidate parent.
+ * @return {object}                                               The `run` of rules paired with their nested selectors, and the `end` index just past the run's last rule.
+ */
+function collectSiblingRun (rules, startIndex, matchNestedSelector) {
+  const run = [];
+  let end = startIndex;
+  let lookahead = startIndex;
+  while (lookahead < rules.length) {
+    const sibling = rules[lookahead];
+    if (sibling.type === 'comment') {
+      lookahead++;
+      continue;
+    }
+    if (sibling.type !== 'rule' || !sibling.selectors?.length) {
+      break;
+    }
+    const nestedSelectors = nestSelectorsUnderParent(sibling, matchNestedSelector);
+    if (!nestedSelectors) {
+      break;
+    }
+    run.push({ sibling, nestedSelectors });
+    lookahead++;
+    end = lookahead;
+  }
+  return { end, run };
+}
+
+/**
  * Groups consecutive sibling rules that share a common leading selector
  * portion (such as `.foo` in `.foo .a`, `.foo .b`, or `.menu .item` in
  * `.menu .item:hover .x`) into a synthesized parent rule with the shared
@@ -308,20 +342,7 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       }
       const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
       // Collect the run of consecutive rules whose selectors can all nest under the candidate.
-      const run = [];
-      let lookahead = index;
-      while (lookahead < rules.length) {
-        const sibling = rules[lookahead];
-        if (sibling.type !== 'rule' || !sibling.selectors?.length) {
-          break;
-        }
-        const nestedSelectors = nestSelectorsUnderParent(sibling, matchNestedSelector);
-        if (!nestedSelectors) {
-          break;
-        }
-        run.push({ sibling, nestedSelectors });
-        lookahead++;
-      }
+      const { end, run } = collectSiblingRun(rules, index, matchNestedSelector);
       const selectorCount = run.reduce((total, entry) => {
         return total + entry.nestedSelectors.length;
       }, 0);
@@ -333,8 +354,11 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       const savings = measureWrapperSavings(run, declarations, candidateParent);
       if (savings > 0 && (!bestGrouping || savings > bestGrouping.savings)) {
         bestGrouping = {
+          comments: rules.slice(index, end).filter((entry) => {
+            return entry.type === 'comment';
+          }),
           declarations,
-          lookahead,
+          end,
           parent: candidateParent,
           savings
         };
@@ -349,12 +373,12 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       index++;
       continue;
     }
-    result.push({
+    result.push(...bestGrouping.comments, {
       type: 'rule',
       selectors: [bestGrouping.parent],
       declarations: bestGrouping.declarations
     });
-    index = bestGrouping.lookahead;
+    index = bestGrouping.end;
   }
   return result;
 }

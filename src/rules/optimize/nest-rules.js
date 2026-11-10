@@ -28,12 +28,12 @@ function nestSelectorRemainder (remainder) {
   if (remainder.startsWith(':')) {
     return '&' + remainder;
   }
-  if (remainder.startsWith(' ')) {
-    return remainder.slice(1);
-  }
   const combinatorMatch = remainder.match(LEADING_COMBINATOR_PATTERN);
   if (combinatorMatch) {
     return combinatorMatch[1] + combinatorMatch[2];
+  }
+  if (remainder.startsWith(' ')) {
+    return remainder.slice(1);
   }
   return null;
 }
