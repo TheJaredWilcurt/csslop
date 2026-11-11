@@ -2,8 +2,22 @@
  * @file Folds a rule into the rule that follows it when the later rule restates everything the earlier one declares, so the two can share a selector list.
  */
 
+import { minifyValue } from '../../value/minify.js';
+
 import { normalizeSelector } from './selector-normalization.js';
 import { selectorsShareSpecificity } from './specificity.js';
+
+/**
+ * Returns a declaration's value in its minified spelling, so values that differ
+ * only in how they are written, such as `rgb(255, 0, 0)` and `#F00`, compare as
+ * equal.
+ *
+ * @param  {object} declaration  The AST declaration node.
+ * @return {string}              The minified value, or an empty string when there is none.
+ */
+function getComparableValue (declaration) {
+  return declaration.value ? minifyValue(declaration) : '';
+}
 
 /**
  * Removes duplicate selectors from a combined selector list by normalizing
@@ -77,7 +91,7 @@ function nestedBlockSignature (block) {
     plainDeclarations
   } = partitionRuleBody(block.declarations);
   const declarationParts = plainDeclarations.map((declaration) => {
-    return declaration.property + ':' + (declaration.value || '').trim();
+    return declaration.property + ':' + getComparableValue(declaration);
   });
   const nestedParts = nestedBlocksSignature(nestedBlocks);
   if (nestedParts === null) {
@@ -143,11 +157,11 @@ function mergeRuleIntoPredecessor (previousRule, rule) {
   }
   const currentValueByProperty = new Map(
     currentBody.plainDeclarations.map((declaration) => {
-      return [declaration.property, (declaration.value || '').trim()];
+      return [declaration.property, getComparableValue(declaration)];
     })
   );
   const previousIsRestated = previousBody.plainDeclarations.every((declaration) => {
-    return currentValueByProperty.get(declaration.property) === (declaration.value || '').trim();
+    return currentValueByProperty.get(declaration.property) === getComparableValue(declaration);
   });
   // `all` rewrites every other property, so the later rule restating a value is
   // no promise that it applies the same way once `all` has run.

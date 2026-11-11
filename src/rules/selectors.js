@@ -271,6 +271,19 @@ const SELECTOR_ARGUMENT_PSEUDO_CLASSES = new Set([
 ]);
 
 /**
+ * Functional pseudo-classes that are invalid when written without an argument,
+ * such as `:nth-child` or `:nth-child()`.
+ *
+ * @type {Set<string>}
+ */
+const PSEUDO_CLASSES_REQUIRING_ARGUMENTS = new Set([
+  'nth-child',
+  'nth-last-child',
+  'nth-last-of-type',
+  'nth-of-type'
+]);
+
+/**
  * Matches a single character allowed inside a selector identifier (letters,
  * digits, hyphens, underscores).
  *
@@ -397,12 +410,14 @@ function summarizeCompoundSelector (selector) {
       }
       const pseudoName = selector.slice(nameStart, nameEnd).toLowerCase();
       index = nameEnd;
+      let argumentText = null;
       if (selector[index] === '(') {
         // Functional pseudo-class: skip past its balanced argument parentheses
         const closeParenthesisIndex = findMatchingParenthesis(selector, index);
         if (closeParenthesisIndex === -1) {
           return null;
         }
+        argumentText = selector.slice(index + 1, closeParenthesisIndex);
         index = closeParenthesisIndex + 1;
       }
       if (isDoubleColon || LEGACY_PSEUDO_ELEMENT_NAMES.has(pseudoName)) {
@@ -417,7 +432,9 @@ function summarizeCompoundSelector (selector) {
         summary.classLevelCount++;
       } else {
         summary.classLevelCount++;
-        if (!WELL_KNOWN_PSEUDO_CLASSES.has(pseudoName)) {
+        // A pseudo-class missing its required argument is invalid even though its name is well known
+        const isMissingArgument = PSEUDO_CLASSES_REQUIRING_ARGUMENTS.has(pseudoName) && !argumentText?.trim();
+        if (!WELL_KNOWN_PSEUDO_CLASSES.has(pseudoName) || isMissingArgument) {
           summary.recognizable = false;
         }
       }
@@ -773,5 +790,7 @@ export {
   flattenNestingParentIsSelector,
   isUniversallyRecognizableSelector,
   mergeAdjacentWherePseudoClasses,
-  processIsSelector
+  PSEUDO_CLASSES_REQUIRING_ARGUMENTS,
+  processIsSelector,
+  unwrapSingleArgumentIsFunctions
 };

@@ -8,6 +8,11 @@ import {
   normalizeMedia
 } from '../normalize.js';
 
+import {
+  expandToOverridableProperties,
+  isPropertyDeclaration
+} from './declaration-writes.js';
+
 /**
  * Removes `@media` rules that contain IE10/IE11 exclusive hacks (the `\0` character).
  *
@@ -145,7 +150,104 @@ function simplifyNestedMediaRules (rules) {
 }
 
 /**
- * Merges adjacent `@media` rules that share an identical normalized query string and deduplicates their child selector rules.
+ * Collects every leaf property written by a list of AST entries, including the
+ * declarations of nested rules and blocks.
+ *
+ * @param  {Array} entries              The AST entries to search.
+ * @param  {Set}   [writtenProperties]  The set the names are added to.
+ * @return {Set}                        The leaf property names written anywhere within the entries.
+ */
+function collectWrittenLeafProperties (entries, writtenProperties = new Set()) {
+  for (const entry of entries) {
+    if (isPropertyDeclaration(entry)) {
+      for (const leafProperty of expandToOverridableProperties(entry.property)) {
+        writtenProperties.add(leafProperty);
+      }
+    }
+    collectWrittenLeafProperties(entry.declarations || [], writtenProperties);
+    collectWrittenLeafProperties(entry.rules || [], writtenProperties);
+  }
+  return writtenProperties;
+}
+
+/**
+ * Reports whether two sets of written leaf properties share a property. Only a
+ * shared property can make the order of two groups of rules change the cascade.
+ * `all` resets every property, so it shares one with any property at all.
+ *
+ * @param  {Set}     firstProperties   The leaf properties written by the first group.
+ * @param  {Set}     secondProperties  The leaf properties written by the second group.
+ * @return {boolean}                   True when the two groups write a property in common.
+ */
+function propertySetsOverlap (firstProperties, secondProperties) {
+  if (firstProperties.has('all') || secondProperties.has('all')) {
+    return firstProperties.size > 0 && secondProperties.size > 0;
+  }
+  return [...firstProperties].some((property) => {
+    return secondProperties.has(property);
+  });
+}
+
+/**
+ * Entry types that may be reordered past a `@media` block. Style rules are
+ * reordered only when they write nothing the block writes, while comments and
+ * whitespace never affect the cascade.
+ *
+ * @type {Set<string>}
+ */
+const REORDERABLE_ENTRY_TYPES = new Set(['rule', 'comment', 'whitespace']);
+
+/**
+ * Finds the `@media` block that a block at `mediaIndex` repeats, if only
+ * reorderable entries sit between the two. The nearest such block is returned.
+ *
+ * @param  {Array}  rules       The AST rule nodes to search.
+ * @param  {number} mediaIndex  The index of the `@media` block being matched.
+ * @return {number}             The index of the repeated block, or -1 when there is none.
+ */
+function findRepeatedMediaIndex (rules, mediaIndex) {
+  if (rules[mediaIndex].type !== 'media') {
+    return -1;
+  }
+  const query = normalizeMedia(rules[mediaIndex].media);
+  let earlierIndex = mediaIndex - 1;
+  while (earlierIndex >= 0 && REORDERABLE_ENTRY_TYPES.has(rules[earlierIndex].type)) {
+    earlierIndex--;
+  }
+  const isRepeat = earlierIndex >= 0 && rules[earlierIndex].type === 'media' &&
+    normalizeMedia(rules[earlierIndex].media) === query;
+  return isRepeat ? earlierIndex : -1;
+}
+
+/**
+ * Moves the reorderable entries that sit between a `@media` block and an earlier
+ * block with the same query above that earlier block, whenever they write no
+ * property the earlier block writes. Without the move, the two blocks are
+ * separated and cannot merge.
+ *
+ * @param  {Array} rules  The AST rule nodes to process.
+ * @return {Array}        A new array of rules with repeated `@media` blocks brought together where safe.
+ */
+function hoistRulesAboveRepeatedMedia (rules) {
+  const result = [...rules];
+  for (let mediaIndex = 0; mediaIndex < result.length; mediaIndex++) {
+    const earlierIndex = findRepeatedMediaIndex(result, mediaIndex);
+    if (earlierIndex === -1) {
+      continue;
+    }
+    const betweenEntries = result.slice(earlierIndex + 1, mediaIndex);
+    const earlierWrites = collectWrittenLeafProperties(result[earlierIndex].rules || []);
+    const betweenWrites = collectWrittenLeafProperties(betweenEntries);
+    if (!propertySetsOverlap(betweenWrites, earlierWrites)) {
+      result.splice(earlierIndex + 1, betweenEntries.length);
+      result.splice(earlierIndex, 0, ...betweenEntries);
+    }
+  }
+  return result;
+}
+
+/**
+ * Merges adjacent `@media` rules that share an identical normalized query string and deduplicates their child selector rules. Reorderable rules that separate a repeated query are first moved above the earlier block, where it is safe to do so.
  *
  * @param  {Array}                  rules               The AST rule nodes to process.
  * @param  {function(Array): Array} mergeSelectorRules  Callback to merge selector rules within each media block.
@@ -154,7 +256,7 @@ function simplifyNestedMediaRules (rules) {
 function mergeMediaRules (rules, mergeSelectorRules) {
   const mediaMap = new Map();
   const result = [];
-  for (const rule of rules) {
+  for (const rule of hoistRulesAboveRepeatedMedia(rules)) {
     if (rule.type === 'media') {
       const normalizedQuery = normalizeMedia(rule.media);
       if (mediaMap.has(normalizedQuery)) {

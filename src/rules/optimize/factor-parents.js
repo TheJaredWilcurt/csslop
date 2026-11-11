@@ -211,7 +211,8 @@ function nestSelectorsUnderParent (rule, matchNestedSelector) {
   for (const selector of rule.selectors) {
     const trimmedSelector = selector.trim();
     const nestedSelector = matchNestedSelector(trimmedSelector);
-    if (nestedSelector === null || nestedSelector.length >= trimmedSelector.length) {
+    // A bare `&` is the parent itself, which is hoisted into the wrapper rather than kept as a nested selector
+    if (nestedSelector === null || (nestedSelector !== '&' && nestedSelector.length >= trimmedSelector.length)) {
       return null;
     }
     nestedSelectors.push(nestedSelector);
@@ -230,50 +231,38 @@ function createNestedChild (entry) {
 }
 
 /**
- * Restores the source order of rules that are being moved under their own
- * selector. Their relative order can affect the cascade when nested rules
- * overlap, so it must not depend on an earlier grouping optimization.
+ * Reports whether a run entry is the parent selector itself, which nests as a
+ * bare `&`. Its body is written straight into the wrapper instead of being kept
+ * as a nested rule of its own.
  *
- * @param  {Array} rules  The nested rules to order.
- * @return {Array}        A source-ordered copy of the rules.
+ * @param  {object}  entry  A run entry pairing a sibling rule with its nested selectors.
+ * @return {boolean}        True when the entry is the parent itself.
  */
-function orderRulesBySourcePosition (rules) {
-  return [...rules].sort((firstRule, secondRule) => {
-    return firstRule.position?.start?.offset - secondRule.position?.start?.offset;
-  });
+function isParentItselfEntry (entry) {
+  return entry.nestedSelectors.length === 1 && entry.nestedSelectors[0] === '&';
 }
 
 /**
  * Builds the declarations of a wrapper that holds a run of sibling rules nested
- * under their shared parent. A first rule whose only nested selector is `&` is
- * the parent itself, so its declarations are hoisted into the wrapper. Otherwise
- * the nested rules are factored again, so the selectors they still share can be
- * wrapped in turn.
+ * under their shared parent. A run entry that is the parent itself has its body
+ * written in place, so the wrapper keeps the run's order. Moving a parent's
+ * declarations ahead of an earlier nested rule could change which one wins a
+ * conflict. Without a parent itself, the nested rules are factored again, so
+ * the selectors they still share can be wrapped in turn.
  *
  * @param  {Array} run  The rules of the run paired with their nested selectors.
  * @return {Array}      The declarations of the wrapper rule.
  */
 function createWrapperDeclarations (run) {
-  const firstEntry = run[0];
-  const firstSelectorIsParent = (
-    firstEntry.nestedSelectors.length === 1 &&
-    firstEntry.nestedSelectors[0] === '&'
-  );
-  if (!firstSelectorIsParent) {
+  if (!run.some(isParentItselfEntry)) {
     return factorCommonParents(run.map(createNestedChild), true);
   }
-  const directDeclarations = firstEntry.sibling.declarations;
-  const directNestedRules = directDeclarations.filter((declaration) => {
-    return declaration.type === 'rule';
+  return run.flatMap((entry) => {
+    if (isParentItselfEntry(entry)) {
+      return entry.sibling.declarations;
+    }
+    return [createNestedChild(entry)];
   });
-  const directEntries = directDeclarations.filter((declaration) => {
-    return declaration.type !== 'rule';
-  });
-  const children = run.slice(1).map(createNestedChild);
-  return [
-    ...directEntries,
-    ...orderRulesBySourcePosition([...directNestedRules, ...children])
-  ];
 }
 
 /**

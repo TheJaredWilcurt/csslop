@@ -2,6 +2,8 @@
  * @file Normalizes selectors into one comparable spelling, memoized per stylesheet, so rules that select the same elements are recognized as such.
  */
 
+import { unwrapSingleArgumentIsFunctions } from '../selectors.js';
+
 /**
  * Memoizes the normalized form of each selector seen during the current
  * stylesheet.
@@ -27,7 +29,9 @@ function clearNormalizedSelectorCache () {
  */
 function computeNormalizedSelector (selector) {
   // Collapse each whitespace run into a single space
-  const normalized = selector.trim().replace(/\s+/g, ' ');
+  const collapsed = selector.trim().replace(/\s+/g, ' ');
+  // Unwrap single-argument `:is()` so `:is(a)` compares equal to `a`
+  const normalized = unwrapSingleArgumentIsFunctions(collapsed, false);
   if (!normalized.includes('::')) {
     return normalized;
   }
