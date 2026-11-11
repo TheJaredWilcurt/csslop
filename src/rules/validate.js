@@ -9,6 +9,8 @@ import {
 } from '../parser/source-search.js';
 import { tokenizeCssValue } from '../parser/tokenizer.js';
 
+import { PSEUDO_CLASSES_REQUIRING_ARGUMENTS } from './selectors.js';
+
 /**
  * Reads an attribute name, optional matcher, value, and case flag.
  *
@@ -92,6 +94,9 @@ function isValidSelector (selector) {
       if (functionName === 'lang' && !isValidLanguageList(inner)) {
         return false;
       }
+      if (PSEUDO_CLASSES_REQUIRING_ARGUMENTS.has(functionName) && inner.trim() === '') {
+        return false;
+      }
       if (functionName === 'not' || functionName === 'has') {
         if (!splitTopLevelCommaList(inner).every(isValidSelector)) {
           return false;
@@ -114,6 +119,9 @@ function isValidSelector (selector) {
       }
       const following = tokens[followingIndex];
       if (following?.type !== 'ident' && following?.type !== 'function') {
+        return false;
+      }
+      if (following.type === 'ident' && PSEUDO_CLASSES_REQUIRING_ARGUMENTS.has(following.text.toLowerCase())) {
         return false;
       }
     }

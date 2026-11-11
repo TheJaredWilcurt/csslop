@@ -25,6 +25,19 @@ function isGradientStopPosition (positionText) {
 }
 
 /**
+ * Checks whether a stop is entirely a hex color with no attached position. Its
+ * digits may look like a shorter hex color followed by a numeric position, so
+ * it must be recognized as a whole before any splitting is attempted.
+ *
+ * @param  {string}  stop  The raw gradient stop text.
+ * @return {boolean}       Whether the stop is a complete hex color.
+ */
+function isCompleteHexColor (stop) {
+  // Match a complete 3, 4, 6, or 8 digit hex color, such as `#123` or `#12345678`.
+  return /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(stop);
+}
+
+/**
  * Splits a hex color stop that has an attached position with no separating
  * whitespace back into distinct color and position parts.
  *
@@ -32,7 +45,7 @@ function isGradientStopPosition (positionText) {
  * @return {object|null}       Parsed `color` and `position` parts, or null.
  */
 function splitAttachedHexColorStop (stop) {
-  if (!stop.startsWith('#')) {
+  if (!stop.startsWith('#') || isCompleteHexColor(stop)) {
     return null;
   }
 
