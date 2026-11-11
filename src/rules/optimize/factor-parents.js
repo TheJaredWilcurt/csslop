@@ -231,15 +231,20 @@ function createNestedChild (entry) {
 }
 
 /**
- * Reports whether a run entry is the parent selector itself, which nests as a
- * bare `&`. Its body is written straight into the wrapper instead of being kept
- * as a nested rule of its own.
+ * Reports whether a run entry is the parent selector itself, with each of its
+ * selectors nesting as a bare `&`. Its body is written straight into the
+ * wrapper instead of being kept as a nested rule of its own. Every selector
+ * must be checked: a rule like `.a,.a` nests as `&,&`, which is still the
+ * parent itself. Treating it otherwise would re-factor identical rules
+ * forever, since `&` never gets shorter.
  *
  * @param  {object}  entry  A run entry pairing a sibling rule with its nested selectors.
- * @return {boolean}        True when the entry is the parent itself.
+ * @return {boolean}        True when every one of the entry's selectors is the parent itself.
  */
 function isParentItselfEntry (entry) {
-  return entry.nestedSelectors.length === 1 && entry.nestedSelectors[0] === '&';
+  return entry.nestedSelectors.every((nestedSelector) => {
+    return nestedSelector === '&';
+  });
 }
 
 /**
