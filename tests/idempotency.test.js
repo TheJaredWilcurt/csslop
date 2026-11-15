@@ -86,6 +86,9 @@ const knownBad = [
   'zxx-lib-v2.10.0.css'
 ];
 
+const onlyThese = [
+];
+
 let foundBad = [];
 
 /**
@@ -97,7 +100,16 @@ function run () {
 
   for (const library of libraries) {
     const fileName = library.fileName;
-    if (!knownBad.includes(fileName)) {
+    if (
+      (
+        onlyThese.length &&
+        onlyThese.includes(fileName)
+      ) ||
+      (
+        !onlyThese.length &&
+        !knownBad.includes(fileName)
+      )
+    ) {
       const file = library.source;
       const first = minifyCSS(file);
       const second = minifyCSS(first);
