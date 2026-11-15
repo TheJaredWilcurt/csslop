@@ -291,6 +291,8 @@ function simplifyNthPseudoClasses (selector) {
   minified = minified.replace(/:nth-child\(2n\s*\+\s*0\)/g, ':nth-child(2n)');
   // Simplify :nth-child(1n) to :nth-child(n)
   minified = minified.replace(/:nth-child\(1n\)/g, ':nth-child(n)');
+  // Simplify :nth-child(even) to :nth-child(2n), which selects the same elements
+  minified = minified.replace(/:nth-child\(even\)/g, ':nth-child(2n)');
   // Remove unnecessary leading + sign from :nth-child()
   minified = minified.replace(/:nth-child\(\+\s*(\d+)\)/g, ':nth-child($1)');
   // Simplify :nth-child(0n+N) to :nth-child(N)
