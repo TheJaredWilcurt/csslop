@@ -215,6 +215,32 @@ function extractSimpleBackgroundBase (value) {
 }
 
 /**
+ * Orders the background color and image within a shorthand. When nothing
+ * follows the image, the color is written right after it with no space, since
+ * the closing parenthesis of a `url()` or function already ends the image.
+ * Otherwise the color leads the image, which costs the same space.
+ *
+ * @param  {string|undefined} color             The background color, if any.
+ * @param  {string|undefined} image             The background image, if any.
+ * @param  {Array}            tokensAfterImage  The shorthand tokens that follow the image.
+ * @return {Array}                              The color and image as shorthand tokens.
+ */
+function buildColorAndImageTokens (color, image, tokensAfterImage) {
+  const hasColor = Boolean(color) && color !== 'transparent';
+  const hasImage = Boolean(image) && image !== 'none';
+  if (!hasImage) {
+    return hasColor ? [color] : [];
+  }
+  if (!hasColor) {
+    return [image];
+  }
+  if (!tokensAfterImage.length) {
+    return [image + color];
+  }
+  return [color, image];
+}
+
+/**
  * Serializes normalized background components into a minified background
  * shorthand value while omitting default sub-values.
  *
@@ -232,33 +258,27 @@ function buildBackgroundShorthandValue (valueMap, importantSuffix) {
   const clip = valueMap.get('background-clip');
   const position = resolveBackgroundPosition(valueMap);
 
-  const result = [];
-  if (color && color !== 'transparent') {
-    result.push(color);
-  }
-  if (image && image !== 'none') {
-    result.push(image);
-  }
-  result.push(...buildLayerPositionAndSize(position, size));
+  const trailingTokens = [...buildLayerPositionAndSize(position, size)];
   if (repeat && repeat !== 'repeat') {
-    result.push(repeat);
+    trailingTokens.push(repeat);
   }
   if (attachment && attachment !== 'scroll') {
-    result.push(attachment);
+    trailingTokens.push(attachment);
   }
   const hasNonDefaultOrigin = origin && origin !== 'padding-box';
   const hasNonDefaultClip = clip && clip !== 'border-box';
   if (hasNonDefaultOrigin && hasNonDefaultClip) {
-    result.push(origin);
-    result.push(clip);
+    trailingTokens.push(origin);
+    trailingTokens.push(clip);
   } else if (hasNonDefaultOrigin || hasNonDefaultClip) {
     if (origin) {
-      result.push(origin);
+      trailingTokens.push(origin);
     }
     if (clip) {
-      result.push(clip);
+      trailingTokens.push(clip);
     }
   }
+  const result = [...buildColorAndImageTokens(color, image, trailingTokens), ...trailingTokens];
   if (!result.length) {
     return null;
   }
