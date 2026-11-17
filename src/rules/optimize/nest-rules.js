@@ -4,7 +4,12 @@
 
 import { findTopLevelDelimiter } from '../../parser/source-search.js';
 
-import { canMoveRuleAcross } from './reordering.js';
+import {
+  createWrittenPropertiesCache,
+  findLastBlockingIndex
+} from './reordering.js';
+import { createSiblingIndex } from './sibling-index.js';
+import { findFirstPositionAtLeast } from './sorted-indexes.js';
 
 /**
  * Matches the part of a child selector that follows its parent when that part
@@ -197,6 +202,37 @@ function isStrictlyNestableUnderParent (childRule, matchNestedSelector) {
 }
 
 /**
+ * Finds the earliest preceding sibling that a parent rule could hoist above
+ * and then host as a nested child. The parent may only move across siblings
+ * whose property writes it does not overlap, so only the rules after the
+ * nearest sibling it cannot cross are considered, and of those only the ones
+ * whose selector starts with the parent's can nest under it.
+ *
+ * @param  {Array}  rules         The sibling AST entries.
+ * @param  {number} parentIndex   The index of the parent rule.
+ * @param  {object} siblingIndex  The lookups built by `createSiblingIndex` for the siblings.
+ * @return {number}               The index of the earliest nestable child, or -1 when there is none.
+ */
+function findEarliestNestableChildIndex (rules, parentIndex, siblingIndex) {
+  const parentRule = rules[parentIndex];
+  const parentSelector = parentRule.selectors[0];
+  const matchNestedSelector = createNestedSelectorMatcher(parentSelector);
+  const lastBlockingIndex = findLastBlockingIndex(parentRule, siblingIndex.writeIndex, parentIndex);
+  const candidateIndexes = siblingIndex.findRulesStartingWith(parentSelector.trim());
+  for (
+    let position = findFirstPositionAtLeast(candidateIndexes, lastBlockingIndex + 1);
+    position < candidateIndexes.length && candidateIndexes[position] < parentIndex;
+    position++
+  ) {
+    const childIndex = candidateIndexes[position];
+    if (isStrictlyNestableUnderParent(rules[childIndex], matchNestedSelector)) {
+      return childIndex;
+    }
+  }
+  return -1;
+}
+
+/**
  * Moves a parent rule before earlier rules that can safely nest under it.
  *
  * @param  {Array} rules  The sibling AST entries to reorder.
@@ -204,6 +240,8 @@ function isStrictlyNestableUnderParent (childRule, matchNestedSelector) {
  */
 function hoistNestingParents (rules) {
   const result = [...rules];
+  const getWrittenProperties = createWrittenPropertiesCache();
+  let siblingIndex = createSiblingIndex(result, getWrittenProperties);
   let parentIndex = 1;
 
   while (parentIndex < result.length) {
@@ -213,34 +251,15 @@ function hoistNestingParents (rules) {
       continue;
     }
 
-    const matchNestedSelector = createNestedSelectorMatcher(parentRule.selectors[0]);
-    let earliestChildIndex = -1;
-    for (let childIndex = parentIndex - 1; childIndex >= 0; childIndex--) {
-      const childRule = result[childIndex];
-      if (childRule.type === 'comment' || childRule.type === 'whitespace') {
-        continue;
-      }
-      if (childRule.type !== 'rule') {
-        break;
-      }
-      if (!isStrictlyNestableUnderParent(childRule, matchNestedSelector)) {
-        continue;
-      }
-      const canMoveBeforeChild = result.slice(childIndex, parentIndex).every((entry) => {
-        return canMoveRuleAcross(parentRule, entry);
-      });
-      if (!canMoveBeforeChild) {
-        break;
-      }
-      earliestChildIndex = childIndex;
-    }
-
+    const earliestChildIndex = findEarliestNestableChildIndex(result, parentIndex, siblingIndex);
     if (earliestChildIndex === -1) {
       parentIndex++;
       continue;
     }
     result.splice(parentIndex, 1);
     result.splice(earliestChildIndex, 0, parentRule);
+    // The indexes no longer match the reordered siblings
+    siblingIndex = createSiblingIndex(result, getWrittenProperties);
     parentIndex = earliestChildIndex + 1;
   }
 
