@@ -196,7 +196,8 @@ function serializeColorStop (color, positionTokens) {
     return color;
   }
 
-  return color + ' ' + positionTokens.join(' ');
+  const separator = color.endsWith(')') ? '' : ' ';
+  return color + separator + positionTokens.join(' ');
 }
 
 /**

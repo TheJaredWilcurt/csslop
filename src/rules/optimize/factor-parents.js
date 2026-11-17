@@ -12,6 +12,9 @@ import {
   createNestedSelectorMatcher,
   isSelectorWhitespace
 } from './nest-rules.js';
+import { canMoveRuleAcrossRange } from './reordering.js';
+import { createSiblingIndex } from './sibling-index.js';
+import { findFirstPositionAtLeast } from './sorted-indexes.js';
 import { selectorsShareSpecificity } from './specificity.js';
 
 /**
@@ -262,46 +265,61 @@ function createWrapperDeclarations (run) {
   if (!run.some(isParentItselfEntry)) {
     return factorCommonParents(run.map(createNestedChild), true);
   }
-  return run.flatMap((entry) => {
+  const declarations = run.flatMap((entry) => {
     if (isParentItselfEntry(entry)) {
       return entry.sibling.declarations;
     }
     return [createNestedChild(entry)];
   });
+  return factorCommonParents(declarations, true);
 }
 
 /**
  * Collects the run of consecutive sibling rules, starting at a given index,
  * whose selectors can all nest under a candidate parent. Comments never affect
- * the cascade, so they are passed over instead of ending the run.
+ * the cascade, so they are passed over instead of ending the run, while any
+ * other entry that is not a rule, such as an at-rule, ends it. A rule that
+ * cannot nest stays in place, and later rules may only join the run when they
+ * can move across every rule left behind since the last rule that joined.
+ * Only the rules whose first selector starts with the parent can nest under
+ * it, so the others are never visited.
  *
- * @param  {Array}                           rules                The sibling AST entries.
- * @param  {number}                          startIndex           The index the run starts at.
- * @param  {function(string): (string|null)} matchNestedSelector  The matcher built for the candidate parent.
- * @return {object}                                               The `run` of rules paired with their nested selectors, and the `end` index just past the run's last rule.
+ * @param  {Array}  rules           The sibling AST entries.
+ * @param  {number} startIndex      The index the run starts at.
+ * @param  {string} parentSelector  The candidate parent selector.
+ * @param  {object} siblingIndex    The lookups built by `createSiblingIndex` for the siblings.
+ * @return {object}                 The `run` of rules paired with their nested selectors, the `retainedEntries` left between them, and the `end` index just past the run's last rule.
  */
-function collectSiblingRun (rules, startIndex, matchNestedSelector) {
+function collectSiblingRun (rules, startIndex, parentSelector, siblingIndex) {
+  const { findRulesStartingWith, writeIndex } = siblingIndex;
+  const matchNestedSelector = createNestedSelectorMatcher(parentSelector);
+  const candidateIndexes = findRulesStartingWith(parentSelector.trim());
+  const barrierPosition = findFirstPositionAtLeast(writeIndex.barrierIndexes, startIndex);
+  const barrierIndex = writeIndex.barrierIndexes[barrierPosition] ?? rules.length;
   const run = [];
-  let end = startIndex;
-  let lookahead = startIndex;
-  while (lookahead < rules.length) {
-    const sibling = rules[lookahead];
-    if (sibling.type === 'comment') {
-      lookahead++;
-      continue;
-    }
-    if (sibling.type !== 'rule' || !sibling.selectors?.length) {
-      break;
-    }
+  const selectedIndexes = new Set();
+  let lastSelectedIndex = startIndex - 1;
+
+  for (
+    let position = findFirstPositionAtLeast(candidateIndexes, startIndex);
+    position < candidateIndexes.length && candidateIndexes[position] < barrierIndex;
+    position++
+  ) {
+    const siblingPosition = candidateIndexes[position];
+    const sibling = rules[siblingPosition];
     const nestedSelectors = nestSelectorsUnderParent(sibling, matchNestedSelector);
-    if (!nestedSelectors) {
-      break;
+    if (nestedSelectors && canMoveRuleAcrossRange(sibling, writeIndex, lastSelectedIndex, siblingPosition)) {
+      selectedIndexes.add(siblingPosition);
+      lastSelectedIndex = siblingPosition;
+      run.push({ sibling, nestedSelectors });
     }
-    run.push({ sibling, nestedSelectors });
-    lookahead++;
-    end = lookahead;
   }
-  return { end, run };
+
+  const end = lastSelectedIndex + 1;
+  const retainedEntries = rules.slice(startIndex, end).filter((entry, relativeIndex) => {
+    return !selectedIndexes.has(startIndex + relativeIndex);
+  });
+  return { end, retainedEntries, run };
 }
 
 /**
@@ -319,8 +337,9 @@ function collectSiblingRun (rules, startIndex, matchNestedSelector) {
  * @param  {boolean} allowTrailingCompound  True when the rules are children of a factored wrapper, whose `&`-relative selectors may share a trailing compound that can be factored out in turn.
  * @return {Array}                          A new array of rules with shared parent selectors factored into nesting wrappers.
  */
-function factorCommonParents (rules, allowTrailingCompound = false) {
+function factorCommonParentsPass (rules, allowTrailingCompound = false) {
   const result = [];
+  const siblingIndex = createSiblingIndex(rules);
   let index = 0;
   while (index < rules.length) {
     const rule = rules[index];
@@ -331,12 +350,10 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
     }
     let bestGrouping = null;
     for (const candidateParent of collectSharedParentCandidates(rule)) {
-      if (!candidateParent || containsPseudoElement(candidateParent)) {
+      if (!candidateParent || candidateParent === '&' || containsPseudoElement(candidateParent)) {
         continue;
       }
-      const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
-      // Collect the run of consecutive rules whose selectors can all nest under the candidate.
-      const { end, run } = collectSiblingRun(rules, index, matchNestedSelector);
+      const { end, retainedEntries, run } = collectSiblingRun(rules, index, candidateParent, siblingIndex);
       const selectorCount = run.reduce((total, entry) => {
         return total + entry.nestedSelectors.length;
       }, 0);
@@ -348,12 +365,10 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       const savings = measureWrapperSavings(run, declarations, candidateParent);
       if (savings > 0 && (!bestGrouping || savings > bestGrouping.savings)) {
         bestGrouping = {
-          comments: rules.slice(index, end).filter((entry) => {
-            return entry.type === 'comment';
-          }),
           declarations,
           end,
           parent: candidateParent,
+          retainedEntries,
           savings
         };
       }
@@ -367,14 +382,48 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       index++;
       continue;
     }
-    result.push(...bestGrouping.comments, {
+    result.push({
       type: 'rule',
       selectors: [bestGrouping.parent],
       declarations: bestGrouping.declarations
     });
+    result.push(...bestGrouping.retainedEntries);
     index = bestGrouping.end;
   }
   return result;
+}
+
+/**
+ * Factors shared selector parents throughout a rule list and its nested rules,
+ * repeating productive passes until the selector text stops shrinking.
+ *
+ * @param  {Array}   rules                  The AST entries to factor.
+ * @param  {boolean} allowTrailingCompound  Whether nested trailing compounds may also be factored.
+ * @return {Array}                          The rules with shared parents factored.
+ */
+function factorCommonParents (rules, allowTrailingCompound = false) {
+  const rulesWithFactoredBodies = rules.map((rule) => {
+    if (rule.type === 'rule' && rule.declarations) {
+      return {
+        ...rule,
+        declarations: factorCommonParents(rule.declarations, true)
+      };
+    }
+    return rule;
+  });
+  let currentRules = rulesWithFactoredBodies;
+  let factorizedRules = factorCommonParentsPass(currentRules, allowTrailingCompound);
+  let previousLength = measureRuleCharacters(currentRules);
+  let currentLength = measureRuleCharacters(factorizedRules);
+
+  while (currentLength < previousLength) {
+    currentRules = factorizedRules;
+    previousLength = currentLength;
+    factorizedRules = factorCommonParentsPass(currentRules, allowTrailingCompound);
+    currentLength = measureRuleCharacters(factorizedRules);
+  }
+
+  return factorizedRules;
 }
 
 /**

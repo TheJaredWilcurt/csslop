@@ -4,6 +4,7 @@
 
 import {
   deduplicateKeyframes,
+  mergeContainerRules,
   mergeLayerRules,
   mergeMediaRules,
   removeIEMediaRules,
@@ -47,8 +48,10 @@ function optimizeRuleList (rules) {
   let result = expandPureNestedRules(rules);
   result = removeIEMediaRules(result);
   result = simplifyNestedMediaRules(result);
+  result = removeEmptyRules(result);
   result = mergeLayerRules(result, mergeSelectorRules);
   result = mergeMediaRules(result, mergeSelectorRules);
+  result = mergeContainerRules(result, mergeSelectorRules);
   result = deduplicateKeyframes(result);
   for (const rule of result) {
     if (rule.rules) {

@@ -59,6 +59,42 @@ function nestedRulesMergeable (first, second) {
 }
 
 /**
+ * Determines whether two nested rules use the exact same selector list. Two
+ * adjacent rules with the same selectors read like one rule whose body is
+ * both bodies in order, so they can always be combined.
+ *
+ * @param  {object}  first   The first nested rule.
+ * @param  {object}  second  The second nested rule.
+ * @return {boolean}         Whether both rules have the same selector list.
+ */
+function nestedRulesShareSelectors (first, second) {
+  if (!first.selectors?.length || first.selectors.length !== second.selectors?.length) {
+    return false;
+  }
+  return first.selectors.every((selector, index) => {
+    return selector.trim() === second.selectors[index].trim();
+  });
+}
+
+/**
+ * Combines two adjacent nested rules that share a selector list into one rule
+ * whose body keeps the earlier body before the later one.
+ *
+ * @param  {object} first   The earlier nested rule.
+ * @param  {object} second  The later nested rule.
+ * @return {object}         The combined nested rule.
+ */
+function combineNestedRuleBodies (first, second) {
+  return {
+    ...first,
+    declarations: mergeConsecutiveNestedRules([
+      ...(first.declarations || []),
+      ...(second.declarations || [])
+    ])
+  };
+}
+
+/**
  * Recursively merges consecutive nested rules within a declaration list when
  * they share identical bodies and specificity, combining their selector lists.
  *
@@ -76,12 +112,15 @@ function mergeConsecutiveNestedRules (declarations) {
   const result = [];
   for (const declaration of recursed) {
     const previous = result[result.length - 1];
-    if (
+    const followsNestedRule = (
       declaration.type === 'rule' &&
-      previous &&
-      previous.type === 'rule' &&
-      nestedRulesMergeable(previous, declaration)
-    ) {
+      previous?.type === 'rule'
+    );
+    if (followsNestedRule && nestedRulesShareSelectors(previous, declaration)) {
+      result[result.length - 1] = combineNestedRuleBodies(previous, declaration);
+      continue;
+    }
+    if (followsNestedRule && nestedRulesMergeable(previous, declaration)) {
       result[result.length - 1] = {
         ...previous,
         selectors: [...previous.selectors, ...declaration.selectors]

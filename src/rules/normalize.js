@@ -97,9 +97,16 @@ function normalizeSelectorWhitespace (selector) {
       continue;
     }
     if (WHITESPACE_CHARACTER.test(character)) {
-      normalized += ' ';
       while (index < selector.length && WHITESPACE_CHARACTER.test(selector[index])) {
         index++;
+      }
+      const previousCharacter = normalized[normalized.length - 1] || '';
+      const nextCharacter = selector[index] || '';
+      if (
+        !',>+~'.includes(previousCharacter) &&
+        !',>+~'.includes(nextCharacter)
+      ) {
+        normalized += ' ';
       }
       continue;
     }

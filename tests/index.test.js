@@ -31,14 +31,22 @@ function loadAllTests () {
     const testFolder = join(copiedTests, folder);
     const testNumbers = readdirSync(testFolder);
     for (const testNumber of testNumbers) {
-      const expected = join(testFolder, testNumber, 'expected.css');
+      const testFileNames = readdirSync(join(testFolder, testNumber));
+      const accepted = testFileNames
+        .filter((testFileName) => {
+          return testFileName.startsWith('expected');
+        })
+        .map((testFileName) => {
+          const expected = join(testFolder, testNumber, testFileName);
+          return normalizeEOL(String(readFileSync(expected)).trim());
+        });
       const source = join(testFolder, testNumber, 'source.css');
       const README = join(testFolder, testNumber, 'README.md');
       const test = {
         folder,
         testNumber,
         source: normalizeEOL(String(readFileSync(source)).trim()),
-        expected: normalizeEOL(String(readFileSync(expected)).trim()),
+        accepted,
         description: normalizeEOL(String(readFileSync(README)).trim())
       };
       allTests.push(test);
@@ -60,14 +68,14 @@ function runAllTests (allTests) {
     const {
       testNumber,
       description,
-      expected,
+      accepted,
       folder,
       source
     } = test;
     const actual = minifyCSS(source);
     const rerun = minifyCSS(actual);
     folders[folder].total++;
-    if (actual === expected) {
+    if (accepted.includes(actual)) {
       pass++;
     } else {
       folders[folder].fail++;
@@ -76,7 +84,7 @@ function runAllTests (allTests) {
         id: '/copiedTests/' + testFolder + '/' + testNumber,
         description,
         source,
-        expected,
+        accepted,
         actual
       });
     }
@@ -90,7 +98,7 @@ function runAllTests (allTests) {
         description: 'This test has failed idempotency. ' +
           'It\'s minified output should not change if minified again.',
         source,
-        expected,
+        accepted,
         actual,
         rerun
       });

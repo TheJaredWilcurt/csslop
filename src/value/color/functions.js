@@ -2,6 +2,7 @@
  * @file Converts CSS color functions (rgb, hsl, hwb, lab, oklab, oklch, color-mix, and relative colors) to their shortest equivalent, and compacts the ones that have to stay functions.
  */
 
+import { findMatchingParenthesis } from '../../parser/source-search.js';
 import {
   formatCompactNumber,
   parseAlphaString,
@@ -213,13 +214,7 @@ function convertOklchFunctionsToHex (value) {
  * @return {string}        The value with computed colors resolved where possible.
  */
 function resolveComputedColors (value) {
-  // Evaluate color-mix() expressions (before space minification to avoid nested-paren issues)
-  if (/\bcolor-mix\(/i.test(value)) {
-    const result = evaluateColorMix(value);
-    if (result) {
-      value = result;
-    }
-  }
+  value = resolveColorMixFunctions(value);
 
   // Handle color(from ...) relative color syntax (identity case)
   if (/\bcolor\(\s*from\b/i.test(value)) {
@@ -229,6 +224,64 @@ function resolveComputedColors (value) {
     }
   }
   return value;
+}
+
+/**
+ * Resolves each color-mix function independently while preserving the rest of
+ * the CSS value that contains it.
+ *
+ * @param  {string} value  The CSS value that may contain color-mix functions.
+ * @return {string}        The value with resolvable color-mix functions replaced.
+ */
+function resolveColorMixFunctions (value) {
+  const functionToken = 'color-mix(';
+  const lowercaseValue = value.toLowerCase();
+  let result = '';
+  let index = 0;
+
+  while (index < value.length) {
+    const functionIndex = lowercaseValue.indexOf(functionToken, index);
+    if (functionIndex === -1) {
+      break;
+    }
+
+    const precedingCharacter = value[functionIndex - 1] || '';
+    if (isCssIdentifierCharacter(precedingCharacter)) {
+      index = functionIndex + functionToken.length;
+      continue;
+    }
+
+    const openParenthesisIndex = functionIndex + functionToken.length - 1;
+    const closeParenthesisIndex = findMatchingParenthesis(value, openParenthesisIndex);
+    if (closeParenthesisIndex === -1) {
+      return result + value.slice(index);
+    }
+
+    const functionCall = value.slice(functionIndex, closeParenthesisIndex + 1);
+    const resolvedFunction = evaluateColorMix(functionCall);
+    result += value.slice(index, functionIndex) + (resolvedFunction || functionCall);
+    index = closeParenthesisIndex + 1;
+  }
+
+  return result + value.slice(index);
+}
+
+/**
+ * Reports whether a character can continue a CSS identifier.
+ *
+ * @param  {string}  character  The character to test.
+ * @return {boolean}            Whether the character is an identifier character.
+ */
+function isCssIdentifierCharacter (character) {
+  const characterCode = character.codePointAt(0);
+  return (
+    character === '-' ||
+    character === '_' ||
+    (characterCode >= 48 && characterCode <= 57) ||
+    (characterCode >= 65 && characterCode <= 90) ||
+    (characterCode >= 97 && characterCode <= 122) ||
+    characterCode >= 128
+  );
 }
 
 /**

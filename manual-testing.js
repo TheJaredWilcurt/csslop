@@ -6,7 +6,7 @@ import { minifyCSS } from './index.js';
 
 const input = `
 a {
-  background: transparent;
+  color: #f00;
 }
 `;
 const output = minifyCSS(input);

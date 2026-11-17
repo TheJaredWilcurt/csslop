@@ -4,6 +4,13 @@
 
 import { findTopLevelDelimiter } from '../../parser/source-search.js';
 
+import {
+  createWrittenPropertiesCache,
+  findLastBlockingIndex
+} from './reordering.js';
+import { createSiblingIndex } from './sibling-index.js';
+import { findFirstPositionAtLeast } from './sorted-indexes.js';
+
 /**
  * Matches the part of a child selector that follows its parent when that part
  * starts with an explicit combinator. Optional whitespace, then the combinator
@@ -177,12 +184,96 @@ function findNestingParent (emittedRules, indexBySelector, childSelector) {
 }
 
 /**
+ * Checks whether every selector of a rule extends a parent selector, so the
+ * rule would nest under that parent as a distinct child. A selector identical
+ * to the parent would only nest as a bare `&`, and treating it as a child lets
+ * two rules sharing a selector endlessly swap places while being hoisted.
+ *
+ * @param  {object}                          childRule            The rule that may nest under the parent.
+ * @param  {function(string): (string|null)} matchNestedSelector  The matcher built from the parent selector.
+ * @return {boolean}                                              Whether every child selector nests as a distinct child.
+ */
+function isStrictlyNestableUnderParent (childRule, matchNestedSelector) {
+  const childSelectors = childRule.selectors || [];
+  return childSelectors.length > 0 && childSelectors.every((selector) => {
+    const nestedSelector = matchNestedSelector(selector.trim());
+    return nestedSelector !== null && nestedSelector !== '&';
+  });
+}
+
+/**
+ * Finds the earliest preceding sibling that a parent rule could hoist above
+ * and then host as a nested child. The parent may only move across siblings
+ * whose property writes it does not overlap, so only the rules after the
+ * nearest sibling it cannot cross are considered, and of those only the ones
+ * whose selector starts with the parent's can nest under it.
+ *
+ * @param  {Array}  rules         The sibling AST entries.
+ * @param  {number} parentIndex   The index of the parent rule.
+ * @param  {object} siblingIndex  The lookups built by `createSiblingIndex` for the siblings.
+ * @return {number}               The index of the earliest nestable child, or -1 when there is none.
+ */
+function findEarliestNestableChildIndex (rules, parentIndex, siblingIndex) {
+  const parentRule = rules[parentIndex];
+  const parentSelector = parentRule.selectors[0];
+  const matchNestedSelector = createNestedSelectorMatcher(parentSelector);
+  const lastBlockingIndex = findLastBlockingIndex(parentRule, siblingIndex.writeIndex, parentIndex);
+  const candidateIndexes = siblingIndex.findRulesStartingWith(parentSelector.trim());
+  for (
+    let position = findFirstPositionAtLeast(candidateIndexes, lastBlockingIndex + 1);
+    position < candidateIndexes.length && candidateIndexes[position] < parentIndex;
+    position++
+  ) {
+    const childIndex = candidateIndexes[position];
+    if (isStrictlyNestableUnderParent(rules[childIndex], matchNestedSelector)) {
+      return childIndex;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Moves a parent rule before earlier rules that can safely nest under it.
+ *
+ * @param  {Array} rules  The sibling AST entries to reorder.
+ * @return {Array}        A new rule list with safe nesting parents hoisted.
+ */
+function hoistNestingParents (rules) {
+  const result = [...rules];
+  const getWrittenProperties = createWrittenPropertiesCache();
+  let siblingIndex = createSiblingIndex(result, getWrittenProperties);
+  let parentIndex = 1;
+
+  while (parentIndex < result.length) {
+    const parentRule = result[parentIndex];
+    if (parentRule.type !== 'rule' || parentRule.selectors?.length !== 1) {
+      parentIndex++;
+      continue;
+    }
+
+    const earliestChildIndex = findEarliestNestableChildIndex(result, parentIndex, siblingIndex);
+    if (earliestChildIndex === -1) {
+      parentIndex++;
+      continue;
+    }
+    result.splice(parentIndex, 1);
+    result.splice(earliestChildIndex, 0, parentRule);
+    // The indexes no longer match the reordered siblings
+    siblingIndex = createSiblingIndex(result, getWrittenProperties);
+    parentIndex = earliestChildIndex + 1;
+  }
+
+  return result;
+}
+
+/**
  * Groups flat CSS rules into nested structures where a child selector can be expressed relative to a preceding parent, reducing output size through CSS nesting.
  *
  * @param  {Array} rules  The flat AST rule nodes to nest.
  * @return {Array}        A new array of rules with applicable children nested under their parents.
  */
 function nestFlatRules (rules) {
+  rules = hoistNestingParents(rules);
   const result = [];
   const indexBySelector = new Map();
   for (const rule of rules) {
