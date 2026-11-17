@@ -12,6 +12,7 @@ import {
   createNestedSelectorMatcher,
   isSelectorWhitespace
 } from './nest-rules.js';
+import { canMoveRuleAcross } from './reordering.js';
 import { selectorsShareSpecificity } from './specificity.js';
 
 /**
@@ -262,12 +263,13 @@ function createWrapperDeclarations (run) {
   if (!run.some(isParentItselfEntry)) {
     return factorCommonParents(run.map(createNestedChild), true);
   }
-  return run.flatMap((entry) => {
+  const declarations = run.flatMap((entry) => {
     if (isParentItselfEntry(entry)) {
       return entry.sibling.declarations;
     }
     return [createNestedChild(entry)];
   });
+  return factorCommonParents(declarations, true);
 }
 
 /**
@@ -282,26 +284,48 @@ function createWrapperDeclarations (run) {
  */
 function collectSiblingRun (rules, startIndex, matchNestedSelector) {
   const run = [];
+  const selectedIndexes = new Set();
+  let lastSelectedIndex = startIndex - 1;
   let end = startIndex;
   let lookahead = startIndex;
+
   while (lookahead < rules.length) {
     const sibling = rules[lookahead];
-    if (sibling.type === 'comment') {
+    if (sibling.type === 'comment' || sibling.type === 'whitespace') {
       lookahead++;
       continue;
     }
     if (sibling.type !== 'rule' || !sibling.selectors?.length) {
-      break;
+      if (sibling.type !== 'rule') {
+        break;
+      }
+      lookahead++;
+      continue;
     }
+
     const nestedSelectors = nestSelectorsUnderParent(sibling, matchNestedSelector);
-    if (!nestedSelectors) {
-      break;
+    let canJoinRun = Boolean(nestedSelectors);
+    if (canJoinRun) {
+      for (let crossedIndex = lastSelectedIndex + 1; crossedIndex < lookahead; crossedIndex++) {
+        if (!canMoveRuleAcross(sibling, rules[crossedIndex])) {
+          canJoinRun = false;
+          break;
+        }
+      }
     }
-    run.push({ sibling, nestedSelectors });
+    if (canJoinRun) {
+      selectedIndexes.add(lookahead);
+      lastSelectedIndex = lookahead;
+      run.push({ sibling, nestedSelectors });
+      end = lookahead + 1;
+    }
     lookahead++;
-    end = lookahead;
   }
-  return { end, run };
+
+  const retainedEntries = rules.slice(startIndex, end).filter((entry, relativeIndex) => {
+    return !selectedIndexes.has(startIndex + relativeIndex);
+  });
+  return { end, retainedEntries, run };
 }
 
 /**
@@ -319,7 +343,7 @@ function collectSiblingRun (rules, startIndex, matchNestedSelector) {
  * @param  {boolean} allowTrailingCompound  True when the rules are children of a factored wrapper, whose `&`-relative selectors may share a trailing compound that can be factored out in turn.
  * @return {Array}                          A new array of rules with shared parent selectors factored into nesting wrappers.
  */
-function factorCommonParents (rules, allowTrailingCompound = false) {
+function factorCommonParentsPass (rules, allowTrailingCompound = false) {
   const result = [];
   let index = 0;
   while (index < rules.length) {
@@ -331,12 +355,11 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
     }
     let bestGrouping = null;
     for (const candidateParent of collectSharedParentCandidates(rule)) {
-      if (!candidateParent || containsPseudoElement(candidateParent)) {
+      if (!candidateParent || candidateParent === '&' || containsPseudoElement(candidateParent)) {
         continue;
       }
       const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
-      // Collect the run of consecutive rules whose selectors can all nest under the candidate.
-      const { end, run } = collectSiblingRun(rules, index, matchNestedSelector);
+      const { end, retainedEntries, run } = collectSiblingRun(rules, index, matchNestedSelector);
       const selectorCount = run.reduce((total, entry) => {
         return total + entry.nestedSelectors.length;
       }, 0);
@@ -348,12 +371,10 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       const savings = measureWrapperSavings(run, declarations, candidateParent);
       if (savings > 0 && (!bestGrouping || savings > bestGrouping.savings)) {
         bestGrouping = {
-          comments: rules.slice(index, end).filter((entry) => {
-            return entry.type === 'comment';
-          }),
           declarations,
           end,
           parent: candidateParent,
+          retainedEntries,
           savings
         };
       }
@@ -367,14 +388,48 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
       index++;
       continue;
     }
-    result.push(...bestGrouping.comments, {
+    result.push({
       type: 'rule',
       selectors: [bestGrouping.parent],
       declarations: bestGrouping.declarations
     });
+    result.push(...bestGrouping.retainedEntries);
     index = bestGrouping.end;
   }
   return result;
+}
+
+/**
+ * Factors shared selector parents throughout a rule list and its nested rules,
+ * repeating productive passes until the selector text stops shrinking.
+ *
+ * @param  {Array}   rules                  The AST entries to factor.
+ * @param  {boolean} allowTrailingCompound  Whether nested trailing compounds may also be factored.
+ * @return {Array}                          The rules with shared parents factored.
+ */
+function factorCommonParents (rules, allowTrailingCompound = false) {
+  const rulesWithFactoredBodies = rules.map((rule) => {
+    if (rule.type === 'rule' && rule.declarations) {
+      return {
+        ...rule,
+        declarations: factorCommonParents(rule.declarations, true)
+      };
+    }
+    return rule;
+  });
+  let currentRules = rulesWithFactoredBodies;
+  let factorizedRules = factorCommonParentsPass(currentRules, allowTrailingCompound);
+  let previousLength = measureRuleCharacters(currentRules);
+  let currentLength = measureRuleCharacters(factorizedRules);
+
+  while (currentLength < previousLength) {
+    currentRules = factorizedRules;
+    previousLength = currentLength;
+    factorizedRules = factorCommonParentsPass(currentRules, allowTrailingCompound);
+    currentLength = measureRuleCharacters(factorizedRules);
+  }
+
+  return factorizedRules;
 }
 
 /**

@@ -210,13 +210,19 @@ function findRepeatedMediaIndex (rules, mediaIndex) {
     return -1;
   }
   const query = normalizeMedia(rules[mediaIndex].media);
-  let earlierIndex = mediaIndex - 1;
-  while (earlierIndex >= 0 && REORDERABLE_ENTRY_TYPES.has(rules[earlierIndex].type)) {
-    earlierIndex--;
+  let earlierIndex = -1;
+  for (let scanIndex = mediaIndex - 1; scanIndex >= 0; scanIndex--) {
+    const candidate = rules[scanIndex];
+    if (candidate.type === 'media' && normalizeMedia(candidate.media) === query) {
+      earlierIndex = scanIndex;
+      continue;
+    }
+    if (REORDERABLE_ENTRY_TYPES.has(candidate.type)) {
+      continue;
+    }
+    break;
   }
-  const isRepeat = earlierIndex >= 0 && rules[earlierIndex].type === 'media' &&
-    normalizeMedia(rules[earlierIndex].media) === query;
-  return isRepeat ? earlierIndex : -1;
+  return earlierIndex;
 }
 
 /**
@@ -230,17 +236,133 @@ function findRepeatedMediaIndex (rules, mediaIndex) {
  */
 function hoistRulesAboveRepeatedMedia (rules) {
   const result = [...rules];
-  for (let mediaIndex = 0; mediaIndex < result.length; mediaIndex++) {
+  for (let mediaIndex = result.length - 1; mediaIndex >= 0; mediaIndex--) {
     const earlierIndex = findRepeatedMediaIndex(result, mediaIndex);
     if (earlierIndex === -1) {
       continue;
     }
-    const betweenEntries = result.slice(earlierIndex + 1, mediaIndex);
-    const earlierWrites = collectWrittenLeafProperties(result[earlierIndex].rules || []);
-    const betweenWrites = collectWrittenLeafProperties(betweenEntries);
-    if (!propertySetsOverlap(betweenWrites, earlierWrites)) {
-      result.splice(earlierIndex + 1, betweenEntries.length);
-      result.splice(earlierIndex, 0, ...betweenEntries);
+    const query = normalizeMedia(result[mediaIndex].media);
+    const entriesBetween = result.slice(earlierIndex + 1, mediaIndex);
+    const repeatedMediaRules = entriesBetween.filter((entry) => {
+      return entry.type === 'media' && normalizeMedia(entry.media) === query;
+    });
+    const mediaRules = [result[earlierIndex], ...repeatedMediaRules, result[mediaIndex]];
+    const entriesBeforeMedia = [];
+    const entriesAfterMedia = [];
+    const allMediaWrites = collectWrittenLeafProperties(mediaRules);
+    let precedingMediaRules = [mediaRules[0]];
+    let hasAfterEntry = false;
+    let canMerge = true;
+
+    for (const entry of entriesBetween) {
+      if (entry.type === 'media' && normalizeMedia(entry.media) === query) {
+        precedingMediaRules.push(entry);
+        continue;
+      }
+      if (entry.type === 'comment' || entry.type === 'whitespace') {
+        entriesAfterMedia.push(entry);
+        continue;
+      }
+
+      const entryWrites = collectWrittenLeafProperties([entry]);
+      const precedingWrites = collectWrittenLeafProperties(precedingMediaRules);
+      if (!propertySetsOverlap(entryWrites, allMediaWrites)) {
+        entriesAfterMedia.push(entry);
+        hasAfterEntry = true;
+      } else if (!propertySetsOverlap(entryWrites, precedingWrites) && !hasAfterEntry) {
+        entriesBeforeMedia.push(entry);
+      } else {
+        canMerge = false;
+        break;
+      }
+    }
+
+    if (canMerge) {
+      result.splice(
+        earlierIndex,
+        mediaIndex - earlierIndex + 1,
+        ...entriesBeforeMedia,
+        ...mediaRules,
+        ...entriesAfterMedia
+      );
+    }
+  }
+  return result;
+}
+
+/**
+ * Normalizes a container condition so equivalent whitespace and casing use
+ * the same key when matching container blocks.
+ *
+ * @param  {string} condition  The raw container condition.
+ * @return {string}            The normalized condition.
+ */
+function normalizeContainerCondition (condition) {
+  const text = String(condition ?? '').trim().toLowerCase();
+  let normalized = '';
+  let index = 0;
+
+  while (index < text.length) {
+    const character = text[index];
+    if (' \t\n\r\f'.includes(character)) {
+      let nextIndex = index + 1;
+      while (nextIndex < text.length && ' \t\n\r\f'.includes(text[nextIndex])) {
+        nextIndex++;
+      }
+      const previousCharacter = normalized[normalized.length - 1] || '';
+      const nextCharacter = text[nextIndex] || '';
+      if (
+        previousCharacter &&
+        nextCharacter &&
+        !'(<>:=,'.includes(previousCharacter) &&
+        !')<>:=,'.includes(nextCharacter)
+      ) {
+        normalized += ' ';
+      }
+      index = nextIndex;
+      continue;
+    }
+    normalized += character;
+    index++;
+  }
+
+  return normalized;
+}
+
+/**
+ * Merges container blocks with matching conditions and combines their child
+ * selector rules.
+ *
+ * @param  {Array}                  rules               The AST rule nodes to process.
+ * @param  {function(Array): Array} mergeSelectorRules  The callback that merges child selector rules.
+ * @return {Array}                                      The rules with matching containers combined.
+ */
+function mergeContainerRules (rules, mergeSelectorRules) {
+  const containerMap = new Map();
+  const result = [];
+
+  for (const rule of rules) {
+    if (rule.type === 'container') {
+      const condition = normalizeContainerCondition(rule.container);
+      if (condition && containerMap.has(condition)) {
+        containerMap.get(condition).rules.push(...(rule.rules || []));
+      } else {
+        if (condition) {
+          containerMap.set(condition, rule);
+        }
+        result.push(rule);
+      }
+    } else {
+      if (rule.type !== 'whitespace' && containerMap.size) {
+        containerMap.clear();
+      }
+      result.push(rule);
+    }
+  }
+
+  for (const rule of result) {
+    if (rule.type === 'container' && rule.rules?.length) {
+      rule.rules = mergeSelectorRules(rule.rules);
     }
   }
   return result;
@@ -347,6 +469,7 @@ function mergeLayerRules (rules, mergeSelectorRules) {
 
 export {
   deduplicateKeyframes,
+  mergeContainerRules,
   mergeLayerRules,
   mergeMediaRules,
   removeIEMediaRules,

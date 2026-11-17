@@ -4,6 +4,8 @@
 
 import { findTopLevelDelimiter } from '../../parser/source-search.js';
 
+import { canMoveRuleAcross } from './reordering.js';
+
 /**
  * Matches the part of a child selector that follows its parent when that part
  * starts with an explicit combinator. Optional whitespace, then the combinator
@@ -177,12 +179,71 @@ function findNestingParent (emittedRules, indexBySelector, childSelector) {
 }
 
 /**
+ * Moves a parent rule before earlier rules that can safely nest under it.
+ *
+ * @param  {Array} rules  The sibling AST entries to reorder.
+ * @return {Array}        A new rule list with safe nesting parents hoisted.
+ */
+function hoistNestingParents (rules) {
+  const result = [...rules];
+  let parentIndex = 1;
+
+  while (parentIndex < result.length) {
+    const parentRule = result[parentIndex];
+    if (parentRule.type !== 'rule' || parentRule.selectors?.length !== 1) {
+      parentIndex++;
+      continue;
+    }
+
+    const matchNestedSelector = createNestedSelectorMatcher(parentRule.selectors[0]);
+    let earliestChildIndex = -1;
+    for (let childIndex = parentIndex - 1; childIndex >= 0; childIndex--) {
+      const childRule = result[childIndex];
+      if (childRule.type === 'comment' || childRule.type === 'whitespace') {
+        continue;
+      }
+      if (childRule.type !== 'rule') {
+        break;
+      }
+      const childSelectors = childRule.selectors || [];
+      const canNestUnderParent = (
+        childSelectors.length > 0 &&
+        childSelectors.every((selector) => {
+          return matchNestedSelector(selector.trim()) !== null;
+        })
+      );
+      if (!canNestUnderParent) {
+        continue;
+      }
+      const canMoveBeforeChild = result.slice(childIndex, parentIndex).every((entry) => {
+        return canMoveRuleAcross(parentRule, entry);
+      });
+      if (!canMoveBeforeChild) {
+        break;
+      }
+      earliestChildIndex = childIndex;
+    }
+
+    if (earliestChildIndex === -1) {
+      parentIndex++;
+      continue;
+    }
+    result.splice(parentIndex, 1);
+    result.splice(earliestChildIndex, 0, parentRule);
+    parentIndex = earliestChildIndex + 1;
+  }
+
+  return result;
+}
+
+/**
  * Groups flat CSS rules into nested structures where a child selector can be expressed relative to a preceding parent, reducing output size through CSS nesting.
  *
  * @param  {Array} rules  The flat AST rule nodes to nest.
  * @return {Array}        A new array of rules with applicable children nested under their parents.
  */
 function nestFlatRules (rules) {
+  rules = hoistNestingParents(rules);
   const result = [];
   const indexBySelector = new Map();
   for (const rule of rules) {

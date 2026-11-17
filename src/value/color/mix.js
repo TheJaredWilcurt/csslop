@@ -486,7 +486,8 @@ function evaluateColorMix (expr) {
  * @return {string|null}               The text between the function's parentheses, or null when the function is not called.
  */
 function extractFunctionArgumentText (expression, functionName) {
-  const callIndex = expression.indexOf(functionName + '(');
+  const normalizedExpression = expression.toLowerCase();
+  const callIndex = normalizedExpression.indexOf((functionName + '(').toLowerCase());
   if (callIndex === -1) {
     return null;
   }
