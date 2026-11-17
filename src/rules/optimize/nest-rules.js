@@ -179,6 +179,24 @@ function findNestingParent (emittedRules, indexBySelector, childSelector) {
 }
 
 /**
+ * Checks whether every selector of a rule extends a parent selector, so the
+ * rule would nest under that parent as a distinct child. A selector identical
+ * to the parent would only nest as a bare `&`, and treating it as a child lets
+ * two rules sharing a selector endlessly swap places while being hoisted.
+ *
+ * @param  {object}                          childRule            The rule that may nest under the parent.
+ * @param  {function(string): (string|null)} matchNestedSelector  The matcher built from the parent selector.
+ * @return {boolean}                                              Whether every child selector nests as a distinct child.
+ */
+function isStrictlyNestableUnderParent (childRule, matchNestedSelector) {
+  const childSelectors = childRule.selectors || [];
+  return childSelectors.length > 0 && childSelectors.every((selector) => {
+    const nestedSelector = matchNestedSelector(selector.trim());
+    return nestedSelector !== null && nestedSelector !== '&';
+  });
+}
+
+/**
  * Moves a parent rule before earlier rules that can safely nest under it.
  *
  * @param  {Array} rules  The sibling AST entries to reorder.
@@ -205,14 +223,7 @@ function hoistNestingParents (rules) {
       if (childRule.type !== 'rule') {
         break;
       }
-      const childSelectors = childRule.selectors || [];
-      const canNestUnderParent = (
-        childSelectors.length > 0 &&
-        childSelectors.every((selector) => {
-          return matchNestedSelector(selector.trim()) !== null;
-        })
-      );
-      if (!canNestUnderParent) {
+      if (!isStrictlyNestableUnderParent(childRule, matchNestedSelector)) {
         continue;
       }
       const canMoveBeforeChild = result.slice(childIndex, parentIndex).every((entry) => {
