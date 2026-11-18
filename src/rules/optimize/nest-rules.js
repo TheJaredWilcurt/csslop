@@ -140,9 +140,11 @@ function addCandidateParentSelector (childSelector, boundaryIndex, candidates) {
  */
 function collectCandidateParentSelectors (childSelector) {
   const candidates = new Set();
-  let boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, 1);
+  let boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, 0);
   while (boundaryIndex !== -1) {
-    addCandidateParentSelector(childSelector, boundaryIndex, candidates);
+    if (boundaryIndex > 0) {
+      addCandidateParentSelector(childSelector, boundaryIndex, candidates);
+    }
     boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, boundaryIndex + 1);
   }
   return candidates;

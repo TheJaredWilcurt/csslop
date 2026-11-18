@@ -67,7 +67,9 @@ function optimizeRuleList (rules) {
   result = removeEmptyRules(result);
   result = mergeByDeclarations(result);
   result = factorCommonParents(result);
+  result = mergeIdenticalNestedRules(result);
   result = nestFlatRules(result);
+  result = expandPureNestedRules(result);
   result.forEach(factorSelectorBranches);
   return mergeIdenticalNestedRules(result);
 }

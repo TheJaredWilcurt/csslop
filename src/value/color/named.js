@@ -157,4 +157,55 @@ const namedColors = {
   yellowgreen: [154, 205, 50]
 };
 
-export { namedColors };
+/**
+ * The CSS system color keywords, in lowercase. Each one names a color taken
+ * from the operating system or browser theme, so it is a valid color value.
+ *
+ * @type {Set<string>}
+ */
+const systemColors = new Set([
+  'accentcolor',
+  'accentcolortext',
+  'activetext',
+  'buttonborder',
+  'buttonface',
+  'buttontext',
+  'canvas',
+  'canvastext',
+  'field',
+  'fieldtext',
+  'graytext',
+  'highlight',
+  'highlighttext',
+  'linktext',
+  'mark',
+  'marktext',
+  'selecteditem',
+  'selecteditemtext',
+  'visitedtext',
+  'activeborder',
+  'activecaption',
+  'appworkspace',
+  'background',
+  'buttonhighlight',
+  'buttonshadow',
+  'captiontext',
+  'inactiveborder',
+  'inactivecaption',
+  'inactivecaptiontext',
+  'infobackground',
+  'infotext',
+  'menu',
+  'menutext',
+  'scrollbar',
+  'threeddarkshadow',
+  'threedface',
+  'threedhighlight',
+  'threedlightshadow',
+  'threedshadow',
+  'window',
+  'windowframe',
+  'windowtext'
+]);
+
+export { namedColors, systemColors };

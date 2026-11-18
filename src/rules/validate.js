@@ -22,7 +22,7 @@ function isValidAttribute (attribute) {
     return token.type !== 'whitespace';
   });
   let index = 0;
-  if ((tokens[0]?.type === 'ident' || tokens[0]?.text === '*') && tokens[1]?.text === '|') {
+  if ((tokens[0]?.type === 'ident' || tokens[0]?.text === '*') && tokens[1]?.text === '|' && tokens[2]?.type === 'ident') {
     index = 2;
   } else if (tokens[0]?.text === '|') {
     index = 1;

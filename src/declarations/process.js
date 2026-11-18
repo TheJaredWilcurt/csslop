@@ -16,6 +16,7 @@ import {
 } from './config.js';
 import { hoistCssWideKeywordsIntoShorthands } from './css-wide-keywords.js';
 import { foldLonghandOverridesIntoShorthands } from './fold.js';
+import { isIgnoredByBrowser } from './invalid-values.js';
 import {
   collectDeclaredProperties,
   indexFirstDeclarationByProperty
@@ -367,6 +368,10 @@ function deduplicateDeclarations (declarations) {
     }
 
     if (propertyName === 'quotes' && hasInvalidQuotesCount(declaration.value)) {
+      continue;
+    }
+
+    if (isIgnoredByBrowser(propertyName, declaration.value)) {
       continue;
     }
 
