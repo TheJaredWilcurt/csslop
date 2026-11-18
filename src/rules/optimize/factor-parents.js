@@ -23,7 +23,7 @@ import { selectorsShareSpecificity } from './specificity.js';
  * that leading part can share the trailing compound through nesting.
  *
  * @param  {string}      selector  The selector string to split.
- * @return {object|null}           The `head`, `combinator` (`' '` for descendant), and `tail`, or null when the selector has no top-level combinator.
+ * @return {object|null}           The `head` and the `nestedSelector` the trailing compound is written as, or null when the selector has no top-level combinator.
  */
 function splitSelectorTail (selector) {
   const trimmed = selector.trim();
@@ -84,9 +84,100 @@ function splitSelectorTail (selector) {
     return null;
   }
   return {
-    combinator,
     head,
-    tail
+    nestedSelector: combinator === ' ' ? tail : combinator + tail
+  };
+}
+
+/**
+ * Matches a type selector at the start of a selector that is directly followed
+ * by a pseudo-class, class, ID, or attribute selector, such as `h1` in
+ * `h1:hover .anchor`. The name itself is what the lookahead leaves unconsumed.
+ *
+ * @type {RegExp}
+ */
+const LEADING_TYPE_SELECTOR_PATTERN = /^[a-z][a-z0-9-]*(?=[:.#[])/i;
+
+/**
+ * Matches a whitespace or combinator character, which separates the compounds
+ * of a selector.
+ *
+ * @type {RegExp}
+ */
+const COMPOUND_SEPARATOR_PATTERN = /[\s>+~]/;
+
+/**
+ * Splits a selector right after its leading type selector, so the rest of the
+ * selector can be nested under that type selector with a leading `&`. Only a
+ * rest that holds a combinator is split, since a bare compound such as
+ * `:hover` is already as short as its nested form.
+ *
+ * @param  {string}      selector  The selector string to split.
+ * @return {object|null}           The `head` and the `nestedSelector` written with a leading `&`, or null when the selector does not start with a type selector followed by a combinator-holding rest.
+ */
+function splitSelectorHead (selector) {
+  const trimmed = selector.trim();
+  const headMatch = trimmed.match(LEADING_TYPE_SELECTOR_PATTERN);
+  if (!headMatch) {
+    return null;
+  }
+  const rest = trimmed.slice(headMatch[0].length);
+  if (!COMPOUND_SEPARATOR_PATTERN.test(rest)) {
+    return null;
+  }
+  return {
+    head: headMatch[0],
+    nestedSelector: '&' + rest
+  };
+}
+
+/**
+ * Rewrites a multi-selector rule into a wrapper rule that nests the part of
+ * every selector that they share, when splitting each selector the same way
+ * leaves heads that can be grouped. The heads join a comma list, which
+ * resolves like `:is()`, so they may only be grouped while they share one
+ * specificity.
+ *
+ * @param  {object}                          rule           The AST rule node whose selector list may be factored.
+ * @param  {function(string): (object|null)} splitSelector  Splits one selector into its `head` and `nestedSelector`.
+ * @return {object|null}                                    The `factoredLength` and the rewritten `rule`, or null when this split cannot factor the rule into something shorter.
+ */
+function factorRuleBySplit (rule, splitSelector) {
+  const splits = rule.selectors.map(splitSelector);
+  if (splits.some((split) => {
+    return split === null;
+  })) {
+    return null;
+  }
+  const nestedSelector = splits[0].nestedSelector;
+  const allShareNestedSelector = splits.every((split) => {
+    return split.nestedSelector === nestedSelector;
+  });
+  if (!allShareNestedSelector) {
+    return null;
+  }
+  const heads = splits.map((split) => {
+    return split.head;
+  });
+  if (!selectorsShareSpecificity(heads)) {
+    return null;
+  }
+  const flatLength = rule.selectors.join(',').length;
+  const factoredLength = heads.join(',').length + nestedSelector.length + 2;
+  if (factoredLength >= flatLength) {
+    return null;
+  }
+  return {
+    factoredLength,
+    rule: {
+      ...rule,
+      selectors: heads,
+      declarations: [{
+        type: 'rule',
+        selectors: [nestedSelector],
+        declarations: rule.declarations
+      }]
+    }
   };
 }
 
@@ -94,8 +185,8 @@ function splitSelectorTail (selector) {
  * Rewrites a multi-selector rule whose selectors only differ before their
  * final combinator into a wrapper rule that nests the shared trailing
  * compound once, such as `&:hover .x,&:focus .x` becoming
- * `&:hover,&:focus{.x{...}}`. The heads join a comma list, which resolves
- * like `:is()`, so they may only be grouped while they share one specificity.
+ * `&:hover,&:focus{.x{...}}`. The shorter of the trailing-combinator split and
+ * the leading type selector split is used.
  *
  * @param  {object} rule  The AST rule node whose selector list may be factored.
  * @return {object}       The rule, rewritten when factoring is valid and shorter.
@@ -104,40 +195,17 @@ function factorCommonTrailingCompound (rule) {
   if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
     return rule;
   }
-  const splitSelectors = rule.selectors.map(splitSelectorTail);
-  if (splitSelectors.some((split) => {
-    return split === null;
-  })) {
-    return rule;
-  }
-  const first = splitSelectors[0];
-  const allShareTrailingCompound = splitSelectors.every((split) => {
-    return split.tail === first.tail && split.combinator === first.combinator;
+  const factorings = [splitSelectorTail, splitSelectorHead].map((splitSelector) => {
+    return factorRuleBySplit(rule, splitSelector);
+  }).filter((factoring) => {
+    return factoring !== null;
   });
-  if (!allShareTrailingCompound) {
+  if (!factorings.length) {
     return rule;
   }
-  const heads = splitSelectors.map((split) => {
-    return split.head;
-  });
-  if (!selectorsShareSpecificity(heads)) {
-    return rule;
-  }
-  const nestedSelector = first.combinator === ' ' ? first.tail : first.combinator + first.tail;
-  const flatLength = rule.selectors.join(',').length;
-  const factoredLength = heads.join(',').length + nestedSelector.length + 2;
-  if (factoredLength >= flatLength) {
-    return rule;
-  }
-  return {
-    ...rule,
-    selectors: heads,
-    declarations: [{
-      type: 'rule',
-      selectors: [nestedSelector],
-      declarations: rule.declarations
-    }]
-  };
+  return factorings.reduce((shortest, factoring) => {
+    return factoring.factoredLength < shortest.factoredLength ? factoring : shortest;
+  }).rule;
 }
 
 /**
