@@ -11,6 +11,7 @@ import {
   createMinifyContext,
   setActiveCharset
 } from './context.js';
+import { removeStarHackDeclarations } from './declarations/invalid-values.js';
 import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
 import { parse } from './parser/index.js';
 import { splitTopLevelCommaList } from './parser/source-search.js';
@@ -194,6 +195,7 @@ export const minifyCSS = function (input) {
 
   if (ast?.stylesheet?.rules) {
     ast.stylesheet.rules = removeInvalidSelectorRules(ast.stylesheet.rules);
+    ast.stylesheet.rules = removeStarHackDeclarations(ast.stylesheet.rules);
     // Every later pass reads selectors, so they are written the one canonical
     // way before any of them runs.
     normalizeRuleSelectors(ast.stylesheet.rules);

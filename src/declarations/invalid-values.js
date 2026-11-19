@@ -103,4 +103,28 @@ function isIgnoredByBrowser (property, value) {
   return hasInvalidHexColor || isUnknownColorKeyword(property, tokens);
 }
 
-export { isIgnoredByBrowser };
+/**
+ * Removes IE6 star-hack declarations such as `*zoom` from every rule and nested
+ * rule. No browser applies them, so they only add bytes to the output.
+ *
+ * @param  {Array} rules  Stylesheet or nested body entries.
+ * @return {Array}        The entries without any star-hack declarations.
+ */
+function removeStarHackDeclarations (rules) {
+  return rules.filter((entry) => {
+    return !entry.property?.startsWith('*');
+  }).map((rule) => {
+    if (rule.rules) {
+      rule.rules = removeStarHackDeclarations(rule.rules);
+    }
+    if (rule.declarations) {
+      rule.declarations = removeStarHackDeclarations(rule.declarations);
+    }
+    return rule;
+  });
+}
+
+export {
+  isIgnoredByBrowser,
+  removeStarHackDeclarations
+};

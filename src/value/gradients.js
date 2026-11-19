@@ -274,8 +274,8 @@ function normalizeBoundaryPositionTokens (mergedStops) {
 }
 
 /**
- * Serializes a parsed gradient stop back into normalized CSS text, ensuring a
- * separating space is preserved when a stop position is present.
+ * Serializes a parsed gradient stop back into normalized CSS text, keeping a
+ * separating space only when the color does not end in a closing parenthesis.
  *
  * @param  {string} stop  The raw gradient stop string.
  * @return {string}       The normalized gradient stop string.
@@ -283,11 +283,7 @@ function normalizeBoundaryPositionTokens (mergedStops) {
 function normalizeColorStop (stop) {
   const parsedStop = parseColorStop(stop);
   const normalizedColor = normalizeStopColorToken(parsedStop.color);
-  if (parsedStop.position === null) {
-    return normalizedColor;
-  }
-
-  return normalizedColor + ' ' + parsedStop.position;
+  return serializeColorStop(normalizedColor, splitStopPositionTokens(parsedStop.position));
 }
 
 /**

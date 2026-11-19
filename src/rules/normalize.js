@@ -6,6 +6,8 @@ import { tokenizeCssValue } from '../parser/tokenizer.js';
 import { resolveUnicodeEscape } from '../utilities.js';
 import { shortenNumericText } from '../value/numbers.js';
 
+import { minifyAttributeSelectors } from './attribute-selectors.js';
+
 /**
  * Converts CSS Unicode escape sequences in an identifier to their literal characters, preserving control characters that must remain escaped.
  *
@@ -118,18 +120,22 @@ function normalizeSelectorWhitespace (selector) {
 
 /**
  * Rewrites every selector in a stylesheet into its whitespace-normalized form,
- * descending into nested rules and the bodies of at-rules. Running this before
- * any rule is rewritten means each later pass compares, nests, and prints
- * selectors that are already written the one canonical way, so a selector that
- * happens to be spaced out in the source cannot leak that spacing into a
- * selector the minifier builds from it.
+ * with its attribute selectors written in their shortest form, descending into
+ * nested rules and the bodies of at-rules. Running this before any rule is
+ * rewritten means each later pass compares, nests, and prints selectors that
+ * are already written the one canonical way, so a selector that happens to be
+ * spaced out in the source cannot leak that spacing into a selector the
+ * minifier builds from it, and two selectors that differ only by a redundant
+ * attribute flag still count as the same selector.
  *
  * @param {Array} rules  The AST rule nodes to normalize.
  */
 function normalizeRuleSelectors (rules) {
   for (const rule of rules || []) {
     if (rule?.selectors?.length) {
-      rule.selectors = rule.selectors.map(normalizeSelectorWhitespace);
+      rule.selectors = rule.selectors.map((selector) => {
+        return minifyAttributeSelectors(normalizeSelectorWhitespace(selector));
+      });
     }
     normalizeRuleSelectors(rule?.rules);
     normalizeRuleSelectors(rule?.declarations);
