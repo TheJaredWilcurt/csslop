@@ -377,11 +377,6 @@ function deduplicateDeclarations (declarations) {
 
     const minifiedValue = minifyValue(declaration);
 
-    // IE6 hack properties starting with * are obsolete and should be removed
-    if (propertyName.startsWith('*')) {
-      continue;
-    }
-
     // IE6-IE9 double !important properties are invalid and should be removed
     if (hasDoubleImportant(minifiedValue)) {
       continue;

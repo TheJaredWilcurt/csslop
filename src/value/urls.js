@@ -16,29 +16,25 @@ import { minifySvgDataUri } from './svg/data-uri.js';
  * a path that arrived escaped is never escaped a second time.
  *
  * @param  {string} path  The url path, without surrounding quotes.
- * @return {string}       The path with every bare space and parenthesis escaped.
+ * @return {string}       The path with every bare space, parenthesis, and quotation mark escaped.
  */
 function escapeUrlPathCharacters (path) {
-  // Match each space and parenthesis that no escaping backslash precedes
-  return path.replace(/(?<!\\)([ ()])/g, '\\$1');
+  // Match each space, parenthesis, and quotation mark that no escaping backslash precedes
+  return path.replace(/(?<!\\)([ ()"'])/g, '\\$1');
 }
 
 /**
  * Chooses the shortest valid representation for the path inside a `url(...)`
- * token, weighing an unquoted form — its spaces and parentheses escaped —
- * against a quoted form. Quotation marks can only ever appear in the quoted
- * form, so a path holding one always keeps its wrapper.
+ * token, weighing an unquoted form — its spaces, parentheses, and quotation
+ * marks escaped — against a quoted form. Each form escapes only the characters
+ * it needs, so an already escaped character is never escaped a second time.
  *
  * @param  {string} path  The resolved url path, without surrounding quotes.
  * @return {string}       The shortest valid url() content string.
  */
 function formatUrlPath (path) {
-  // Escape any embedded double quotes so the double-quoted wrapper stays valid
-  const quotedForm = '"' + path.replace(/"/g, '\\"') + '"';
-  // Match a quotation mark, which an unquoted url() token cannot hold
-  if (/["']/.test(path)) {
-    return quotedForm;
-  }
+  // Escape any bare double quotes so the double-quoted wrapper stays valid
+  const quotedForm = '"' + path.replace(/(?<!\\)"/g, '\\"') + '"';
   const unquotedForm = escapeUrlPathCharacters(path);
   // Each escaped character costs one backslash, so dropping the two quotation
   // marks pays off whenever at most one character needs escaping

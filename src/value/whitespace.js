@@ -30,6 +30,54 @@ function restoreSpaceBeforeMathOperators (value) {
 }
 
 /**
+ * Splits the contents of a quoted CSS string into its characters, keeping each
+ * backslash escape together with the character it escapes.
+ *
+ * @param  {string} content  The text between a string's quotation marks.
+ * @return {Array}           The units of the string, each one character or one escape sequence.
+ */
+function splitStringUnits (content) {
+  // Match a backslash escape with its escaped character, or any single character
+  return content.match(/\\[\s\S]|[\s\S]/g) ?? [];
+}
+
+/**
+ * Returns the character a string unit stands for, without any escaping backslash.
+ *
+ * @param  {string} unit  One unit from `splitStringUnits`.
+ * @return {string}       The character the unit represents.
+ */
+function getStringUnitCharacter (unit) {
+  return unit.startsWith('\\') ? unit.slice(1) : unit;
+}
+
+/**
+ * Rewrites a quoted CSS string with whichever quotation mark needs fewer
+ * escapes. A tie keeps double quotes.
+ *
+ * @param  {string} quotedString  A complete string token, including its quotation marks.
+ * @return {string}               The same string written with the quotation mark that needs fewer escapes.
+ */
+function requoteString (quotedString) {
+  const units = splitStringUnits(quotedString.slice(1, -1));
+  const doubleQuoteCount = units.filter((unit) => {
+    return getStringUnitCharacter(unit) === '"';
+  }).length;
+  const singleQuoteCount = units.filter((unit) => {
+    return getStringUnitCharacter(unit) === '\'';
+  }).length;
+  const quote = doubleQuoteCount > singleQuoteCount ? '\'' : '"';
+  const contents = units.map((unit) => {
+    const character = getStringUnitCharacter(unit);
+    if (character !== '"' && character !== '\'') {
+      return unit;
+    }
+    return character === quote ? '\\' + character : character;
+  }).join('');
+  return quote + contents + quote;
+}
+
+/**
  * Normalizes whitespace, quotes, and unicode escapes in a CSS value string.
  *
  * @param  {string} value     The raw CSS value string to normalize.
@@ -47,11 +95,11 @@ function normalizeWhitespaceAndQuotes (value, property) {
       return resolveUnicodeEscape(hex) ?? match;
     });
   }
-  // Normalize single-quoted strings to double-quoted
-  value = value.replace(/'((?:[^'\\]|\\.)*?)'/g, '"$1"');
+  // Rewrite each quoted string with whichever quotation mark needs fewer escapes
+  value = value.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, requoteString);
 
   // Remove space between string literals
-  value = value.replace(/("(?:[^"\\]|\\.)*")\s+(?=")/g, '$1');
+  value = value.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s+(?=["'])/g, '$1');
 
   // Whitespace minification
   value = value.replace(/\s*!\s*important/i, '!important');

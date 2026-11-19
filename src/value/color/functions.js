@@ -3,6 +3,7 @@
  */
 
 import { findMatchingParenthesis } from '../../parser/source-search.js';
+import { replaceOutsideStringsAndUrls } from '../segments.js';
 import {
   formatCompactNumber,
   parseAlphaString,
@@ -492,6 +493,38 @@ function convertCommaSeparatedRgbAndHslToHex (value) {
 }
 
 /**
+ * Matches the opening of a color function that may be written as hex.
+ *
+ * @type {RegExp}
+ */
+const COLOR_FUNCTION_OPENING_PATTERN = /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/gi;
+
+/**
+ * Keeps a color function that is directly followed by an identifier, digit, or
+ * minus sign apart from that text. Once the function is written as hex, the
+ * hash token would absorb what follows it, as in `#f003inset`. Any space that
+ * turns out to be redundant is dropped again when the value's separators are
+ * elided.
+ *
+ * @param  {string} value  The CSS value string that may contain color functions.
+ * @return {string}        The value with a space after each color function that needs one.
+ */
+function separateColorFunctionsFromFollowingTokens (value) {
+  return replaceOutsideStringsAndUrls(value, (segment) => {
+    const closingIndexes = new Set();
+    for (const match of segment.matchAll(COLOR_FUNCTION_OPENING_PATTERN)) {
+      const openingIndex = match.index + match[0].length - 1;
+      closingIndexes.add(findMatchingParenthesis(segment, openingIndex));
+    }
+    return segment.split('').map((character, index) => {
+      // Match an identifier character, digit, or minus sign, which a hash token would absorb
+      const needsSpace = closingIndexes.has(index) && /[\w-]/.test(segment[index + 1] ?? '');
+      return needsSpace ? character + ' ' : character;
+    }).join('');
+  });
+}
+
+/**
  * Converts CSS color functions (rgb, hsl, hwb, oklab, color-mix, etc.) to their
  * shortest hex equivalents and applies hex shortening.
  *
@@ -499,7 +532,8 @@ function convertCommaSeparatedRgbAndHslToHex (value) {
  * @return {string}        The value with color functions converted to hex where shorter.
  */
 function convertColorsToHex (value) {
-  let converted = resolveComputedColors(value);
+  let converted = separateColorFunctionsFromFollowingTokens(value);
+  converted = resolveComputedColors(converted);
   converted = convertLabFunctionsToHex(converted);
   // Convert in-gamut oklch() to hex before precision rounding, so the full authored precision is used
   converted = convertOklchFunctionsToHex(converted);

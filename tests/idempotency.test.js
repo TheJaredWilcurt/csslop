@@ -11,7 +11,6 @@ const __dirname = import.meta.dirname;
 
 const knownBad = [
   '960.gs-v0.0.0.css',
-  '98-v0.1.18.css',
   'admin-lte-v4.0.0.css',
   'awesome-bootstrap-checkbox-v0.3.7.css',
   'balloon-v1.0.0.css',
@@ -25,7 +24,6 @@ const knownBad = [
   'chota-v0.9.2.css',
   'cirrus-v0.8.0.css',
   'cs16-v0.0.0.css',
-  'css-spinners-v2.2.0.css',
   'cssicon-v1.0.0.css',
   'elegantfin-v25.12.31.css',
   'ff-ultima-v4.3.0.css',
@@ -66,7 +64,6 @@ const knownBad = [
   'shina-fox-v0.1.0.css',
   'sierra-v3.5.0.css',
   'spicetify-bloom-v0.0.0.css',
-  'stackoverflow-dark-v5.1.2.css',
   'stacks-v2.8.6.css',
   'tablecloth-v1.0.0.css',
   'tailwind-cards-v0.0.0.css',
@@ -74,13 +71,10 @@ const knownBad = [
   'tocas-v5.7.0.css',
   'tw-animate-css-v1.4.0.css',
   'uikit-v3.25.17.css',
-  'unfold-v0.0.0.css',
   'universal-v0.0.0.css',
   'uswds-v3.13.0.css',
   'water-v2.1.1.css',
-  'wikipedia-dark-v3.7.9.css',
-  'yacy-v4.1.2.css',
-  'zxx-lib-v2.10.0.css'
+  'wikipedia-dark-v3.7.9.css'
 ];
 
 const onlyThese = [
