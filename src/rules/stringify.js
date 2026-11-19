@@ -328,6 +328,22 @@ const ATTRIBUTE_SELECTOR_PATTERN = /\[\s*([^\s=\]]+?)\s*([~|^$*]?=)\s*("(?:[^"\\
 const UNQUOTED_ATTRIBUTE_VALUE_PATTERN = /^(?:-?[a-zA-Z_]|\\.)(?:[\w-]|\\.)*$/;
 
 /**
+ * HTML attributes whose values are matched ASCII case-insensitively by default,
+ * per the HTML spec's list of case-insensitive attributes. Every other attribute
+ * is matched case-sensitively, so its `s` flag is implied and its `i` flag is not.
+ *
+ * @type {Set<string>}
+ */
+const CASE_INSENSITIVE_HTML_ATTRIBUTES = new Set([
+  'accept', 'accept-charset', 'align', 'alink', 'axis', 'bgcolor', 'charset',
+  'checked', 'clear', 'codetype', 'color', 'compact', 'declare', 'defer', 'dir',
+  'direction', 'disabled', 'enctype', 'face', 'frame', 'hreflang', 'http-equiv',
+  'lang', 'language', 'link', 'media', 'method', 'multiple', 'nohref', 'noresize',
+  'noshade', 'nowrap', 'readonly', 'rel', 'rev', 'rules', 'scope', 'scrolling',
+  'selected', 'shape', 'target', 'text', 'type', 'valign', 'valuetype', 'vlink'
+]);
+
+/**
  * Writes the text of a quoted attribute value without its quotes, escaping the
  * characters that would otherwise end an unquoted identifier.
  *
@@ -386,15 +402,36 @@ function formatAttributeValue (rawValue, flag) {
 }
 
 /**
+ * Drops a case-sensitivity flag when it matches what the attribute already does
+ * by default. `i` is redundant on an attribute that is case-insensitive by
+ * default, and `s` is redundant on one that is case-sensitive by default.
+ *
+ * @param  {string}      attribute  The attribute name as written.
+ * @param  {string|null} flag       The flag as written, or null when there is none.
+ * @return {string|null}            The flag to keep, or null when it can be removed.
+ */
+function getEffectiveCaseFlag (attribute, flag) {
+  if (!flag) {
+    return null;
+  }
+  const isCaseInsensitiveByDefault = CASE_INSENSITIVE_HTML_ATTRIBUTES.has(attribute.toLowerCase());
+  const isCaseInsensitiveFlag = flag.toLowerCase() === 'i';
+  const isFlagRedundant = isCaseInsensitiveFlag === isCaseInsensitiveByDefault;
+  return isFlagRedundant ? null : flag;
+}
+
+/**
  * Writes each attribute selector's value quoted or escaped, whichever is
- * shorter, and removes the whitespace inside its brackets.
+ * shorter, removes a case-sensitivity flag that is redundant for the attribute,
+ * and removes the whitespace inside its brackets.
  *
  * @param  {string} selector  A selector with its whitespace already collapsed.
  * @return {string}           The selector with minified attribute selectors.
  */
 function minifyAttributeSelectors (selector) {
   return selector.replace(ATTRIBUTE_SELECTOR_PATTERN, (match, attribute, matcher, rawValue, flag) => {
-    return '[' + attribute + matcher + formatAttributeValue(rawValue, flag) + ']';
+    const effectiveFlag = getEffectiveCaseFlag(attribute, flag);
+    return '[' + attribute + matcher + formatAttributeValue(rawValue, effectiveFlag) + ']';
   });
 }
 
