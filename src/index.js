@@ -17,7 +17,10 @@ import { parse } from './parser/index.js';
 import { splitTopLevelCommaList } from './parser/source-search.js';
 import { preprocessDeclarationBlocks } from './preprocess.js';
 import { combineLanguageSelectors } from './rules/lang.js';
-import { normalizeRuleSelectors } from './rules/normalize.js';
+import {
+  clearNormalizedMediaCache,
+  normalizeRuleSelectors
+} from './rules/normalize.js';
 import {
   clearSelectorCaches,
   optimizeRuleList
@@ -140,6 +143,16 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
 }
 
 /**
+ * Discards every memoized value, selector, and `@media` query, so no cache
+ * outlives the minification pass that filled it.
+ */
+function clearMinificationCaches () {
+  clearMinifiedValueCache();
+  clearSelectorCaches();
+  clearNormalizedMediaCache();
+}
+
+/**
  * Prepares the module-level state a single minification pass relies on: the
  * active charset, and empty value and selector caches, since a value
  * memoized under a different charset may no longer minify the same way.
@@ -148,8 +161,7 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
  */
 function beginMinificationPass (charset) {
   setActiveCharset(charset);
-  clearMinifiedValueCache();
-  clearSelectorCaches();
+  clearMinificationCaches();
 }
 
 /**
@@ -158,8 +170,7 @@ function beginMinificationPass (charset) {
  */
 function endMinificationPass () {
   clearActiveCharset();
-  clearMinifiedValueCache();
-  clearSelectorCaches();
+  clearMinificationCaches();
 }
 
 /**

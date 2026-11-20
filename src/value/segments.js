@@ -15,6 +15,15 @@ import {
  */
 
 /**
+ * Matches anything that can open a literal segment: a double or single quote,
+ * or the case-insensitive `url(` that starts a url token. A value without one
+ * is syntax from start to end.
+ *
+ * @type {RegExp}
+ */
+const LITERAL_START_PATTERN = /["']|url\(/i;
+
+/**
  * Splits a CSS value into literal and syntax segments. A quoted string and a
  * `url()` token are literals: they hold data rather than CSS syntax, so no pass
  * may rewrite what is inside them. Everything between the literals is syntax.
@@ -23,6 +32,12 @@ import {
  * @return {Array}         The value's segments, in order.
  */
 function splitValueSegments (value) {
+  if (!value) {
+    return [];
+  }
+  if (!LITERAL_START_PATTERN.test(value)) {
+    return [{ text: value, isLiteral: false }];
+  }
   const segments = [];
   let index = 0;
 

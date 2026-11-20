@@ -166,12 +166,28 @@ function containsIEHack (media) {
 }
 
 /**
+ * Memoizes the normalized form of each `@media` query seen during the current
+ * stylesheet.
+ *
+ * @type {Map<string, string>}
+ */
+const normalizedMediaCache = new Map();
+
+/**
+ * Discards every memoized normalized `@media` query. The minifier calls this
+ * around each stylesheet, so the cache does not outlive the pass that filled it.
+ */
+function clearNormalizedMediaCache () {
+  normalizedMediaCache.clear();
+}
+
+/**
  * Normalizes a `@media` query string by collapsing whitespace, stripping the default "all and" prefix, and converting min/max-width to range syntax.
  *
  * @param  {string} media  The raw `@media` query string.
  * @return {string}        The normalized and minified media query.
  */
-function normalizeMedia (media) {
+function computeNormalizedMedia (media) {
   // Collapse whitespace, strip spaces around punctuation, and remove the redundant "all and" prefix
   media = media.replace(/\s+/g, ' ').replace(/\s*([:,])\s*/g, '$1').replace(/\s*([=<>])\s*/g, '$1').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').replace(/\b(?:all and )/gi, '');
   // Convert min-width/max-width to range syntax (e.g. min-width:768px → width>=768px)
@@ -188,6 +204,23 @@ function normalizeMedia (media) {
     }
   );
   return compactLogicalOperators(shortenRatioNumbers(media.trim()));
+}
+
+/**
+ * Normalizes a `@media` query string, reusing the result when the same query
+ * was already normalized during this stylesheet. Merging and hoisting `@media`
+ * blocks compares the same queries many times, so each is only rewritten once.
+ *
+ * @param  {string} media  The raw `@media` query string.
+ * @return {string}        The normalized and minified media query.
+ */
+function normalizeMedia (media) {
+  let normalized = normalizedMediaCache.get(media);
+  if (normalized === undefined) {
+    normalized = computeNormalizedMedia(media);
+    normalizedMediaCache.set(media, normalized);
+  }
+  return normalized;
 }
 
 /**
@@ -260,6 +293,7 @@ function canUnwrapSupports (supports) {
 
 export {
   canUnwrapSupports,
+  clearNormalizedMediaCache,
   containsIEHack,
   normalizeLayerNames,
   normalizeMedia,

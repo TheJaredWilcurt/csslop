@@ -167,6 +167,54 @@ function startsUrlToken (source, index) {
 }
 
 /**
+ * The number of ASCII character codes, all of which fit in an attention table.
+ *
+ * @type {number}
+ */
+const ASCII_LIMIT = 128;
+
+/**
+ * The characters that need a closer look while searching for a top-level
+ * delimiter, whatever the delimiters are: the slash that may open a comment,
+ * the backslash of an escape, the quotes of a string, and the parenthesis and
+ * bracket that open a group.
+ *
+ * @type {string}
+ */
+const GROUPING_CHARACTERS = '/\\"\'([';
+
+/**
+ * Memoizes one attention table per set of delimiters. Callers search for a
+ * handful of fixed delimiter sets, so each table is only built once.
+ *
+ * @type {Map<string, Uint8Array>}
+ */
+const attentionTablesByDelimiters = new Map();
+
+/**
+ * Builds a lookup, indexed by ASCII character code, marking each character
+ * that either opens something to read past or is one of the delimiters.
+ * Every unmarked ASCII character can be skipped outright.
+ *
+ * @param  {string}     delimiters  The delimiter characters being searched for.
+ * @return {Uint8Array}             A `1` for every ASCII character that needs a closer look.
+ */
+function getAttentionTable (delimiters) {
+  let attentionTable = attentionTablesByDelimiters.get(delimiters);
+  if (!attentionTable) {
+    attentionTable = new Uint8Array(ASCII_LIMIT);
+    for (const character of GROUPING_CHARACTERS + delimiters) {
+      const characterCode = character.charCodeAt(0);
+      if (characterCode < ASCII_LIMIT) {
+        attentionTable[characterCode] = 1;
+      }
+    }
+    attentionTablesByDelimiters.set(delimiters, attentionTable);
+  }
+  return attentionTable;
+}
+
+/**
  * Finds the first of several delimiter characters that is written at the top
  * level of the text, meaning it is not escaped, quoted, inside a comment, or
  * nested inside a group.
@@ -177,8 +225,16 @@ function startsUrlToken (source, index) {
  * @return {number}             The index of the first top-level delimiter, or -1 when there is none.
  */
 function findTopLevelDelimiter (source, delimiters, startIndex) {
+  const attentionTable = getAttentionTable(delimiters);
   let index = startIndex;
   while (index < source.length) {
+    const characterCode = source.charCodeAt(index);
+    // Most characters are plain ASCII that can neither open a group nor end
+    // the search, so they are passed over without building a string
+    if (characterCode < ASCII_LIMIT && !attentionTable[characterCode]) {
+      index++;
+      continue;
+    }
     const character = source[index];
     if (character === '/' && source[index + 1] === '*') {
       const closingIndex = source.indexOf('*/', index + 2);

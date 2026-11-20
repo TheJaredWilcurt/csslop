@@ -19,7 +19,10 @@ import {
 import { mergeByDeclarations } from './merge-declarations.js';
 import { mergeIdenticalNestedRules } from './merge-nested-rules.js';
 import { mergeSelectorRules } from './merge-selectors.js';
-import { nestFlatRules } from './nest-rules.js';
+import {
+  clearCandidateParentSelectorCache,
+  nestFlatRules
+} from './nest-rules.js';
 import {
   removeFullyOverriddenSelectors,
   removeOverriddenMultiSelectorProperties
@@ -28,13 +31,14 @@ import { clearNormalizedSelectorCache } from './selector-normalization.js';
 import { clearSpecificityCache } from './specificity.js';
 
 /**
- * Discards every memoized specificity and normalized selector. The minifier
- * calls this around each stylesheet, so the caches do not outlive the pass that
- * filled them.
+ * Discards every memoized specificity, normalized selector, and set of
+ * candidate parent selectors. The minifier calls this around each stylesheet,
+ * so the caches do not outlive the pass that filled them.
  */
 function clearSelectorCaches () {
   clearSpecificityCache();
   clearNormalizedSelectorCache();
+  clearCandidateParentSelectorCache();
 }
 
 /**

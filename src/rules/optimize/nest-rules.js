@@ -138,7 +138,7 @@ function addCandidateParentSelector (childSelector, boundaryIndex, candidates) {
  * @param  {string} childSelector  The trimmed child selector.
  * @return {Set}                   The candidate parent selector strings.
  */
-function collectCandidateParentSelectors (childSelector) {
+function computeCandidateParentSelectors (childSelector) {
   const candidates = new Set();
   let boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, 0);
   while (boundaryIndex !== -1) {
@@ -146,6 +146,42 @@ function collectCandidateParentSelectors (childSelector) {
       addCandidateParentSelector(childSelector, boundaryIndex, candidates);
     }
     boundaryIndex = findTopLevelDelimiter(childSelector, PARENT_BOUNDARY_CHARACTERS, boundaryIndex + 1);
+  }
+  return candidates;
+}
+
+/**
+ * Memoizes the candidate parent selectors of each child selector seen during
+ * the current stylesheet.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const candidateParentSelectorCache = new Map();
+
+/**
+ * Discards every memoized set of candidate parent selectors. The minifier
+ * calls this around each stylesheet, so the cache does not outlive the pass
+ * that filled it.
+ */
+function clearCandidateParentSelectorCache () {
+  candidateParentSelectorCache.clear();
+}
+
+/**
+ * Collects every prefix of a child selector that could act as its nesting
+ * parent, reusing the result when the same selector was already examined
+ * during this stylesheet. Nesting and parent factoring run repeatedly over the
+ * same selectors, so each is only scanned once. The returned set is shared
+ * between callers, so it must be copied before it is changed.
+ *
+ * @param  {string} childSelector  The trimmed child selector.
+ * @return {Set}                   The candidate parent selector strings.
+ */
+function collectCandidateParentSelectors (childSelector) {
+  let candidates = candidateParentSelectorCache.get(childSelector);
+  if (!candidates) {
+    candidates = computeCandidateParentSelectors(childSelector);
+    candidateParentSelectorCache.set(childSelector, candidates);
   }
   return candidates;
 }
@@ -348,6 +384,7 @@ function nestFlatRules (rules) {
 }
 
 export {
+  clearCandidateParentSelectorCache,
   collectCandidateParentSelectors,
   createNestedSelectorMatcher,
   isSelectorWhitespace,

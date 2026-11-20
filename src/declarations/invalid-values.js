@@ -94,6 +94,12 @@ function isIgnoredByBrowser (property, value) {
   if (typeof value !== 'string' || isCustomProperty(property)) {
     return false;
   }
+  // Only a hash token or a color property can be ignored, and every hash token
+  // starts with a literal `#`, so any other value is accepted without tokenizing
+  const mayBeIgnored = value.includes('#') || property.endsWith('color');
+  if (!mayBeIgnored) {
+    return false;
+  }
   const tokens = tokenizeCssValue(value.replace(IMPORTANT_FLAG_PATTERN, '')).filter((token) => {
     return token.type !== 'whitespace';
   });

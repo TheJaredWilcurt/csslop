@@ -218,7 +218,7 @@ function factorCommonTrailingCompound (rule) {
  */
 function collectSharedParentCandidates (rule) {
   const firstSelector = rule.selectors[0].trim();
-  const candidates = collectCandidateParentSelectors(firstSelector);
+  const candidates = new Set(collectCandidateParentSelectors(firstSelector));
   if (firstSelector) {
     candidates.add(firstSelector);
   }
