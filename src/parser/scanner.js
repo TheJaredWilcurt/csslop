@@ -223,6 +223,7 @@ export {
   consumeTo,
   createScanner,
   hasMoreInput,
+  isWhitespaceCode,
   peekPattern,
   skipSemicolonsAndWhitespace,
   skipWhitespace

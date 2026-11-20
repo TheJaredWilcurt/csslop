@@ -2,43 +2,126 @@
  * @file Reads a CSS value as the sequence of tokens that the CSS Syntax tokenizer reads out of it, so that what a value is made of can be judged token by token rather than character by character.
  */
 
-/**
- * Matches one CSS whitespace character. CSS counts a form feed and a carriage
- * return as whitespace, so the shorter `\s` class would be too broad.
- *
- * @type {RegExp}
- */
-const WHITESPACE_CHARACTER = /[ \t\n\r\f]/;
+import { isWhitespaceCode } from './scanner.js';
 
 /**
- * Matches one decimal digit, which is what starts the numeric tokens.
- *
- * @type {RegExp}
+ * The character codes the tokenizer classifies characters by. Every value is
+ * read one character at a time, so comparing numeric codes avoids running a
+ * regular expression once per character.
  */
-const DIGIT_CHARACTER = /[0-9]/;
+const CHARACTER_CODE = {
+  hyphen: 45,
+  digitZero: 48,
+  digitNine: 57,
+  uppercaseA: 65,
+  uppercaseF: 70,
+  uppercaseZ: 90,
+  underscore: 95,
+  lowercaseA: 97,
+  lowercaseF: 102,
+  lowercaseZ: 122,
+  firstNonAscii: 128
+};
 
 /**
- * Matches one hexadecimal digit, which is what a unicode escape holds.
+ * Reports whether the character at an index is one of the five characters CSS
+ * counts as whitespace. CSS counts a form feed and a carriage return as
+ * whitespace, so the shorter `\s` class would be too broad. An index past the
+ * end of the text reads as `NaN`, which is never whitespace.
  *
- * @type {RegExp}
+ * @param  {string}  text   The CSS value being read.
+ * @param  {number}  index  The index of the character to test.
+ * @return {boolean}        Whether the character is CSS whitespace.
  */
-const HEX_DIGIT_CHARACTER = /[0-9a-fA-F]/;
+function isWhitespaceAt (text, index) {
+  return isWhitespaceCode(text.charCodeAt(index));
+}
 
 /**
- * Matches one character that may start an identifier: a letter, an underscore,
- * or anything outside ASCII.
+ * Reports whether a character code is a decimal digit, which is what starts
+ * the numeric tokens.
  *
- * @type {RegExp}
+ * @param  {number}  characterCode  The UTF-16 code unit of the character.
+ * @return {boolean}                True for `0`-`9`.
  */
-const IDENT_START_CHARACTER = /[a-zA-Z_\u0080-\uFFFF]/;
+function isDigitCode (characterCode) {
+  return characterCode >= CHARACTER_CODE.digitZero && characterCode <= CHARACTER_CODE.digitNine;
+}
 
 /**
- * Matches one character that may continue an identifier, which is everything an
- * identifier may start with plus the digits and the hyphen.
+ * Reports whether the character at an index is a decimal digit. An index past
+ * the end of the text is never a digit.
  *
- * @type {RegExp}
+ * @param  {string}  text   The CSS value being read.
+ * @param  {number}  index  The index of the character to test.
+ * @return {boolean}        Whether the character is a decimal digit.
  */
-const NAME_CHARACTER = /[-a-zA-Z0-9_\u0080-\uFFFF]/;
+function isDigitAt (text, index) {
+  return isDigitCode(text.charCodeAt(index));
+}
+
+/**
+ * Reports whether the character at an index is a hexadecimal digit, which is
+ * what a unicode escape holds.
+ *
+ * @param  {string}  text   The CSS value being read.
+ * @param  {number}  index  The index of the character to test.
+ * @return {boolean}        True for `0`-`9`, `a`-`f`, and `A`-`F`.
+ */
+function isHexDigitAt (text, index) {
+  const characterCode = text.charCodeAt(index);
+  return (
+    isDigitCode(characterCode) ||
+    (characterCode >= CHARACTER_CODE.lowercaseA && characterCode <= CHARACTER_CODE.lowercaseF) ||
+    (characterCode >= CHARACTER_CODE.uppercaseA && characterCode <= CHARACTER_CODE.uppercaseF)
+  );
+}
+
+/**
+ * Reports whether a character code may start an identifier: a letter, an
+ * underscore, or anything outside ASCII.
+ *
+ * @param  {number}  characterCode  The UTF-16 code unit of the character.
+ * @return {boolean}                Whether the character may start an identifier.
+ */
+function isIdentStartCode (characterCode) {
+  return (
+    (characterCode >= CHARACTER_CODE.lowercaseA && characterCode <= CHARACTER_CODE.lowercaseZ) ||
+    (characterCode >= CHARACTER_CODE.uppercaseA && characterCode <= CHARACTER_CODE.uppercaseZ) ||
+    characterCode === CHARACTER_CODE.underscore ||
+    characterCode >= CHARACTER_CODE.firstNonAscii
+  );
+}
+
+/**
+ * Reports whether the character at an index may start an identifier. An index
+ * past the end of the text never does.
+ *
+ * @param  {string}  text   The CSS value being read.
+ * @param  {number}  index  The index of the character to test.
+ * @return {boolean}        Whether the character may start an identifier.
+ */
+function isIdentStartAt (text, index) {
+  return isIdentStartCode(text.charCodeAt(index));
+}
+
+/**
+ * Reports whether the character at an index may continue an identifier, which
+ * is everything an identifier may start with plus the digits and the hyphen.
+ * An index past the end of the text never does.
+ *
+ * @param  {string}  text   The CSS value being read.
+ * @param  {number}  index  The index of the character to test.
+ * @return {boolean}        Whether the character may continue an identifier.
+ */
+function isNameCharacterAt (text, index) {
+  const characterCode = text.charCodeAt(index);
+  return (
+    isIdentStartCode(characterCode) ||
+    isDigitCode(characterCode) ||
+    characterCode === CHARACTER_CODE.hyphen
+  );
+}
 
 /**
  * @typedef  {object} CssToken
@@ -71,14 +154,14 @@ function startsEscape (text, index) {
 function readPastEscape (text, index) {
   let end = index + 1;
   let hexDigitCount = 0;
-  while (end < text.length && hexDigitCount < 6 && HEX_DIGIT_CHARACTER.test(text[end])) {
+  while (end < text.length && hexDigitCount < 6 && isHexDigitAt(text, end)) {
     end++;
     hexDigitCount++;
   }
   if (!hexDigitCount) {
     return Math.min(end + 1, text.length);
   }
-  if (end < text.length && WHITESPACE_CHARACTER.test(text[end])) {
+  if (end < text.length && isWhitespaceAt(text, end)) {
     end++;
   }
   return end;
@@ -95,7 +178,7 @@ function readPastEscape (text, index) {
 function readPastName (text, index) {
   let end = index;
   while (end < text.length) {
-    if (NAME_CHARACTER.test(text[end])) {
+    if (isNameCharacterAt(text, end)) {
       end++;
       continue;
     }
@@ -127,9 +210,9 @@ function startsIdent (text, index) {
     if (nextCharacter === '-') {
       return true;
     }
-    return Boolean(nextCharacter) && (IDENT_START_CHARACTER.test(nextCharacter) || startsEscape(text, index + 1));
+    return Boolean(nextCharacter) && (isIdentStartAt(text, index + 1) || startsEscape(text, index + 1));
   }
-  if (IDENT_START_CHARACTER.test(character)) {
+  if (isIdentStartAt(text, index)) {
     return true;
   }
   return startsEscape(text, index);
@@ -150,13 +233,12 @@ function startsNumber (text, index) {
   }
   if (character === '+' || character === '-') {
     const nextCharacter = text[index + 1] || '';
-    const followingCharacter = text[index + 2] || '';
-    return DIGIT_CHARACTER.test(nextCharacter) || (nextCharacter === '.' && DIGIT_CHARACTER.test(followingCharacter));
+    return isDigitAt(text, index + 1) || (nextCharacter === '.' && isDigitAt(text, index + 2));
   }
   if (character === '.') {
-    return DIGIT_CHARACTER.test(text[index + 1] || '');
+    return isDigitAt(text, index + 1);
   }
-  return DIGIT_CHARACTER.test(character);
+  return isDigitAt(text, index);
 }
 
 /**
@@ -168,7 +250,7 @@ function startsNumber (text, index) {
  */
 function readPastDigits (text, index) {
   let end = index;
-  while (end < text.length && DIGIT_CHARACTER.test(text[end])) {
+  while (end < text.length && isDigitAt(text, end)) {
     end++;
   }
   return end;
@@ -188,7 +270,7 @@ function readPastNumber (text, index) {
     end++;
   }
   end = readPastDigits(text, end);
-  if (text[end] === '.' && DIGIT_CHARACTER.test(text[end + 1] || '')) {
+  if (text[end] === '.' && isDigitAt(text, end + 1)) {
     end = readPastDigits(text, end + 1);
   }
   const exponentCharacter = text[end];
@@ -197,7 +279,7 @@ function readPastNumber (text, index) {
     if (text[exponentEnd] === '+' || text[exponentEnd] === '-') {
       exponentEnd++;
     }
-    if (DIGIT_CHARACTER.test(text[exponentEnd] || '')) {
+    if (isDigitAt(text, exponentEnd)) {
       end = readPastDigits(text, exponentEnd);
     }
   }
@@ -234,7 +316,7 @@ function readNumericToken (text, index) {
  */
 function holdsQuotedUrl (text, index) {
   let end = index;
-  while (end < text.length && WHITESPACE_CHARACTER.test(text[end])) {
+  while (end < text.length && isWhitespaceAt(text, end)) {
     end++;
   }
   return text[end] === '"' || text[end] === '\'';
@@ -324,7 +406,7 @@ function readStringToken (text, index) {
  */
 function readWhitespaceToken (text, index) {
   let end = index;
-  while (end < text.length && WHITESPACE_CHARACTER.test(text[end])) {
+  while (end < text.length && isWhitespaceAt(text, end)) {
     end++;
   }
   return { type: 'whitespace', text: text.slice(index, end) };
@@ -348,7 +430,7 @@ const PUNCTUATION_CHARACTERS = new Set(['(', ')', '[', ']', '{', '}', ',', ':', 
 function readToken (text, index) {
   const character = text[index];
 
-  if (WHITESPACE_CHARACTER.test(character)) {
+  if (isWhitespaceAt(text, index)) {
     return readWhitespaceToken(text, index);
   }
   if (character === '"' || character === '\'') {
@@ -358,7 +440,7 @@ function readToken (text, index) {
     return { type: 'punctuation', text: character };
   }
   if (character === '#') {
-    const startsHash = NAME_CHARACTER.test(text[index + 1] || '') || startsEscape(text, index + 1);
+    const startsHash = isNameCharacterAt(text, index + 1) || startsEscape(text, index + 1);
     if (startsHash) {
       return { type: 'hash', text: text.slice(index, readPastName(text, index + 1)) };
     }

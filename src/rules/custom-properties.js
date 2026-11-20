@@ -135,6 +135,10 @@ function shortenNumbers (value) {
       return shortenNumericToken(token.text);
     })
     .join('');
+  // An unchanged value keeps its token boundaries, so it need not be re-read
+  if (rewritten === value) {
+    return value;
+  }
   if (!hasSameTokenBoundaries(tokens, tokenizeCssValue(rewritten))) {
     return value;
   }
