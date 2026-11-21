@@ -198,8 +198,8 @@ function mergeSelectorRulePass (rules, mergeCaches) {
       const mergedPosition = slots.length;
       const placement = chooseMergePlacement(overrideIndex, existingRule, rule, existingPosition, mergedPosition);
       if (placement) {
-        existingRule.declarations.push(...(rule.declarations || []));
         overrideIndex.absorbRule(existingRule, rule);
+        existingRule.declarations.push(...(rule.declarations || []));
         if (placement === MERGE_AT_LATER_RULE) {
           slots[existingPosition] = null;
           positionByRule.set(existingRule, mergedPosition);
