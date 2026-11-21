@@ -11,6 +11,7 @@ import {
   splitBorderEdgesIntoTrio
 } from './border.js';
 import {
+  expandToLeafProperties,
   getLonghandsOf,
   shorthandMap
 } from './config.js';
@@ -587,6 +588,63 @@ function removeSubsumedShorthands (builtDeclarations) {
 }
 
 /**
+ * Checks whether a declaration that the shorthand does not replace, but that
+ * sets one of the same longhands, sits between the longhands it does replace.
+ * Moving the shorthand up to the first of them would reverse which of the two
+ * wins the cascade, so the shorthand must not be built.
+ *
+ * @param  {Array}   declarations       The declarations of a single rule, in source order.
+ * @param  {string}  shorthand          The shorthand property name being built.
+ * @param  {Array}   replacedLonghands  The longhand property names the shorthand replaces.
+ * @return {boolean}                    Whether a shared, non-replaced declaration sits between the replaced longhands.
+ */
+function hasInterveningSharedLonghand (declarations, shorthand, replacedLonghands) {
+  const isReplaced = (declaration) => {
+    return replacedLonghands.includes(declaration.property);
+  };
+  const firstIndex = declarations.findIndex(isReplaced);
+  const lastIndex = declarations.findLastIndex(isReplaced);
+  const shorthandLeaves = expandToLeafProperties(shorthand);
+  return declarations.some((declaration, index) => {
+    if (index <= firstIndex || index >= lastIndex || !declaration.property || isReplaced(declaration)) {
+      return false;
+    }
+    if (minifyValue(declaration).includes('!important')) {
+      return false;
+    }
+    return [...expandToLeafProperties(declaration.property)].some((leaf) => {
+      return shorthandLeaves.has(leaf);
+    });
+  });
+}
+
+/**
+ * Places each built shorthand where the first longhand it replaces stood. The
+ * declarations after that point keep their place, so an edge declaration that
+ * followed the longhands still overrides the shorthand, as it did before.
+ *
+ * @param  {Array} declarations        The declarations of a single rule, in source order.
+ * @param  {Set}   replacedProperties  The longhand property names the built shorthands replace.
+ * @param  {Array} builtEntries        The surviving built shorthands, each with the longhands it replaces.
+ * @return {Array}                     The declarations with the built shorthands in place of their longhands.
+ */
+function placeBuiltShorthands (declarations, replacedProperties, builtEntries) {
+  const insertionsByIndex = new Map();
+  for (const { declaration, replacedLonghands } of builtEntries) {
+    const index = declarations.findIndex((entry) => {
+      return replacedLonghands.includes(entry.property);
+    });
+    insertionsByIndex.set(index, [...(insertionsByIndex.get(index) || []), declaration]);
+  }
+  return declarations.flatMap((declaration, index) => {
+    if (!replacedProperties.has(declaration.property)) {
+      return [declaration];
+    }
+    return insertionsByIndex.get(index) || [];
+  });
+}
+
+/**
  * Builds every shorthand that the remaining longhands support, repeating until
  * no further shorthand can be created, so that shorthands built from other
  * shorthands (such as `border` from `border-width`) are also collapsed.
@@ -602,7 +660,7 @@ function mergeLonghandsIntoShorthands (declarations, context) {
   while (builtShorthand) {
     builtShorthand = false;
     const replacedProperties = new Set();
-    const builtDeclarations = [];
+    const builtEntries = [];
     // Every shorthand asks the same questions of the same declarations, so the
     // set of declared properties is gathered once per pass rather than rescanned
     // for each of the dozens of shorthand families.
@@ -634,22 +692,31 @@ function mergeLonghandsIntoShorthands (declarations, context) {
         continue;
       }
 
-      builtDeclarations.push({
-        property: shorthand,
-        value: mergedValue,
-        isAssembledShorthand: true
-      });
       const replacedLonghands = getReplacedLonghands(shorthand, mergeableProperties, relevantDeclarations);
+      if (hasInterveningSharedLonghand(result, shorthand, replacedLonghands)) {
+        continue;
+      }
+      builtEntries.push({
+        declaration: {
+          property: shorthand,
+          value: mergedValue,
+          isAssembledShorthand: true
+        },
+        replacedLonghands
+      });
       for (const property of replacedLonghands) {
         replacedProperties.add(property);
       }
     }
 
-    if (builtDeclarations.length) {
-      const keptDeclarations = result.filter((declaration) => {
-        return !replacedProperties.has(declaration.property);
+    if (builtEntries.length) {
+      const survivingDeclarations = removeSubsumedShorthands(builtEntries.map(({ declaration }) => {
+        return declaration;
+      }));
+      const survivingEntries = builtEntries.filter(({ declaration }) => {
+        return survivingDeclarations.includes(declaration);
       });
-      result = [...keptDeclarations, ...removeSubsumedShorthands(builtDeclarations)];
+      result = placeBuiltShorthands(result, replacedProperties, survivingEntries);
       builtShorthand = true;
     }
   }
@@ -677,4 +744,7 @@ function processDeclarations (declarations, context) {
   return orderDeclarations(result);
 }
 
-export { processDeclarations };
+export {
+  deduplicateDeclarations,
+  processDeclarations
+};

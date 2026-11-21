@@ -359,9 +359,8 @@ function nestFlatRules (rules) {
         continue;
       }
 
-      for (const selector of rule.selectors) {
-        indexBySelector.set(selector.trim(), result.length);
-      }
+      // A selector list cannot host nested rules for only some of its selectors,
+      // since a nested selector would then apply to every selector in the list
       result.push(rule);
       continue;
     }

@@ -132,12 +132,13 @@ function isDeclarationOverriddenLater (coverageByProperty, declaration, ruleInde
 }
 
 /**
- * Removes a selector from a multi-selector rule's list when every declaration
- * the rule would still give that selector is overridden by a later rule that
- * contains the same selector. For example, if `h1,h2{color:red}` is followed
- * by `h2{color:tan}`, the `h2` entry contributes nothing and can be dropped,
- * leaving `h1{color:red}`. If the list empties out entirely, the rule is
- * stripped of declarations so `removeEmptyRules` discards it.
+ * Removes a selector from a rule's list when every declaration the rule would
+ * still give that selector is overridden by a later rule that contains the same
+ * selector. For example, if `h1,h2{color:red}` is followed by `h2{color:tan}`,
+ * the `h2` entry contributes nothing and can be dropped, leaving `h1{color:red}`.
+ * A single-selector rule whose selector is overridden this way contributes
+ * nothing at all. If the list empties out entirely, the rule is stripped of
+ * declarations so `removeEmptyRules` discards it.
  *
  * @param  {Array} rules  The flat list of AST rule nodes.
  * @return {Array}        The rules with fully overridden selectors removed from their lists.
@@ -150,7 +151,7 @@ function removeFullyOverriddenSelectors (rules) {
 
   for (let ruleIndex = 0; ruleIndex < rules.length; ruleIndex++) {
     const rule = rules[ruleIndex];
-    if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
+    if (rule.type !== 'rule' || !rule.selectors?.length) {
       continue;
     }
     const entries = rule.declarations || [];

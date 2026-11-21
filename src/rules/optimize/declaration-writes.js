@@ -63,8 +63,49 @@ function isImportantDeclaration (declaration) {
   return /!\s*important\s*$/i.test(declaration.rawValue || declaration.value || '');
 }
 
+/**
+ * Collects every leaf property written by a list of AST entries, including the
+ * declarations of nested rules and blocks.
+ *
+ * @param  {Array} entries              The AST entries to search.
+ * @param  {Set}   [writtenProperties]  The set the names are added to.
+ * @return {Set}                        The leaf property names written anywhere within the entries.
+ */
+function collectWrittenLeafProperties (entries, writtenProperties = new Set()) {
+  for (const entry of entries) {
+    if (isPropertyDeclaration(entry)) {
+      for (const leafProperty of expandToOverridableProperties(entry.property)) {
+        writtenProperties.add(leafProperty);
+      }
+    }
+    collectWrittenLeafProperties(entry.declarations || [], writtenProperties);
+    collectWrittenLeafProperties(entry.rules || [], writtenProperties);
+  }
+  return writtenProperties;
+}
+
+/**
+ * Reports whether two sets of written leaf properties share a property. Only a
+ * shared property can make the order of two groups of rules change the cascade.
+ * `all` resets every property, so it shares one with any property at all.
+ *
+ * @param  {Set}     firstProperties   The leaf properties written by the first group.
+ * @param  {Set}     secondProperties  The leaf properties written by the second group.
+ * @return {boolean}                   True when the two groups write a property in common.
+ */
+function propertySetsOverlap (firstProperties, secondProperties) {
+  if (firstProperties.has('all') || secondProperties.has('all')) {
+    return firstProperties.size > 0 && secondProperties.size > 0;
+  }
+  return [...firstProperties].some((property) => {
+    return secondProperties.has(property);
+  });
+}
+
 export {
+  collectWrittenLeafProperties,
   expandToOverridableProperties,
   isImportantDeclaration,
-  isPropertyDeclaration
+  isPropertyDeclaration,
+  propertySetsOverlap
 };

@@ -123,11 +123,19 @@ function absorbWriteProfile (profile, absorbedWrites) {
  * position grows, so the first entry past a queried position is also the
  * strongest one past it.
  *
+ * Many merge passes never ask the index anything, so rules are only queued as
+ * they are recorded, and indexed in order the first time the index is asked
+ * about a relocation or told about a merge.
+ *
  * @param  {Map}    profileByRule  The write profiles already built for rules, shared by every pass of one merge.
  * @return {object}                An index exposing `recordRule` and `blocksRelocation`.
  */
 function createOverrideIndex (profileByRule) {
   const entriesByProperty = new Map();
+  // The rules and positions recorded before the index was first needed,
+  // alternating, in the order they were recorded
+  const queuedRecords = [];
+  let isIndexed = false;
 
   /**
    * Records that a property is written at a position with a given specificity.
@@ -197,12 +205,12 @@ function createOverrideIndex (profileByRule) {
   }
 
   /**
-   * Records every property a rule writes to at the position it occupies.
+   * Indexes every property a rule writes to at the position it occupies.
    *
    * @param {object} rule      The AST rule node.
    * @param {number} position  The slot the rule occupies.
    */
-  function recordRule (rule, position) {
+  function indexRule (rule, position) {
     const profile = getWriteProfile(rule);
     if (!profile.specificityByProperty.size) {
       return;
@@ -214,13 +222,46 @@ function createOverrideIndex (profileByRule) {
   }
 
   /**
-   * Folds a rule's writes into the rule that just absorbed its declarations, so
-   * the grown rule is treated as writing to both sets of properties.
+   * Indexes every queued rule, in the order they were recorded, so the index
+   * reads as though each had been indexed when it was recorded.
+   */
+  function indexQueuedRules () {
+    if (isIndexed) {
+      return;
+    }
+    isIndexed = true;
+    for (let index = 0; index < queuedRecords.length; index += 2) {
+      indexRule(queuedRecords[index], queuedRecords[index + 1]);
+    }
+    queuedRecords.length = 0;
+  }
+
+  /**
+   * Records every property a rule writes to at the position it occupies. A
+   * rule recorded before the index is needed is queued, and must not change
+   * until `absorbRule` or `blocksRelocation` is first called.
    *
-   * @param {object} rule          The rule that grew.
+   * @param {object} rule      The AST rule node.
+   * @param {number} position  The slot the rule occupies.
+   */
+  function recordRule (rule, position) {
+    if (isIndexed) {
+      indexRule(rule, position);
+    } else {
+      queuedRecords.push(rule, position);
+    }
+  }
+
+  /**
+   * Folds a rule's writes into the rule that just absorbed its declarations, so
+   * the grown rule is treated as writing to both sets of properties. It must
+   * be called before the declarations are appended.
+   *
+   * @param {object} rule          The rule that grows.
    * @param {object} absorbedRule  The rule whose declarations were appended to it.
    */
   function absorbRule (rule, absorbedRule) {
+    indexQueuedRules();
     absorbWriteProfile(getWriteProfile(rule), getWriteProfile(absorbedRule));
   }
 
@@ -236,6 +277,7 @@ function createOverrideIndex (profileByRule) {
    * @return {boolean}                True when the relocation is unsafe.
    */
   function blocksRelocation (movingRule, afterPosition) {
+    indexQueuedRules();
     const profile = getWriteProfile(movingRule);
     const specificity = profile.weakestSpecificity;
     for (const property of profile.specificityByProperty.keys()) {
