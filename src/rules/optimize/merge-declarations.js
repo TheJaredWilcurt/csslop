@@ -4,7 +4,15 @@
 
 import { minifyValue } from '../../value/minify.js';
 
-import { expandToOverridableProperties } from './declaration-writes.js';
+import {
+  collectWrittenLeafProperties,
+  expandToOverridableProperties,
+  propertySetsOverlap
+} from './declaration-writes.js';
+import {
+  collectCandidateParentSelectors,
+  createNestedSelectorMatcher
+} from './nest-rules.js';
 import { normalizeSelector } from './selector-normalization.js';
 import { selectorsShareSpecificity } from './specificity.js';
 
@@ -368,8 +376,8 @@ function combineSelectors (adjacentRules) {
  * properties. The first rule's body moves into one rule carrying every selector,
  * and each later rule keeps only the declarations that differ from the first's.
  *
- * @param  {Array} adjacentRules  The consecutive rule nodes to merge.
- * @return {Array}                The rules replacing the run.
+ * @param  {Array}      adjacentRules  The consecutive rule nodes to merge.
+ * @return {Array|null}                The rules replacing the run, or null when a restated declaration cannot move up.
  */
 function buildFirstRuleMerge (adjacentRules) {
   const firstRuleBody = partitionRuleBody(adjacentRules[0].declarations);
@@ -381,6 +389,8 @@ function buildFirstRuleMerge (adjacentRules) {
 
   const result = [mergedRule];
 
+  const keptDeclarations = [];
+  const restatedDeclarations = [];
   for (let ruleIndex = 1; ruleIndex < adjacentRules.length; ruleIndex++) {
     const rule = adjacentRules[ruleIndex];
     const ruleBody = partitionRuleBody(rule.declarations);
@@ -393,6 +403,10 @@ function buildFirstRuleMerge (adjacentRules) {
       }
       return (declaration.value || '').trim() !== (firstRuleValue.value || '').trim();
     });
+    keptDeclarations.push(...differingDeclarations);
+    restatedDeclarations.push(...ruleBody.plainDeclarations.filter((declaration) => {
+      return !differingDeclarations.includes(declaration);
+    }));
 
     if (differingDeclarations.length > 0) {
       result.push({
@@ -402,6 +416,12 @@ function buildFirstRuleMerge (adjacentRules) {
     }
   }
 
+  // A restated declaration is dropped here and takes effect from the merged
+  // rule instead, so it would lose to any kept declaration it shares a property with.
+  const keptProperties = collectWrittenLeafProperties(keptDeclarations);
+  if (propertySetsOverlap(keptProperties, collectWrittenLeafProperties(restatedDeclarations))) {
+    return null;
+  }
   return result;
 }
 
@@ -544,6 +564,104 @@ function mergeAdjacentRuleRun (adjacentRules) {
 }
 
 /**
+ * Reports whether a rule's selectors share a parent that nesting could factor
+ * out, such as `.a` for `.a .b,.a .d`, so the rule is worth keeping in place
+ * next to the rules it nests with.
+ *
+ * @param  {object}  rule  The AST rule node.
+ * @return {boolean}       True when every selector of the rule nests under one shared parent.
+ */
+function hasSharedNestingParent (rule) {
+  if (!rule.selectors || rule.selectors.length < 2) {
+    return false;
+  }
+  return [...collectCandidateParentSelectors(rule.selectors[0].trim())].some((candidateParent) => {
+    const matchNestedSelector = createNestedSelectorMatcher(candidateParent);
+    return rule.selectors.every((selector) => {
+      return matchNestedSelector(selector.trim()) !== null;
+    });
+  });
+}
+
+/**
+ * Folds a rule into the rule it restates, which may sit further back than the
+ * rule immediately before it. The rule can only join an earlier rule when every
+ * rule between them leaves the properties it writes alone, since its
+ * declarations would otherwise reach its selectors from the earlier position.
+ * Rules are only passed over when one of them has a shared nesting parent, so
+ * the rules are kept in place unless moving them lets nesting remove repetition.
+ *
+ * @param  {Array}   result  The rules merged so far, which the rule is folded into when possible.
+ * @param  {object}  rule    The rule to fold in.
+ * @return {boolean}         True when the rule was folded into an earlier rule.
+ */
+function foldIntoRestatingRule (result, rule) {
+  const previousRuleIndex = result.findLastIndex((entry) => {
+    return entry.type !== 'comment';
+  });
+  const merged = mergeRuleIntoPredecessor(result[previousRuleIndex], rule);
+  if (merged) {
+    result.splice(previousRuleIndex, 1, ...merged);
+    return true;
+  }
+
+  const ruleWrites = collectWrittenLeafProperties([rule]);
+  const writesBetween = new Set();
+  let passesNestableRule = false;
+  for (let index = previousRuleIndex; index >= 0; index--) {
+    const entry = result[index];
+    if (entry.type === 'comment') {
+      continue;
+    }
+    if (entry.type !== 'rule' || !entry.selectors?.length) {
+      return false;
+    }
+    if (index !== previousRuleIndex && passesNestableRule) {
+      const restated = mergeRuleIntoPredecessor(entry, rule);
+      if (restated?.length === 1 && !propertySetsOverlap(ruleWrites, writesBetween)) {
+        result.splice(index, 1, restated[0]);
+        return true;
+      }
+    }
+    collectWrittenLeafProperties([entry], writesBetween);
+    passesNestableRule = passesNestableRule || hasSharedNestingParent(entry);
+    if (propertySetsOverlap(ruleWrites, writesBetween)) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Combines common properties across a run of adjacent rules. When the whole run
+ * shares nothing, each contiguous part of it is tried in turn, so two rules that
+ * share a declaration still combine when a neighbor does not share it.
+ *
+ * @param  {Array} adjacentRules  The consecutive rule nodes in the run.
+ * @return {Array}                The rules after combining common properties.
+ */
+function mergeAdjacentRuleRunBySubruns (adjacentRules) {
+  const mergedRun = mergeAdjacentRuleRun(adjacentRules);
+  if (mergedRun !== adjacentRules) {
+    return mergedRun;
+  }
+  for (let start = 0; start < adjacentRules.length - 1; start++) {
+    for (let end = adjacentRules.length; end - start > 1; end--) {
+      const subRun = adjacentRules.slice(start, end);
+      const mergedSubRun = mergeAdjacentRuleRun(subRun);
+      if (mergedSubRun !== subRun) {
+        return mergeAdjacentRuleRunBySubruns([
+          ...adjacentRules.slice(0, start),
+          ...mergedSubRun,
+          ...adjacentRules.slice(end)
+        ]);
+      }
+    }
+  }
+  return adjacentRules;
+}
+
+/**
  * Merges consecutive rules whose declarations are a subset of the following rule, combining their selectors and splitting out any extra declarations. Also combines common properties across adjacent rules.
  *
  * @param  {Array} rules  The AST rule nodes to merge.
@@ -552,15 +670,9 @@ function mergeAdjacentRuleRun (adjacentRules) {
 function mergeByDeclarations (rules) {
   const result = [];
   for (const rule of rules) {
-    const previousRuleIndex = result.findLastIndex((entry) => {
-      return entry.type !== 'comment';
-    });
-    const merged = mergeRuleIntoPredecessor(result[previousRuleIndex], rule);
-    if (merged) {
-      result.splice(previousRuleIndex, 1, ...merged);
-      continue;
+    if (!foldIntoRestatingRule(result, rule)) {
+      result.push(rule);
     }
-    result.push(rule);
   }
 
   // Pass to combine common properties across adjacent rules
@@ -574,13 +686,13 @@ function mergeByDeclarations (rules) {
     } else if (entry.type === 'comment' && adjacentRules.length) {
       heldComments.push(entry);
     } else {
-      finalResult.push(...mergeAdjacentRuleRun(adjacentRules), ...heldComments, entry);
+      finalResult.push(...mergeAdjacentRuleRunBySubruns(adjacentRules), ...heldComments, entry);
       adjacentRules = [];
       heldComments = [];
     }
   }
 
-  finalResult.push(...mergeAdjacentRuleRun(adjacentRules), ...heldComments);
+  finalResult.push(...mergeAdjacentRuleRunBySubruns(adjacentRules), ...heldComments);
   return finalResult;
 }
 

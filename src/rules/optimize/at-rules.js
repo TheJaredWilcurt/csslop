@@ -9,9 +9,17 @@ import {
 } from '../normalize.js';
 
 import {
+  collectWrittenLeafProperties,
   expandToOverridableProperties,
-  isPropertyDeclaration
+  isPropertyDeclaration,
+  propertySetsOverlap
 } from './declaration-writes.js';
+import {
+  addSpecificity,
+  compareSpecificity,
+  maximumRuleSpecificity,
+  minimumRuleSpecificity
+} from './specificity.js';
 
 /**
  * Removes `@media` rules that contain IE10/IE11 exclusive hacks (the `\0` character).
@@ -150,41 +158,54 @@ function simplifyNestedMediaRules (rules) {
 }
 
 /**
- * Collects every leaf property written by a list of AST entries, including the
- * declarations of nested rules and blocks.
+ * Maps every leaf property a list of AST entries writes to the strongest
+ * specificity that write is applied with. Nested rules add their selectors'
+ * specificity to the rule they are nested in, as they only match through it.
  *
- * @param  {Array} entries              The AST entries to search.
- * @param  {Set}   [writtenProperties]  The set the names are added to.
- * @return {Set}                        The leaf property names written anywhere within the entries.
+ * @param  {Array} entries                The AST entries to search.
+ * @param  {Array} baseSpecificity        The specificity the entries are nested under.
+ * @param  {Map}   [strongestByProperty]  The map the strongest specificities are added to.
+ * @return {Map}                          Map of leaf property name to its strongest [ids, classes, types] specificity.
  */
-function collectWrittenLeafProperties (entries, writtenProperties = new Set()) {
+function collectStrongestLeafWrites (entries, baseSpecificity = [0, 0, 0], strongestByProperty = new Map()) {
   for (const entry of entries) {
     if (isPropertyDeclaration(entry)) {
       for (const leafProperty of expandToOverridableProperties(entry.property)) {
-        writtenProperties.add(leafProperty);
+        const strongestSoFar = strongestByProperty.get(leafProperty);
+        if (!strongestSoFar || compareSpecificity(baseSpecificity, strongestSoFar) > 0) {
+          strongestByProperty.set(leafProperty, baseSpecificity);
+        }
       }
+      continue;
     }
-    collectWrittenLeafProperties(entry.declarations || [], writtenProperties);
-    collectWrittenLeafProperties(entry.rules || [], writtenProperties);
+    const entrySpecificity = entry.selectors?.length ?
+      addSpecificity(baseSpecificity, maximumRuleSpecificity(entry.selectors)) :
+      baseSpecificity;
+    collectStrongestLeafWrites(entry.declarations || [], entrySpecificity, strongestByProperty);
+    collectStrongestLeafWrites(entry.rules || [], entrySpecificity, strongestByProperty);
   }
-  return writtenProperties;
+  return strongestByProperty;
 }
 
 /**
- * Reports whether two sets of written leaf properties share a property. Only a
- * shared property can make the order of two groups of rules change the cascade.
- * `all` resets every property, so it shares one with any property at all.
+ * Reports whether an entry would change the cascade if it were moved above a
+ * group of earlier rules. Only a rule of strictly lower specificity than the
+ * entry is guaranteed to lose to it either way, so a preceding write of the
+ * same property with at least the entry's weakest specificity blocks the move.
  *
- * @param  {Set}     firstProperties   The leaf properties written by the first group.
- * @param  {Set}     secondProperties  The leaf properties written by the second group.
- * @return {boolean}                   True when the two groups write a property in common.
+ * @param  {object}  entry            The entry that would move.
+ * @param  {Map}     precedingWrites  Map of leaf property name to the strongest specificity the preceding rules write it with.
+ * @return {boolean}                  True when the entry cannot be moved above the preceding rules.
  */
-function propertySetsOverlap (firstProperties, secondProperties) {
-  if (firstProperties.has('all') || secondProperties.has('all')) {
-    return firstProperties.size > 0 && secondProperties.size > 0;
+function isBlockedAboveEarlierWrites (entry, precedingWrites) {
+  const entryWrites = collectWrittenLeafProperties([entry]);
+  if (entryWrites.has('all') || precedingWrites.has('all')) {
+    return propertySetsOverlap(entryWrites, new Set(precedingWrites.keys()));
   }
-  return [...firstProperties].some((property) => {
-    return secondProperties.has(property);
+  const weakestEntrySpecificity = minimumRuleSpecificity(entry.selectors || []);
+  return [...entryWrites].some((leafProperty) => {
+    const strongestPreceding = precedingWrites.get(leafProperty);
+    return strongestPreceding !== undefined && compareSpecificity(strongestPreceding, weakestEntrySpecificity) >= 0;
   });
 }
 
@@ -250,8 +271,7 @@ function hoistRulesAboveRepeatedMedia (rules) {
     const entriesBeforeMedia = [];
     const entriesAfterMedia = [];
     const allMediaWrites = collectWrittenLeafProperties(mediaRules);
-    let precedingMediaRules = [mediaRules[0]];
-    let hasAfterEntry = false;
+    const precedingMediaRules = [mediaRules[0]];
     let canMerge = true;
 
     for (const entry of entriesBetween) {
@@ -264,13 +284,19 @@ function hoistRulesAboveRepeatedMedia (rules) {
         continue;
       }
 
+      // An entry moves above the block when the rules it would pass cannot
+      // change its cascade, and it does not pass an entry that stays behind.
+      // Failing that, it moves below the block when it writes nothing the
+      // block writes.
       const entryWrites = collectWrittenLeafProperties([entry]);
-      const precedingWrites = collectWrittenLeafProperties(precedingMediaRules);
-      if (!propertySetsOverlap(entryWrites, allMediaWrites)) {
-        entriesAfterMedia.push(entry);
-        hasAfterEntry = true;
-      } else if (!propertySetsOverlap(entryWrites, precedingWrites) && !hasAfterEntry) {
+      const crossesEntriesAfter = entriesAfterMedia.some((entryAfter) => {
+        return propertySetsOverlap(collectWrittenLeafProperties([entryAfter]), entryWrites);
+      });
+      const precedingWrites = collectStrongestLeafWrites(precedingMediaRules);
+      if (!crossesEntriesAfter && !isBlockedAboveEarlierWrites(entry, precedingWrites)) {
         entriesBeforeMedia.push(entry);
+      } else if (!propertySetsOverlap(entryWrites, allMediaWrites)) {
+        entriesAfterMedia.push(entry);
       } else {
         canMerge = false;
         break;

@@ -2,6 +2,8 @@
  * @file Optimizes CSS rule structures by merging selectors, deduplicating keyframes, nesting flat rules, and consolidating `@media` and `@layer` blocks.
  */
 
+import { deduplicateDeclarations } from '../../declarations/process.js';
+
 import {
   deduplicateKeyframes,
   mergeContainerRules,
@@ -42,6 +44,25 @@ function clearSelectorCaches () {
 }
 
 /**
+ * Drops the declarations that a later declaration of the same property makes
+ * redundant, so rules that only differ by such duplicates can still merge.
+ *
+ * @param  {Array} rules  The AST rule nodes to deduplicate.
+ * @return {Array}        A new array of rules with their redundant declarations removed.
+ */
+function deduplicateRuleDeclarations (rules) {
+  return rules.map((rule) => {
+    if (rule.type !== 'rule' || !rule.declarations) {
+      return rule;
+    }
+    return {
+      ...rule,
+      declarations: deduplicateDeclarations(rule.declarations)
+    };
+  });
+}
+
+/**
  * Applies the structural optimization pipeline to a stylesheet or grouping
  * block, so merging at-rules does not leave their children unoptimized.
  *
@@ -49,7 +70,7 @@ function clearSelectorCaches () {
  * @return {Array}        The optimized sibling entries.
  */
 function optimizeRuleList (rules) {
-  let result = expandPureNestedRules(rules);
+  let result = deduplicateRuleDeclarations(expandPureNestedRules(rules));
   result = removeIEMediaRules(result);
   result = simplifyNestedMediaRules(result);
   result = removeEmptyRules(result);
@@ -71,7 +92,9 @@ function optimizeRuleList (rules) {
   result = mergeSelectorRules(result);
   result = removeEmptyRules(result);
   result = mergeByDeclarations(result);
+  result = mergeSelectorRules(result);
   result = factorCommonParents(result);
+  result = mergeSelectorRules(result);
   result = mergeIdenticalNestedRules(result);
   result = nestFlatRules(result);
   result = expandPureNestedRules(result);
