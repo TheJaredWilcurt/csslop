@@ -11,19 +11,23 @@ import {
   createMinifyContext,
   setActiveCharset
 } from './context.js';
-import { removeStarHackDeclarations } from './declarations/invalid-values.js';
+import {
+  clearIgnoredValueCache,
+  removeStarHackDeclarations
+} from './declarations/invalid-values.js';
 import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
 import { parse } from './parser/index.js';
 import { splitTopLevelCommaList } from './parser/source-search.js';
 import { preprocessDeclarationBlocks } from './preprocess.js';
+import { clearCollapsedCustomPropertyCache } from './rules/custom-properties.js';
 import { combineLanguageSelectors } from './rules/lang.js';
 import {
   clearNormalizedMediaCache,
   normalizeRuleSelectors
 } from './rules/normalize.js';
 import {
-  clearSelectorCaches,
-  optimizeRuleList
+  clearOptimizationCaches,
+  optimizeAndStringifyRuleList
 } from './rules/optimize/index.js';
 import {
   analyzePositionTryRules,
@@ -33,8 +37,8 @@ import {
 } from './rules/position-try.js';
 import { combineLegacyAnySelectors } from './rules/selectors.js';
 import {
-  removeRedundantLayerStatementSemicolon,
-  stringifyRule
+  clearMinifiedSelectorListCache,
+  removeRedundantLayerStatementSemicolon
 } from './rules/stringify.js';
 import { removeInvalidSelectorRules } from './rules/validate.js';
 import {
@@ -148,7 +152,10 @@ function mergeAdjacentRulesWithIdenticalBodies (ruleStrings) {
  */
 function clearMinificationCaches () {
   clearMinifiedValueCache();
-  clearSelectorCaches();
+  clearIgnoredValueCache();
+  clearCollapsedCustomPropertyCache();
+  clearMinifiedSelectorListCache();
+  clearOptimizationCaches();
   clearNormalizedMediaCache();
 }
 
@@ -187,7 +194,6 @@ export const minifyCSS = function (input) {
     source = String(input ?? '');
   }
   let ast;
-  const output = [];
 
   const detectedCharset = detectCharset(source);
   beginMinificationPass(detectedCharset);
@@ -195,7 +201,7 @@ export const minifyCSS = function (input) {
   try {
     ast = parse(
       preprocessDeclarationBlocks(source),
-      { preserveFormatting: true, silent: true }
+      { silent: true }
     );
   } catch {
     endMinificationPass();
@@ -235,12 +241,7 @@ export const minifyCSS = function (input) {
     );
     ast.stylesheet.rules = filterRedundantCharsets(ast.stylesheet.rules);
 
-    const finalRules = optimizeRuleList(ast.stylesheet.rules, context);
-
-    for (const rule of finalRules) {
-      output.push(stringifyRule(rule, context));
-    }
-
+    const output = optimizeAndStringifyRuleList(ast.stylesheet.rules, context);
     const mergedOutput = removeRedundantLayerStatementSemicolon(mergeAdjacentRulesWithIdenticalBodies(output));
 
     endMinificationPass();

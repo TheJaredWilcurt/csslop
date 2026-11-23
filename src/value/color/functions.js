@@ -532,6 +532,11 @@ function separateColorFunctionsFromFollowingTokens (value) {
  * @return {string}        The value with color functions converted to hex where shorter.
  */
 function convertColorsToHex (value) {
+  // Every color this converts is written as a function, so a value without an
+  // opening parenthesis holds nothing to convert
+  if (!value.includes('(')) {
+    return value;
+  }
   let converted = separateColorFunctionsFromFollowingTokens(value);
   converted = resolveComputedColors(converted);
   converted = convertLabFunctionsToHex(converted);

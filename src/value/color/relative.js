@@ -234,6 +234,15 @@ function rewriteRelativeColor (functionName, inner) {
 }
 
 /**
+ * Matches the opening of the arguments of a relative color, which every
+ * relative-color function needs, so a value without one is passed over.
+ *
+ * @type {RegExp}
+ */
+// An opening parenthesis, optional whitespace, then the `from` keyword in any case
+const RELATIVE_COLOR_OPENING_PATTERN = /\(\s*from/i;
+
+/**
  * Minifies every relative-color function (`<func>(from ...)`) in a CSS value,
  * resolving identity transforms and collapsing redundant whitespace. The
  * `color(from ...)` form is intentionally left to `evaluateRelativeColor`.
@@ -242,6 +251,11 @@ function rewriteRelativeColor (functionName, inner) {
  * @return {string}        The value with relative colors minified.
  */
 function minifyRelativeColorSyntax (value) {
+  // Every relative color opens its arguments with `from`, so a value without
+  // that opening holds nothing to minify
+  if (!RELATIVE_COLOR_OPENING_PATTERN.test(value)) {
+    return value;
+  }
   let result = '';
   let index = 0;
   while (index < value.length) {

@@ -71,7 +71,7 @@ function deduplicateSelectors (selectors) {
  *
  * @type {Set<string>}
  */
-const UNSTYLED_BODY_ENTRY_TYPES = new Set(['whitespace', 'comment']);
+const UNSTYLED_BODY_ENTRY_TYPES = new Set(['comment']);
 
 /**
  * Splits a rule body into the declarations it sets directly and the blocks
@@ -804,8 +804,6 @@ function createRunMeasureContext () {
     firstPairs: createIdSet(),
     keptLeaves: createIdSet(),
     restatedLeaves: createIdSet(),
-    ruleProperties: createIdSet(),
-    rulePairs: createIdSet(),
     seenSelectors: createIdSet(),
     sharedLeaves: createIdSet(),
     internProperty,
@@ -877,6 +875,8 @@ function gatherRuleMergeFacts (rule, context) {
   return {
     declarations,
     declarationSize,
+    // Filled in by `getDeclaredIds` the first time a run reaches the rule
+    declaredIds: null,
     preventsMerge: preventsCommonPropertyMerge(rule),
     selectorIds: rule.selectors.map((selector) => {
       return context.internSelector(normalizeSelectorWhitespace(selector));
@@ -913,7 +913,7 @@ function addCombinedSelectors (seenSelectors, facts, size) {
  * at the front of the arrays.
  *
  * @param  {object} common     The run's common `pairIds` and `propertyIds`, narrowed in place.
- * @param  {object} rulePairs  The ids of the further rule's pairs.
+ * @param  {Set}    rulePairs  The ids of the further rule's pairs.
  * @return {number}            The number of common pairs left.
  */
 function narrowCommonPairs (common, rulePairs) {
@@ -1054,19 +1054,28 @@ function measureSharedMerge (context, runFacts, start, end, common) {
 }
 
 /**
- * Records the property and value pairs, and the properties, a rule declares.
+ * Returns the ids of the property and value pairs, and of the properties, a
+ * rule declares, collecting them the first time they are needed. A run grows
+ * across the same rules from many starts, so each rule's ids are kept with its
+ * merge facts rather than collected again on every visit.
  *
- * @param {object} context  The context from `createRunMeasureContext`.
- * @param {object} facts    The rule's merge facts.
+ * @param  {object} facts  The rule's merge facts.
+ * @return {object}        The rule's `pairIds` and `propertyIds` sets.
  */
-function recordRuleDeclarations (context, facts) {
-  const { ruleProperties, rulePairs } = context;
-  rulePairs.clear();
-  ruleProperties.clear();
-  for (const declaration of facts.declarations) {
-    rulePairs.add(declaration.pairId);
-    ruleProperties.add(declaration.propertyId);
+function getDeclaredIds (facts) {
+  if (!facts.declaredIds) {
+    const pairIds = new Set();
+    const propertyIds = new Set();
+    for (const declaration of facts.declarations) {
+      pairIds.add(declaration.pairId);
+      propertyIds.add(declaration.propertyId);
+    }
+    facts.declaredIds = {
+      pairIds,
+      propertyIds
+    };
   }
+  return facts.declaredIds;
 }
 
 /**
@@ -1099,7 +1108,7 @@ function findMergingRunEnds (runFacts, start, context) {
       runEnd: start
     };
   }
-  const { firstPairs, ruleProperties, rulePairs, seenSelectors } = context;
+  const { firstPairs, seenSelectors } = context;
   const common = {
     count: firstFacts.declarations.length,
     pairIds: [],
@@ -1123,16 +1132,16 @@ function findMergingRunEnds (runFacts, start, context) {
     if (facts.preventsMerge) {
       break;
     }
-    recordRuleDeclarations(context, facts);
+    const declaredIds = getDeclaredIds(facts);
     const previousCommonCount = common.count;
-    if (!narrowCommonPairs(common, rulePairs)) {
+    if (!narrowCommonPairs(common, declaredIds.pairIds)) {
       break;
     }
     end++;
     originalSize += facts.selectorSize + facts.declarationSize;
     combinedSelectorSize = addCombinedSelectors(seenSelectors, facts, combinedSelectorSize);
     restatesFirstRule = restatesFirstRule && firstFacts.declarations.every((declaration) => {
-      return ruleProperties.has(declaration.propertyId);
+      return declaredIds.propertyIds.has(declaration.propertyId);
     });
 
     let merge;

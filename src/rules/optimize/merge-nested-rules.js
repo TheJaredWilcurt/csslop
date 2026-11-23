@@ -16,7 +16,7 @@ import {
  */
 function nestedRuleBodySignature (rule) {
   const declarations = (rule.declarations || []).filter((declaration) => {
-    return declaration.type !== 'whitespace' && declaration.type !== 'comment';
+    return declaration.type !== 'comment';
   });
   if (declarations.length === 0) {
     return null;

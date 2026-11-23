@@ -299,12 +299,20 @@ const IDENTIFIER_CHARACTER = /[a-zA-Z0-9_-]/;
 const TYPE_SELECTOR_START = /[a-zA-Z]/;
 
 /**
- * Matches a single character that may start a pseudo-class or pseudo-element
- * name (a letter, or a hyphen for vendor-prefixed names).
+ * Determines whether a character code may appear in a pseudo-class or
+ * pseudo-element name: an ASCII letter, or a hyphen for vendor-prefixed names.
+ * Comparing codes spares the scan a one-character string for every character.
  *
- * @type {RegExp}
+ * @param  {number}  characterCode  The character code to test.
+ * @return {boolean}                Whether the character can be part of a pseudo name.
  */
-const PSEUDO_NAME_CHARACTER = /[a-zA-Z-]/;
+function isPseudoNameCharacterCode (characterCode) {
+  return (
+    (characterCode >= 97 && characterCode <= 122) ||
+    (characterCode >= 65 && characterCode <= 90) ||
+    characterCode === 45
+  );
+}
 
 /**
  * Reads a pseudo-class or pseudo-element name starting at the given index and
@@ -316,7 +324,7 @@ const PSEUDO_NAME_CHARACTER = /[a-zA-Z-]/;
  */
 function readPseudoNameEnd (selector, start) {
   let index = start;
-  while (index < selector.length && PSEUDO_NAME_CHARACTER.test(selector[index])) {
+  while (index < selector.length && isPseudoNameCharacterCode(selector.charCodeAt(index))) {
     index++;
   }
   return index;
@@ -493,12 +501,8 @@ function isUniversallyRecognizableSelector (selector) {
  * @return {boolean}           True when a pseudo-element token is present.
  */
 function containsPseudoElement (selector) {
-  let index = 0;
-  while (index < selector.length) {
-    if (selector[index] !== ':') {
-      index++;
-      continue;
-    }
+  let index = selector.indexOf(':');
+  while (index !== -1) {
     if (selector[index + 1] === ':') {
       return true;
     }
@@ -507,7 +511,7 @@ function containsPseudoElement (selector) {
     if (LEGACY_PSEUDO_ELEMENT_NAMES.has(pseudoName)) {
       return true;
     }
-    index = nameEnd > index + 1 ? nameEnd : index + 1;
+    index = selector.indexOf(':', nameEnd > index + 1 ? nameEnd : index + 1);
   }
   return false;
 }

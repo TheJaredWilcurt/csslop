@@ -349,8 +349,8 @@ function createWrapperDeclarations (run) {
  * other entry that is not a rule, such as an at-rule, ends it. A rule that
  * cannot nest stays in place, and later rules may only join the run when they
  * can move across every rule left behind since the last rule that joined.
- * Only the rules whose first selector starts with the parent can nest under
- * it, so the others are never visited.
+ * Only the rules whose first selector could nest under the parent are ever
+ * visited.
  *
  * @param  {Array}  rules           The sibling AST entries.
  * @param  {number} startIndex      The index the run starts at.
@@ -359,9 +359,9 @@ function createWrapperDeclarations (run) {
  * @return {object}                 The `run` of rules paired with their nested selectors, the `retainedEntries` left between them, and the `end` index just past the run's last rule.
  */
 function collectSiblingRun (rules, startIndex, parentSelector, siblingIndex) {
-  const { findRulesStartingWith, writeIndex } = siblingIndex;
+  const { findNestingCandidates, writeIndex } = siblingIndex;
   const matchNestedSelector = createNestedSelectorMatcher(parentSelector);
-  const candidateIndexes = findRulesStartingWith(parentSelector.trim());
+  const candidateIndexes = findNestingCandidates(parentSelector.trim());
   const barrierPosition = findFirstPositionAtLeast(writeIndex.barrierIndexes, startIndex);
   const barrierIndex = writeIndex.barrierIndexes[barrierPosition] ?? rules.length;
   const run = [];
@@ -462,6 +462,19 @@ function factorCommonParentsPass (rules, allowTrailingCompound = false) {
 }
 
 /**
+ * Reports whether a list of AST entries holds any style rule, which is the
+ * only kind of entry factoring can rewrite.
+ *
+ * @param  {Array}   entries  The AST entries to search.
+ * @return {boolean}          True when an entry is a style rule.
+ */
+function containsStyleRule (entries) {
+  return entries.some((entry) => {
+    return entry.type === 'rule';
+  });
+}
+
+/**
  * Factors shared selector parents throughout a rule list and its nested rules,
  * repeating productive passes until the selector text stops shrinking.
  *
@@ -470,6 +483,10 @@ function factorCommonParentsPass (rules, allowTrailingCompound = false) {
  * @return {Array}                          The rules with shared parents factored.
  */
 function factorCommonParents (rules, allowTrailingCompound = false) {
+  // Most rule bodies only hold declarations, which leaves nothing to factor
+  if (!containsStyleRule(rules)) {
+    return [...rules];
+  }
   const rulesWithFactoredBodies = rules.map((rule) => {
     if (rule.type === 'rule' && rule.declarations) {
       return {
@@ -495,8 +512,32 @@ function factorCommonParents (rules, allowTrailingCompound = false) {
 }
 
 /**
+ * Counts, for every part of a selector in front of a space, how many selectors
+ * of a list continue past that part with the space. A selector only branches
+ * off a parent when it starts with the parent followed by a space, so the
+ * count is how many branches the parent has.
+ *
+ * @param  {Array}               selectors  The selectors of the list.
+ * @return {Map<string, number>}            Map of each prefix to the number of selectors that branch off it.
+ */
+function countDescendantBranches (selectors) {
+  const branchCounts = new Map();
+  for (const selector of selectors) {
+    let spaceIndex = selector.indexOf(' ');
+    while (spaceIndex !== -1) {
+      const prefix = selector.slice(0, spaceIndex);
+      branchCounts.set(prefix, (branchCounts.get(prefix) || 0) + 1);
+      spaceIndex = selector.indexOf(' ', spaceIndex + 1);
+    }
+  }
+  return branchCounts;
+}
+
+/**
  * Shares a descendant prefix through `:is()` when a nesting wrapper did not
- * save enough space to factor the parent out of the selector list.
+ * save enough space to factor the parent out of the selector list. The
+ * branches of every parent are counted up front, so a long selector list is
+ * not searched again for each of its selectors only to find fewer than two.
  *
  * @param {object} rule  The style rule whose selector list may be shortened.
  */
@@ -504,7 +545,11 @@ function factorSelectorBranches (rule) {
   if (rule.type !== 'rule' || !rule.selectors?.length) {
     return;
   }
+  let branchCounts = countDescendantBranches(rule.selectors);
   for (const parent of [...rule.selectors]) {
+    if ((branchCounts.get(parent) || 0) < 2) {
+      continue;
+    }
     const prefix = parent + ' ';
     const branches = rule.selectors.filter((selector) => {
       return selector.startsWith(prefix);
@@ -527,6 +572,7 @@ function factorSelectorBranches (rule) {
       }
       return branchSet.has(selector) ? [] : [selector];
     });
+    branchCounts = countDescendantBranches(rule.selectors);
   }
 }
 

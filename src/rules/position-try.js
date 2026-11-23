@@ -19,16 +19,14 @@ function collectRuleMetadata (rules, context) {
     if (rule.type === 'property' && rule.name && registersCustomProperty(rule)) {
       context.registeredCustomProperties.add(rule.name);
       const syntaxDeclaration = (rule.declarations || []).find((declaration) => {
-        return declaration.type !== 'whitespace' && declaration.property === 'syntax';
+        return declaration.property === 'syntax';
       });
       if (syntaxDeclaration?.value) {
         context.registeredCustomPropertySyntax.set(rule.name, syntaxDeclaration.value);
       }
     }
     if (rule.type === 'position-try') {
-      const declarations = (rule.declarations || []).filter((declaration) => {
-        return declaration.type !== 'whitespace';
-      });
+      const declarations = rule.declarations || [];
       if (declarations.length > 0) {
         positionTryRules.set(rule.name, declarations);
         positionTryUsage.set(rule.name, 0);
@@ -55,15 +53,14 @@ function analyzePositionTryRules (rules, minifyValue, positionTryRules, position
     if (rule.type === 'rule') {
       let basePositionArea = null;
       for (const declaration of rule.declarations || []) {
-        if (declaration.type !== 'whitespace' && declaration.property === 'position-area') {
+        if (declaration.property === 'position-area') {
           basePositionArea = minifyValue(declaration);
         }
       }
 
       for (const declaration of rule.declarations || []) {
         const isPositionTryProperty = (
-          declaration.type !== 'whitespace' &&
-          (declaration.property === 'position-try-fallbacks' || declaration.property === 'position-try')
+          declaration.property === 'position-try-fallbacks' || declaration.property === 'position-try'
         );
         if (!isPositionTryProperty) {
           continue;
@@ -129,8 +126,7 @@ function cleanPositionTryRules (rules) {
     if (rule.type === 'rule') {
       rule.declarations = (rule.declarations || []).filter((declaration) => {
         const isPositionTryProperty = (
-          declaration.type !== 'whitespace' &&
-          (declaration.property === 'position-try-fallbacks' || declaration.property === 'position-try')
+          declaration.property === 'position-try-fallbacks' || declaration.property === 'position-try'
         );
         if (isPositionTryProperty) {
           return declaration.value !== '';

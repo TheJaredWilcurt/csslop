@@ -19,13 +19,11 @@ const EMPTY_GROUPING_RULE_TYPES = new Set([
  */
 function isRuleEffectivelyEmpty (rule) {
   if (rule.type === 'rule') {
-    const nonWhitespaceEntries = (rule.declarations || []).filter((declaration) => {
-      return declaration.type !== 'whitespace';
-    });
-    if (nonWhitespaceEntries.length === 0) {
+    const entries = rule.declarations || [];
+    if (entries.length === 0) {
       return true;
     }
-    return nonWhitespaceEntries.every((entry) => {
+    return entries.every((entry) => {
       if (entry.type === 'comment') {
         return !entry.comment?.startsWith('!');
       }
@@ -39,9 +37,6 @@ function isRuleEffectivelyEmpty (rule) {
     return false;
   }
   return rule.rules.every((entry) => {
-    if (entry.type === 'whitespace') {
-      return true;
-    }
     if (entry.type === 'comment') {
       return !entry.comment?.startsWith('!');
     }

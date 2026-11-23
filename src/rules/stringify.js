@@ -40,7 +40,7 @@ import {
 } from './selectors.js';
 
 /**
- * Renders an array of CSS declaration objects as a minified semicolon-separated string, filtering out whitespace entries.
+ * Renders an array of CSS declaration objects as a minified semicolon-separated string, filtering out comments.
  *
  * @param  {Array}  declarations  The declaration objects to render.
  * @return {string}               A semicolon-joined "property:value" string.
@@ -48,7 +48,7 @@ import {
 function stringifyDeclarations (declarations) {
   return declarations
     .filter((declaration) => {
-      return declaration.type !== 'whitespace' && declaration.type !== 'comment' && declaration.property;
+      return declaration.type !== 'comment' && declaration.property;
     })
     .map((declaration) => {
       return [declaration.property, ':', minifyValueForOutput(declaration)].join('');
@@ -253,9 +253,7 @@ function stringifyAtRule (rule, context) {
     minifiedPrelude = (rule.prelude || '').trim().replace(/\s+/g, ' ');
   }
 
-  const bodyItems = (rule.rules || []).filter((item) => {
-    return item.type !== 'whitespace';
-  });
+  const bodyItems = rule.rules || [];
   if (bodyItems.length === 0) {
     return '';
   }
@@ -378,6 +376,109 @@ function minifySelector (selector) {
 }
 
 /**
+ * Minifies the selector list of a style rule into the text written in front of
+ * its block, dropping repeated selectors and combining the ones that can share
+ * a single selector.
+ *
+ * @param  {Array}   selectors        The rule's selectors.
+ * @param  {boolean} isNestingParent  Whether the rule holds nested rules.
+ * @return {string}                   The comma-separated minified selector list.
+ */
+function minifySelectorList (selectors, isNestingParent) {
+  let uniqueSelectors = [...new Set(selectors)];
+  // Minify spacing within selectors (e.g. inside :is(), :where(), etc)
+  uniqueSelectors = uniqueSelectors.map(minifySelector);
+  uniqueSelectors = combineLegacyAnySelectors(uniqueSelectors);
+  // When this rule is a nesting parent, its whole selector list is treated
+  // as :is() for the children's specificity, so a top-level :is() can be
+  // safely lifted into the list without altering specificity.
+  if (isNestingParent) {
+    uniqueSelectors = uniqueSelectors.flatMap(flattenNestingParentIsSelector);
+  }
+  const hasSiblingSelectors = uniqueSelectors.length > 1;
+  uniqueSelectors = uniqueSelectors.flatMap((selector) => {
+    return processIsSelector(selector, hasSiblingSelectors);
+  });
+  uniqueSelectors = [...new Set(uniqueSelectors)];
+  uniqueSelectors = combineLanguageSelectors(uniqueSelectors);
+  return uniqueSelectors.join(',');
+}
+
+/**
+ * Memoizes minified selector lists for the current stylesheet. Rules are
+ * stringified to measure every form the optimizer compares, so the same
+ * selector lists are minified many times over, and the result only depends on
+ * the selectors and on whether the rule holds nested rules.
+ *
+ * @type {Map<string, string>}
+ */
+const minifiedSelectorListCache = new Map();
+
+/**
+ * The minified forms of each selector list array already stringified during
+ * the current stylesheet. Passes replace a rule's selectors with a new array
+ * rather than changing the array in place, so a rule stringified again finds
+ * its forms here without building the key `minifiedSelectorListCache` needs.
+ *
+ * @type {WeakMap<Array, object>}
+ */
+let minifiedFormsBySelectors = new WeakMap();
+
+/**
+ * Discards every memoized selector list. The minifier calls this around each
+ * stylesheet, so the cache does not outlive the pass that filled it.
+ */
+function clearMinifiedSelectorListCache () {
+  minifiedSelectorListCache.clear();
+  minifiedFormsBySelectors = new WeakMap();
+}
+
+/**
+ * Minifies a selector list, reusing the result when a list with the same
+ * selectors was already minified during this stylesheet. The list is keyed by
+ * its JSON form, which tells apart any two lists of selectors, behind a marker
+ * for whether the rule is a nesting parent that JSON never starts with.
+ *
+ * @param  {Array}   selectors        The rule's selectors.
+ * @param  {boolean} isNestingParent  Whether the rule holds nested rules.
+ * @return {string}                   The comma-separated minified selector list.
+ */
+function lookupMinifiedSelectorList (selectors, isNestingParent) {
+  const key = (isNestingParent ? '&' : '') + JSON.stringify(selectors);
+  let minified = minifiedSelectorListCache.get(key);
+  if (minified === undefined) {
+    minified = minifySelectorList(selectors, isNestingParent);
+    minifiedSelectorListCache.set(key, minified);
+  }
+  return minified;
+}
+
+/**
+ * Minifies the selector list of a style rule, reusing the result when the same
+ * list was already minified during this stylesheet.
+ *
+ * @param  {Array}   selectors        The rule's selectors.
+ * @param  {boolean} isNestingParent  Whether the rule holds nested rules.
+ * @return {string}                   The comma-separated minified selector list.
+ */
+function getMinifiedSelectorList (selectors, isNestingParent) {
+  let minifiedForms = minifiedFormsBySelectors.get(selectors);
+  if (!minifiedForms) {
+    minifiedForms = {
+      nestingParent: undefined,
+      plain: undefined
+    };
+    minifiedFormsBySelectors.set(selectors, minifiedForms);
+  }
+  if (isNestingParent) {
+    minifiedForms.nestingParent ??= lookupMinifiedSelectorList(selectors, true);
+    return minifiedForms.nestingParent;
+  }
+  minifiedForms.plain ??= lookupMinifiedSelectorList(selectors, false);
+  return minifiedForms.plain;
+}
+
+/**
  * Converts a parsed CSS AST rule node into a minified CSS string, dispatching to specialized handlers for each rule type including selectors, `@media`, `@keyframes`, `@layer`, and other at-rules.
  *
  * @param  {object} rule     The AST rule node to stringify.
@@ -386,10 +487,7 @@ function minifySelector (selector) {
  */
 function stringifyRule (rule, context) {
   if (rule.type === 'rule') {
-    let declarations = rule.declarations
-      ?.filter((declaration) => {
-        return declaration.type !== 'whitespace';
-      }) || [];
+    let declarations = rule.declarations || [];
 
     // Ignore empty rules (comments-only rules are also effectively empty)
     const isEffectivelyEmpty = (
@@ -404,26 +502,10 @@ function stringifyRule (rule, context) {
 
     let output = [];
     if (rule.selectors?.length) {
-      let uniqueSelectors = [...new Set(rule.selectors)];
-      // Minify spacing within selectors (e.g. inside :is(), :where(), etc)
-      uniqueSelectors = uniqueSelectors.map(minifySelector);
-      uniqueSelectors = combineLegacyAnySelectors(uniqueSelectors);
-      // When this rule is a nesting parent, its whole selector list is treated
-      // as :is() for the children's specificity, so a top-level :is() can be
-      // safely lifted into the list without altering specificity.
-      const isNestingParent = (rule.declarations || []).some((declaration) => {
+      const isNestingParent = declarations.some((declaration) => {
         return declaration.type === 'rule';
       });
-      if (isNestingParent) {
-        uniqueSelectors = uniqueSelectors.flatMap(flattenNestingParentIsSelector);
-      }
-      const hasSiblingSelectors = uniqueSelectors.length > 1;
-      uniqueSelectors = uniqueSelectors.flatMap((selector) => {
-        return processIsSelector(selector, hasSiblingSelectors);
-      });
-      uniqueSelectors = [...new Set(uniqueSelectors)];
-      uniqueSelectors = combineLanguageSelectors(uniqueSelectors);
-      output.push(uniqueSelectors.join(','));
+      output.push(getMinifiedSelectorList(rule.selectors, isNestingParent));
     }
     output.push('{');
 
@@ -580,10 +662,9 @@ function stringifyRule (rule, context) {
       })
       .filter((keyframe) => {
         // Skip keyframe stops that have no meaningful declarations
-        const meaningful = (keyframe.declarations || []).filter((declaration) => {
-          return declaration.type !== 'whitespace' && declaration.type !== 'comment';
+        return (keyframe.declarations || []).some((declaration) => {
+          return declaration.type !== 'comment';
         });
-        return meaningful.length > 0;
       })
       .map((keyframe) => {
         let output = [];
@@ -600,7 +681,7 @@ function stringifyRule (rule, context) {
         output.push('{');
         const renderedKeyframeDeclarations = keyframe.declarations
           ?.filter((declaration) => {
-            return declaration.type !== 'whitespace' && declaration.type !== 'comment';
+            return declaration.type !== 'comment';
           })
           ?.map((declaration) => {
             return [declaration.property, ':', minifyValueForOutput(declaration)].join('');
@@ -709,14 +790,11 @@ function stringifyRule (rule, context) {
       }
     }
     const parts = (rule.declarations || [])
-      .filter((declaration) => {
-        return declaration.type !== 'whitespace';
-      })
       .flatMap((declaration) => {
         if (declaration.type === 'page-margin-box' && declaration.name) {
           const innerDeclarations = (declaration.declarations || [])
             .filter((innerDeclaration) => {
-              return innerDeclaration.type !== 'whitespace' && innerDeclaration.property;
+              return innerDeclaration.property;
             })
             .map((innerDeclaration) => {
               return [unescapeIdent(innerDeclaration.property), ':', minifyValueForOutput(innerDeclaration)].join('');
@@ -794,6 +872,7 @@ function stringifyRule (rule, context) {
 }
 
 export {
+  clearMinifiedSelectorListCache,
   removeRedundantLayerStatementSemicolon,
   stringifyRule
 };

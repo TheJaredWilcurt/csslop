@@ -48,6 +48,10 @@ function startsLightDarkFunction (value, index) {
  * @return {string}        The value with redundant light-dark functions removed.
  */
 function simplifyEquivalentLightDarkFunctions (value) {
+  // A value without a `light-dark(` in any case holds nothing to simplify
+  if (!value.includes('(') || !value.toLowerCase().includes('light-dark(')) {
+    return value;
+  }
   let result = '';
   let index = 0;
 

@@ -106,16 +106,6 @@ function joinNestedMediaQueries (outerMedia, innerMedia) {
 }
 
 /**
- * Reports whether an entry of a rule list is real content rather than the whitespace between entries.
- *
- * @param  {object}  entry  An entry of a rule list.
- * @return {boolean}        True when the entry is not whitespace.
- */
-function isContentEntry (entry) {
-  return entry.type !== 'whitespace';
-}
-
-/**
  * Simplifies one `@media` block. A block whose only content is a single nested `@media` block is joined into one query, and the simplification repeats on the result. Nested `@media` blocks whose media type the block already excludes are removed.
  *
  * @param  {object} rule  The `@media` rule node to simplify.
@@ -123,11 +113,10 @@ function isContentEntry (entry) {
  */
 function simplifyMediaBlock (rule) {
   const children = rule.rules || [];
-  const content = children.filter(isContentEntry);
-  if (content.length === 1 && content[0].type === 'media') {
-    const joinedMedia = joinNestedMediaQueries(rule.media, content[0].media);
+  if (children.length === 1 && children[0].type === 'media') {
+    const joinedMedia = joinNestedMediaQueries(rule.media, children[0].media);
     if (joinedMedia !== null) {
-      return simplifyMediaBlock({ ...content[0], media: joinedMedia });
+      return simplifyMediaBlock({ ...children[0], media: joinedMedia });
     }
   }
   const outerQuery = parseJoinableMediaQuery(rule.media);
@@ -151,8 +140,8 @@ function simplifyNestedMediaRules (rules) {
       return [rule];
     }
     const simplified = simplifyMediaBlock(rule);
-    const hadContent = (rule.rules || []).some(isContentEntry);
-    const isEmptiedByDeadContent = hadContent && !simplified.rules.some(isContentEntry);
+    const hadContent = Boolean(rule.rules?.length);
+    const isEmptiedByDeadContent = hadContent && !simplified.rules.length;
     return isEmptiedByDeadContent ? [] : [simplified];
   });
 }
@@ -168,7 +157,7 @@ function canFoldMediaIntoRule (rule, mediaBlock) {
   if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
     return false;
   }
-  const content = (mediaBlock.rules || []).filter(isContentEntry);
+  const content = mediaBlock.rules || [];
   return content.length > 0 && content.every((child) => {
     const repeatsSelector = child.type === 'rule' && child.selectors?.length === 1 && child.selectors[0] === rule.selectors[0];
     return repeatsSelector && !(child.declarations || []).some((entry) => {
@@ -185,7 +174,7 @@ function canFoldMediaIntoRule (rule, mediaBlock) {
  * @return {object}             A new rule node with the nested `@media` block added to its declarations.
  */
 function foldMediaIntoRule (rule, mediaBlock) {
-  const nestedDeclarations = mediaBlock.rules.filter(isContentEntry).flatMap((child) => {
+  const nestedDeclarations = mediaBlock.rules.flatMap((child) => {
     return child.declarations || [];
   });
   const nestedMedia = { ...mediaBlock, rules: nestedDeclarations };
@@ -204,7 +193,7 @@ function foldMediaIntoRule (rule, mediaBlock) {
 function foldRepeatedMediaRules (rules) {
   const result = [];
   for (const entry of rules) {
-    const previousIndex = result.findLastIndex(isContentEntry);
+    const previousIndex = result.length - 1;
     if (entry.type === 'media' && previousIndex !== -1 && canFoldMediaIntoRule(result[previousIndex], entry)) {
       result[previousIndex] = foldMediaIntoRule(result[previousIndex], entry);
     } else {
@@ -268,12 +257,12 @@ function isBlockedAboveEarlierWrites (entry, precedingWrites) {
 
 /**
  * Entry types that may be reordered past a `@media` block. Style rules are
- * reordered only when they write nothing the block writes, while comments and
- * whitespace never affect the cascade.
+ * reordered only when they write nothing the block writes, while comments
+ * never affect the cascade.
  *
  * @type {Set<string>}
  */
-const REORDERABLE_ENTRY_TYPES = new Set(['rule', 'comment', 'whitespace']);
+const REORDERABLE_ENTRY_TYPES = new Set(['rule', 'comment']);
 
 /**
  * Finds the `@media` block that a block at `mediaIndex` repeats, if only
@@ -336,7 +325,7 @@ function hoistRulesAboveRepeatedMedia (rules) {
         precedingMediaRules.push(entry);
         continue;
       }
-      if (entry.type === 'comment' || entry.type === 'whitespace') {
+      if (entry.type === 'comment') {
         entriesAfterMedia.push(entry);
         continue;
       }
@@ -436,7 +425,7 @@ function mergeContainerRules (rules, mergeSelectorRules) {
         result.push(rule);
       }
     } else {
-      if (rule.type !== 'whitespace' && containerMap.size) {
+      if (containerMap.size) {
         containerMap.clear();
       }
       result.push(rule);
@@ -472,7 +461,7 @@ function mergeMediaRules (rules, mergeSelectorRules) {
       }
     } else {
       // Clearing a map replaces its storage, so an already empty one is left alone
-      if (rule.type !== 'whitespace' && mediaMap.size) {
+      if (mediaMap.size) {
         mediaMap.clear();
       }
       result.push(rule);

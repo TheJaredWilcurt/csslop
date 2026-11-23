@@ -178,6 +178,10 @@ function removeDefaultBackgroundPositionsAfterUrlTokens (value, urlTokens) {
  * @return {string}        The value with all url() tokens minified.
  */
 function minifyUrls (value) {
+  // A value without a `url(` in any case holds nothing to minify
+  if (!value.toLowerCase().includes('url(')) {
+    return value;
+  }
   let result = '';
   let index = 0;
 
