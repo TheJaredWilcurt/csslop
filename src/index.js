@@ -235,7 +235,7 @@ export const minifyCSS = function (input) {
     );
     ast.stylesheet.rules = filterRedundantCharsets(ast.stylesheet.rules);
 
-    const finalRules = optimizeRuleList(ast.stylesheet.rules);
+    const finalRules = optimizeRuleList(ast.stylesheet.rules, context);
 
     for (const rule of finalRules) {
       output.push(stringifyRule(rule, context));
