@@ -158,6 +158,63 @@ function simplifyNestedMediaRules (rules) {
 }
 
 /**
+ * Reports whether a `@media` block holds only declaration-only rules that repeat the selector of the single-selector rule directly before it, so the block can be folded into that rule. Rules with nested rules are excluded, since a nested rule cannot be written inside a `@media` block in the same way.
+ *
+ * @param  {object}  rule        The rule that would receive the block.
+ * @param  {object}  mediaBlock  The `@media` rule node that would be folded.
+ * @return {boolean}             True when every entry of the block is a rule with the same selector as `rule` and no nested rules.
+ */
+function canFoldMediaIntoRule (rule, mediaBlock) {
+  if (rule.type !== 'rule' || rule.selectors?.length !== 1) {
+    return false;
+  }
+  const content = (mediaBlock.rules || []).filter(isContentEntry);
+  return content.length > 0 && content.every((child) => {
+    const repeatsSelector = child.type === 'rule' && child.selectors?.length === 1 && child.selectors[0] === rule.selectors[0];
+    return repeatsSelector && !(child.declarations || []).some((entry) => {
+      return entry.type === 'rule';
+    });
+  });
+}
+
+/**
+ * Folds a `@media` block into the rule it repeats, writing the block as a nested `@media` placed after that rule's existing declarations. The block's content keeps its order, and it stays after the rule, so the cascade is unchanged.
+ *
+ * @param  {object} rule        The rule that receives the nested block.
+ * @param  {object} mediaBlock  The `@media` rule node whose rules all repeat `rule`'s selector.
+ * @return {object}             A new rule node with the nested `@media` block added to its declarations.
+ */
+function foldMediaIntoRule (rule, mediaBlock) {
+  const nestedDeclarations = mediaBlock.rules.filter(isContentEntry).flatMap((child) => {
+    return child.declarations || [];
+  });
+  const nestedMedia = { ...mediaBlock, rules: nestedDeclarations };
+  return {
+    ...rule,
+    declarations: [...(rule.declarations || []), nestedMedia]
+  };
+}
+
+/**
+ * Folds each `@media` block that repeats the single-selector rule before it into that rule as a nested `@media`. Blocks that do not repeat the rule are left as they are.
+ *
+ * @param  {Array} rules  The AST rule nodes to process.
+ * @return {Array}        A new array of rules with repeated `@media` blocks folded into their preceding rules.
+ */
+function foldRepeatedMediaRules (rules) {
+  const result = [];
+  for (const entry of rules) {
+    const previousIndex = result.findLastIndex(isContentEntry);
+    if (entry.type === 'media' && previousIndex !== -1 && canFoldMediaIntoRule(result[previousIndex], entry)) {
+      result[previousIndex] = foldMediaIntoRule(result[previousIndex], entry);
+    } else {
+      result.push(entry);
+    }
+  }
+  return result;
+}
+
+/**
  * Maps every leaf property a list of AST entries writes to the strongest
  * specificity that write is applied with. Nested rules add their selectors'
  * specificity to the rule they are nested in, as they only match through it.
@@ -495,6 +552,7 @@ function mergeLayerRules (rules, mergeSelectorRules) {
 
 export {
   deduplicateKeyframes,
+  foldRepeatedMediaRules,
   mergeContainerRules,
   mergeLayerRules,
   mergeMediaRules,

@@ -3,9 +3,11 @@
  */
 
 import { deduplicateDeclarations } from '../../declarations/process.js';
+import { stringifyRule } from '../stringify.js';
 
 import {
   deduplicateKeyframes,
+  foldRepeatedMediaRules,
   mergeContainerRules,
   mergeLayerRules,
   mergeMediaRules,
@@ -66,10 +68,11 @@ function deduplicateRuleDeclarations (rules) {
  * Applies the structural optimization pipeline to a stylesheet or grouping
  * block, so merging at-rules does not leave their children unoptimized.
  *
- * @param  {Array} rules  The sibling AST entries.
- * @return {Array}        The optimized sibling entries.
+ * @param  {Array}  rules    The sibling AST entries.
+ * @param  {object} context  The minification context used to measure the output.
+ * @return {Array}           The optimized sibling entries.
  */
-function optimizeRuleList (rules) {
+function runOptimizationPasses (rules, context) {
   let result = deduplicateRuleDeclarations(expandPureNestedRules(rules));
   result = removeIEMediaRules(result);
   result = simplifyNestedMediaRules(result);
@@ -80,7 +83,7 @@ function optimizeRuleList (rules) {
   result = deduplicateKeyframes(result);
   for (const rule of result) {
     if (rule.rules) {
-      rule.rules = optimizeRuleList(rule.rules);
+      rule.rules = optimizeRuleList(rule.rules, context);
     }
   }
   result = mergeSelectorRules(result);
@@ -100,6 +103,43 @@ function optimizeRuleList (rules) {
   result = expandPureNestedRules(result);
   result.forEach(factorSelectorBranches);
   return mergeIdenticalNestedRules(result);
+}
+
+/**
+ * Measures how many characters a list of rules stringifies to, so two optimized
+ * versions of the same rules can be compared by size.
+ *
+ * @param  {Array}  rules    The AST rule nodes to measure.
+ * @param  {object} context  The minification context used to stringify the rules.
+ * @return {number}          The length of the stringified rules.
+ */
+function measureRuleList (rules, context) {
+  return rules.reduce((totalLength, rule) => {
+    return totalLength + stringifyRule(rule, context).length;
+  }, 0);
+}
+
+/**
+ * Optimizes a list of sibling entries. A `@media` block that repeats the rule
+ * before it is either merged with its earlier twin, as the pipeline does by
+ * default, or folded into that rule as a nested `@media`. Which form is shorter
+ * depends on the size of the selector and the media query, so when folding
+ * applies both forms are optimized and the shorter output is kept.
+ *
+ * @param  {Array}  rules    The AST rule nodes to optimize.
+ * @param  {object} context  The minification context used to measure the output.
+ * @return {Array}           The optimized rules.
+ */
+function optimizeRuleList (rules, context) {
+  const foldedRules = foldRepeatedMediaRules(rules);
+  if (foldedRules.length === rules.length) {
+    return runOptimizationPasses(rules, context);
+  }
+  // The passes mutate the rules they receive, so the folded form gets its own copy before the merged form is optimized
+  const foldedCopy = structuredClone(foldedRules);
+  const mergedResult = runOptimizationPasses(rules, context);
+  const foldedResult = runOptimizationPasses(foldedCopy, context);
+  return measureRuleList(foldedResult, context) < measureRuleList(mergedResult, context) ? foldedResult : mergedResult;
 }
 
 export {
