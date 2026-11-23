@@ -51,46 +51,81 @@ function createWrittenPropertiesCache () {
 }
 
 /**
- * Indexes which sibling rules write each property, and which siblings can
- * never be crossed at all, so how far a rule can move through its siblings is
- * answered with a few binary searches instead of a comparison against every
- * sibling on the way. Comments and whitespace never block a move, while any
- * entry that is not a rule, such as an at-rule, always does.
+ * Collects the ascending indexes of the siblings that can never be crossed at
+ * all. Comments never block a move, while any entry that is not a rule, such
+ * as an at-rule, always does.
  *
- * @param  {Array}                 entries               The sibling AST entries. They must not be mutated or reordered while the index is in use.
- * @param  {function(object): Set} getWrittenProperties  Returns the properties a rule writes.
- * @return {object}                                      The ascending `barrierIndexes`, the `indexesByProperty` map, and the `writingIndexes` of rules that write anything.
+ * @param  {Array}         entries  The sibling AST entries.
+ * @return {Array<number>}          The ascending indexes of the barrier entries.
  */
-function createWriteIndex (entries, getWrittenProperties) {
+function collectBarrierIndexes (entries) {
   const barrierIndexes = [];
+  for (let index = 0; index < entries.length; index++) {
+    const type = entries[index].type;
+    if (type !== 'rule' && type !== 'comment') {
+      barrierIndexes.push(index);
+    }
+  }
+  return barrierIndexes;
+}
+
+/**
+ * Indexes which sibling rules write each property, and which rules write
+ * anything at all.
+ *
+ * @param  {Array}                 entries               The sibling AST entries.
+ * @param  {function(object): Set} getWrittenProperties  Returns the properties a rule writes.
+ * @return {object}                                      The `indexesByProperty` map, and the ascending `writingIndexes` of rules that write anything.
+ */
+function indexPropertyWrites (entries, getWrittenProperties) {
   const indexesByProperty = new Map();
   const writingIndexes = [];
-  entries.forEach((entry, index) => {
-    if (entry.type === 'comment' || entry.type === 'whitespace') {
-      return;
-    }
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
     if (entry.type !== 'rule') {
-      barrierIndexes.push(index);
-      return;
+      continue;
     }
     const properties = getWrittenProperties(entry);
     if (properties.size > 0) {
       writingIndexes.push(index);
     }
     for (const property of properties) {
-      let indexes = indexesByProperty.get(property);
-      if (!indexes) {
-        indexes = [];
-        indexesByProperty.set(property, indexes);
+      const indexes = indexesByProperty.get(property);
+      if (indexes) {
+        indexes.push(index);
+      } else {
+        indexesByProperty.set(property, [index]);
       }
-      indexes.push(index);
     }
-  });
+  }
   return {
-    barrierIndexes,
-    getWrittenProperties,
     indexesByProperty,
     writingIndexes
+  };
+}
+
+/**
+ * Indexes which sibling rules write each property, and which siblings can
+ * never be crossed at all, so how far a rule can move through its siblings is
+ * answered with a few binary searches instead of a comparison against every
+ * sibling on the way. Walking every rule body for the properties it writes is
+ * the costly part, and many sibling lists never ask about a rule that writes
+ * anything, so the property writes are only indexed once they are first
+ * needed.
+ *
+ * @param  {Array}                 entries               The sibling AST entries. They must not be mutated or reordered while the index is in use.
+ * @param  {function(object): Set} getWrittenProperties  Returns the properties a rule writes.
+ * @return {object}                                      The ascending `barrierIndexes`, and `getPropertyWrites`, which returns the `indexesByProperty` map and the `writingIndexes` of rules that write anything.
+ */
+function createWriteIndex (entries, getWrittenProperties) {
+  let propertyWrites = null;
+  return {
+    barrierIndexes: collectBarrierIndexes(entries),
+    getWrittenProperties,
+    getPropertyWrites: function () {
+      propertyWrites = propertyWrites || indexPropertyWrites(entries, getWrittenProperties);
+      return propertyWrites;
+    }
   };
 }
 
@@ -105,12 +140,13 @@ function createWriteIndex (entries, getWrittenProperties) {
  * @return {number}              The index of the last blocking sibling before the bound, or -1 when nothing blocks the move.
  */
 function findLastBlockingIndex (movingRule, writeIndex, beforeIndex) {
-  const { barrierIndexes, getWrittenProperties, indexesByProperty, writingIndexes } = writeIndex;
+  const { barrierIndexes, getWrittenProperties } = writeIndex;
   const movingProperties = getWrittenProperties(movingRule);
   const lastBarrierIndex = findLastIndexBefore(barrierIndexes, beforeIndex);
   if (movingProperties.size === 0) {
     return lastBarrierIndex;
   }
+  const { indexesByProperty, writingIndexes } = writeIndex.getPropertyWrites();
   if (movingProperties.has('all')) {
     return Math.max(lastBarrierIndex, findLastIndexBefore(writingIndexes, beforeIndex));
   }

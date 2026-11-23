@@ -158,7 +158,7 @@ function removeFullyOverriddenSelectors (rules) {
     // Removing a selector would also un-scope nested rules, which may depend
     // on it, so only rules made purely of declarations qualify
     const hasNestedContent = entries.some((entry) => {
-      return entry.type !== 'declaration' && entry.type !== 'whitespace' && entry.type !== 'comment';
+      return entry.type !== 'declaration' && entry.type !== 'comment';
     });
     if (hasNestedContent) {
       continue;

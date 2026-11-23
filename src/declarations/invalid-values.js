@@ -80,6 +80,42 @@ function isUnknownColorKeyword (property, tokens) {
 }
 
 /**
+ * Checks whether a value holds a hash token that is not a valid hex color, or
+ * gives a color property a keyword that is not a color.
+ *
+ * @param  {string}  property  The CSS property name.
+ * @param  {string}  value     The raw CSS value, which may end in `!important`.
+ * @return {boolean}           Whether the value holds a color the browser cannot parse.
+ */
+function hasUnparsableColorTokens (property, value) {
+  const tokens = tokenizeCssValue(value.replace(IMPORTANT_FLAG_PATTERN, '')).filter((token) => {
+    return token.type !== 'whitespace';
+  });
+  const hasInvalidHexColor = tokens.some((token) => {
+    return token.type === 'hash' && !isValidHexColor(token.text);
+  });
+  return hasInvalidHexColor || isUnknownColorKeyword(property, tokens);
+}
+
+/**
+ * Memoizes whether each value of each property is ignored by browsers during
+ * the current stylesheet. Every pass that deduplicates a rule's declarations
+ * asks again about the same declarations, and the answer only depends on the
+ * property and its value.
+ *
+ * @type {Map<string, Map<string, boolean>>}
+ */
+const ignoredValuesByProperty = new Map();
+
+/**
+ * Discards every memoized answer. The minifier calls this around each
+ * stylesheet, so the cache does not outlive the pass that filled it.
+ */
+function clearIgnoredValueCache () {
+  ignoredValuesByProperty.clear();
+}
+
+/**
  * Checks whether a browser discards a declaration because its value does not
  * parse. Such a declaration has no effect on the page, so it must not hide an
  * earlier valid declaration of the same property. A hash token that is not a
@@ -100,13 +136,17 @@ function isIgnoredByBrowser (property, value) {
   if (!mayBeIgnored) {
     return false;
   }
-  const tokens = tokenizeCssValue(value.replace(IMPORTANT_FLAG_PATTERN, '')).filter((token) => {
-    return token.type !== 'whitespace';
-  });
-  const hasInvalidHexColor = tokens.some((token) => {
-    return token.type === 'hash' && !isValidHexColor(token.text);
-  });
-  return hasInvalidHexColor || isUnknownColorKeyword(property, tokens);
+  let ignoredByValue = ignoredValuesByProperty.get(property);
+  if (!ignoredByValue) {
+    ignoredByValue = new Map();
+    ignoredValuesByProperty.set(property, ignoredByValue);
+  }
+  let isIgnored = ignoredByValue.get(value);
+  if (isIgnored === undefined) {
+    isIgnored = hasUnparsableColorTokens(property, value);
+    ignoredByValue.set(value, isIgnored);
+  }
+  return isIgnored;
 }
 
 /**
@@ -131,6 +171,7 @@ function removeStarHackDeclarations (rules) {
 }
 
 export {
+  clearIgnoredValueCache,
   isIgnoredByBrowser,
   removeStarHackDeclarations
 };

@@ -20,6 +20,10 @@ function buildSelectorKey (rule) {
   if (!rule.selectors) {
     return '';
   }
+  // Most rules have a single selector, which is already its own sorted list
+  if (rule.selectors.length === 1) {
+    return normalizeSelector(rule.selectors[0]);
+  }
   return rule.selectors
     .map((selector) => {
       return normalizeSelector(selector);
@@ -110,7 +114,7 @@ function findDecidingDeclarations (declarations) {
 function decidesAnythingAfterMerge (rule, decidingDeclarations) {
   return (rule.declarations || []).some((entry) => {
     if (!isPropertyDeclaration(entry)) {
-      return entry.type !== 'whitespace' && entry.type !== 'comment';
+      return entry.type !== 'comment';
     }
     return [...expandToOverridableProperties(entry.property)].some((leafProperty) => {
       return decidingDeclarations.get(leafProperty) === entry;
@@ -179,9 +183,6 @@ function mergeSelectorRulePass (rules, mergeCaches) {
   const selectorMap = new Map();
   const overrideIndex = createOverrideIndex(mergeCaches.profileByRule);
   for (const rule of rules) {
-    if (rule.type === 'whitespace') {
-      continue;
-    }
     if (rule.type !== 'rule') {
       slots.push(rule);
       // Clearing a map replaces its storage, so already empty maps are left alone

@@ -35,14 +35,57 @@ import { clearNormalizedSelectorCache } from './selector-normalization.js';
 import { clearSpecificityCache } from './specificity.js';
 
 /**
- * Discards every memoized specificity, normalized selector, and set of
- * candidate parent selectors. The minifier calls this around each stylesheet,
- * so the caches do not outlive the pass that filled them.
+ * Memoizes the optimized form of each list of nested entries, such as the
+ * rules of a `@media` block, for the current stylesheet. When folding applies,
+ * the optimizer runs every pass over two forms of the same stylesheet, which
+ * hold almost all of the same nested lists. The optimized form only depends
+ * on the content of the list, which as plain data is told apart exactly by its
+ * JSON form. Each optimized form is kept as a copy, since the passes go on to
+ * rewrite the rules they are handed.
+ *
+ * @type {Map<string, Array>}
  */
-function clearSelectorCaches () {
+const optimizedRuleListsByContent = new Map();
+
+/**
+ * Discards every memoized specificity, normalized selector, set of candidate
+ * parent selectors, and optimized list of nested entries. The minifier calls
+ * this around each stylesheet, so the caches do not outlive the pass that
+ * filled them.
+ */
+function clearOptimizationCaches () {
   clearSpecificityCache();
   clearNormalizedSelectorCache();
   clearCandidateParentSelectorCache();
+  optimizedRuleListsByContent.clear();
+}
+
+/**
+ * Copies an AST entry, or any array or plain object within one, so that
+ * passes can mutate the copy without touching the original. The AST is plain
+ * data that never refers to the same object twice, which lets a direct walk
+ * over its fields stand in for the far slower general purpose
+ * `structuredClone`.
+ *
+ * @param  {object|Array|string|number|boolean|null} value  The AST value to copy.
+ * @return {object|Array|string|number|boolean|null}        A deep copy of the value.
+ */
+function cloneSyntaxTree (value) {
+  if (Array.isArray(value)) {
+    const copy = new Array(value.length);
+    for (let i = 0; i < value.length; i++) {
+      copy[i] = cloneSyntaxTree(value[i]);
+    }
+    return copy;
+  }
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  const copy = {};
+  for (const key in value) {
+    copy[key] = cloneSyntaxTree(value[key]);
+  }
+  return copy;
 }
 
 /**
@@ -106,16 +149,52 @@ function runOptimizationPasses (rules, context) {
 }
 
 /**
- * Measures how many characters a list of rules stringifies to, so two optimized
- * versions of the same rules can be compared by size.
+ * Stringifies each rule of a list on its own, keeping the strings in rule
+ * order.
  *
- * @param  {Array}  rules    The AST rule nodes to measure.
+ * @param  {Array}  rules    The AST rule nodes to stringify.
  * @param  {object} context  The minification context used to stringify the rules.
- * @return {number}          The length of the stringified rules.
+ * @return {Array}           The minified CSS string of each rule.
  */
-function measureRuleList (rules, context) {
-  return rules.reduce((totalLength, rule) => {
-    return totalLength + stringifyRule(rule, context).length;
+function stringifyRuleList (rules, context) {
+  return rules.map((rule) => {
+    return stringifyRule(rule, context);
+  });
+}
+
+/**
+ * Stringifies each rule of a list on its own, reusing the string of any rule
+ * whose content matches a rule of a list already stringified. The two forms of
+ * the same rules that the optimizer compares mostly hold identical rules, and
+ * a rule's string depends on nothing but its content, which as plain data is
+ * told apart exactly by its JSON form.
+ *
+ * @param  {Array}  rules         The AST rule nodes to stringify.
+ * @param  {Array}  knownRules    The rules of the list already stringified.
+ * @param  {Array}  knownStrings  The minified CSS string of each known rule.
+ * @param  {object} context       The minification context used to stringify the rules.
+ * @return {Array}                The minified CSS string of each rule.
+ */
+function stringifyRuleListReusing (rules, knownRules, knownStrings, context) {
+  const stringsByContent = new Map();
+  knownRules.forEach((rule, index) => {
+    stringsByContent.set(JSON.stringify(rule), knownStrings[index]);
+  });
+  return rules.map((rule) => {
+    return stringsByContent.get(JSON.stringify(rule)) ?? stringifyRule(rule, context);
+  });
+}
+
+/**
+ * Measures how many characters a list of stringified rules adds up to, so two
+ * optimized versions of the same rules can be compared by size.
+ *
+ * @param  {Array}  ruleStrings  The minified CSS string of each rule.
+ * @return {number}              The combined length of the strings.
+ */
+function measureRuleStrings (ruleStrings) {
+  return ruleStrings.reduce((totalLength, ruleString) => {
+    return totalLength + ruleString.length;
   }, 0);
 }
 
@@ -124,25 +203,77 @@ function measureRuleList (rules, context) {
  * before it is either merged with its earlier twin, as the pipeline does by
  * default, or folded into that rule as a nested `@media`. Which form is shorter
  * depends on the size of the selector and the media query, so when folding
- * applies both forms are optimized and the shorter output is kept.
+ * applies both forms are optimized and the shorter output is kept. Comparing
+ * the two forms means stringifying them, so the strings of the form that was
+ * kept are handed back as well, sparing a caller that only needs the output
+ * from stringifying the rules a second time.
+ *
+ * @param  {Array}  rules    The AST rule nodes to optimize.
+ * @param  {object} context  The minification context used to measure the output.
+ * @return {object}          The optimized `rules`, and their `ruleStrings` when the rules were stringified to be measured, otherwise null.
+ */
+function optimizeAndMeasureRuleList (rules, context) {
+  const foldedRules = foldRepeatedMediaRules(rules);
+  if (foldedRules.length === rules.length) {
+    return {
+      rules: runOptimizationPasses(rules, context),
+      ruleStrings: null
+    };
+  }
+  // The passes mutate the rules they receive, so the folded form gets its own copy before the merged form is optimized
+  const foldedCopy = cloneSyntaxTree(foldedRules);
+  const mergedResult = runOptimizationPasses(rules, context);
+  const foldedResult = runOptimizationPasses(foldedCopy, context);
+  const foldedStrings = stringifyRuleList(foldedResult, context);
+  const mergedStrings = stringifyRuleListReusing(mergedResult, foldedResult, foldedStrings, context);
+  if (measureRuleStrings(foldedStrings) < measureRuleStrings(mergedStrings)) {
+    return {
+      rules: foldedResult,
+      ruleStrings: foldedStrings
+    };
+  }
+  return {
+    rules: mergedResult,
+    ruleStrings: mergedStrings
+  };
+}
+
+/**
+ * Optimizes a list of sibling entries, such as the rules inside a grouping
+ * at-rule, which later passes may still rewrite. A list with the same content
+ * as one already optimized during this stylesheet is handed a fresh copy of
+ * that list's optimized form instead of being optimized again.
  *
  * @param  {Array}  rules    The AST rule nodes to optimize.
  * @param  {object} context  The minification context used to measure the output.
  * @return {Array}           The optimized rules.
  */
 function optimizeRuleList (rules, context) {
-  const foldedRules = foldRepeatedMediaRules(rules);
-  if (foldedRules.length === rules.length) {
-    return runOptimizationPasses(rules, context);
+  const contentKey = JSON.stringify(rules);
+  const optimizedCopy = optimizedRuleListsByContent.get(contentKey);
+  if (optimizedCopy) {
+    return cloneSyntaxTree(optimizedCopy);
   }
-  // The passes mutate the rules they receive, so the folded form gets its own copy before the merged form is optimized
-  const foldedCopy = structuredClone(foldedRules);
-  const mergedResult = runOptimizationPasses(rules, context);
-  const foldedResult = runOptimizationPasses(foldedCopy, context);
-  return measureRuleList(foldedResult, context) < measureRuleList(mergedResult, context) ? foldedResult : mergedResult;
+  const optimized = optimizeAndMeasureRuleList(rules, context).rules;
+  optimizedRuleListsByContent.set(contentKey, cloneSyntaxTree(optimized));
+  return optimized;
+}
+
+/**
+ * Optimizes the top-level rules of a stylesheet and stringifies the result.
+ * Nothing rewrites the rules once they are optimized, so the strings measured
+ * while optimizing them are already the final output.
+ *
+ * @param  {Array}  rules    The top-level AST rule nodes.
+ * @param  {object} context  The minification context.
+ * @return {Array}           The minified CSS string of each optimized rule.
+ */
+function optimizeAndStringifyRuleList (rules, context) {
+  const optimized = optimizeAndMeasureRuleList(rules, context);
+  return optimized.ruleStrings || stringifyRuleList(optimized.rules, context);
 }
 
 export {
-  clearSelectorCaches,
-  optimizeRuleList
+  clearOptimizationCaches,
+  optimizeAndStringifyRuleList
 };

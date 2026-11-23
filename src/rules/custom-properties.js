@@ -174,7 +174,7 @@ function processCustomPropertyComments (value) {
  * @param  {string} value  The raw custom property value string.
  * @return {string}        The minified custom property value.
  */
-function collapseCustomPropertyWhitespace (value) {
+function computeCollapsedCustomPropertyValue (value) {
   // Collapse all whitespace sequences (newlines, tabs, multiple spaces) to a single space
   let collapsed = value.replace(/\s+/g, ' ');
   // Remove spaces after commas only inside function calls (e.g. var(--bar, 1.5) → var(--bar,1.5))
@@ -183,7 +183,44 @@ function collapseCustomPropertyWhitespace (value) {
   collapsed = shortenNumbers(collapsed);
   return collapsed;
 }
+
+/**
+ * Memoizes collapsed custom property values for the current stylesheet. Rules
+ * are stringified to measure every form the optimizer compares, so the same
+ * values are collapsed many times over.
+ *
+ * @type {Map<string, string>}
+ */
+const collapsedCustomPropertyValues = new Map();
+
+/**
+ * Discards every memoized custom property value. The minifier calls this
+ * around each stylesheet, so the cache does not outlive the pass that filled
+ * it.
+ */
+function clearCollapsedCustomPropertyCache () {
+  collapsedCustomPropertyValues.clear();
+}
+
+/**
+ * Collapses whitespace in a custom property value while preserving token
+ * boundaries, reusing the result when the same value was already collapsed
+ * during this stylesheet.
+ *
+ * @param  {string} value  The raw custom property value string.
+ * @return {string}        The minified custom property value.
+ */
+function collapseCustomPropertyWhitespace (value) {
+  let collapsed = collapsedCustomPropertyValues.get(value);
+  if (collapsed === undefined) {
+    collapsed = computeCollapsedCustomPropertyValue(value);
+    collapsedCustomPropertyValues.set(value, collapsed);
+  }
+  return collapsed;
+}
+
 export {
+  clearCollapsedCustomPropertyCache,
   collapseCustomPropertyWhitespace,
   processCustomPropertyComments
 };

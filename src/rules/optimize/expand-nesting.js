@@ -41,7 +41,7 @@ function expandNestedRuleBodies (rules) {
       if (canFlattenSelf && isSelfRule && !encounteredNestedContent) {
         return entry.declarations || [];
       }
-      if (entry.type !== 'declaration' && entry.type !== 'whitespace' && entry.type !== 'comment') {
+      if (entry.type !== 'declaration' && entry.type !== 'comment') {
         encounteredNestedContent = true;
       }
       if (entry.type === 'rule' && rule.selectors.length === 1) {
@@ -142,10 +142,7 @@ function expandPureNestedRules (inputRules) {
     if (rule.type !== 'rule' || !rule.selectors?.length) {
       continue;
     }
-    const nonWhitespace = (rule.declarations || []).filter((declaration) => {
-      return declaration.type !== 'whitespace';
-    });
-    const hasNonRuleDeclarations = nonWhitespace.some((declaration) => {
+    const hasNonRuleDeclarations = (rule.declarations || []).some((declaration) => {
       return declaration.type !== 'rule';
     });
     if (hasNonRuleDeclarations) {
@@ -162,10 +159,8 @@ function expandPureNestedRules (inputRules) {
       result.push(rule);
       continue;
     }
-    const nonWhitespace = (rule.declarations || []).filter((declaration) => {
-      return declaration.type !== 'whitespace';
-    });
-    const isPureNested = nonWhitespace.length > 0 && nonWhitespace.every((declaration) => {
+    const entries = rule.declarations || [];
+    const isPureNested = entries.length > 0 && entries.every((declaration) => {
       return declaration.type === 'rule';
     });
     // A comma-separated parent selector list behaves like :is() for specificity,
@@ -180,7 +175,7 @@ function expandPureNestedRules (inputRules) {
     let expandedRules = [];
     let canExpand = true;
 
-    for (const nestedRule of nonWhitespace) {
+    for (const nestedRule of entries) {
       if (!nestedRule.selectors?.length) {
         canExpand = false;
         break;

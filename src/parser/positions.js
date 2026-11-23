@@ -1,5 +1,5 @@
 /**
- * @file Turns offsets into the stylesheet into the line and column numbers that AST nodes report.
+ * @file Turns offsets into the stylesheet into the line and column numbers that parsing errors report.
  */
 
 /**
@@ -46,26 +46,7 @@ function resolveSourceLocation (lineStartOffsets, offset) {
   };
 }
 
-/**
- * Builds the position an AST node reports, spanning the text the node was
- * parsed from.
- *
- * @param  {Array}  lineStartOffsets  The offset each line starts at.
- * @param  {number} startOffset       The offset the node begins at.
- * @param  {number} endOffset         The offset just past the end of the node.
- * @param  {string} sourceName        The name of the file the CSS came from.
- * @return {object}                   The position of the node in the source.
- */
-function createPosition (lineStartOffsets, startOffset, endOffset, sourceName) {
-  return {
-    start: resolveSourceLocation(lineStartOffsets, startOffset),
-    end: resolveSourceLocation(lineStartOffsets, endOffset),
-    source: sourceName
-  };
-}
-
 export {
   createLineIndex,
-  createPosition,
   resolveSourceLocation
 };

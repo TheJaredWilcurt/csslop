@@ -244,7 +244,7 @@ function isStrictlyNestableUnderParent (childRule, matchNestedSelector) {
  * and then host as a nested child. The parent may only move across siblings
  * whose property writes it does not overlap, so only the rules after the
  * nearest sibling it cannot cross are considered, and of those only the ones
- * whose selector starts with the parent's can nest under it.
+ * whose first selector could nest under the parent are visited.
  *
  * @param  {Array}  rules         The sibling AST entries.
  * @param  {number} parentIndex   The index of the parent rule.
@@ -254,9 +254,14 @@ function isStrictlyNestableUnderParent (childRule, matchNestedSelector) {
 function findEarliestNestableChildIndex (rules, parentIndex, siblingIndex) {
   const parentRule = rules[parentIndex];
   const parentSelector = parentRule.selectors[0];
+  const candidateIndexes = siblingIndex.findNestingCandidates(parentSelector.trim());
+  // Most parents have no candidate before them, which settles the search
+  // without working out which siblings the parent could not move across
+  if (!candidateIndexes.length || candidateIndexes[0] >= parentIndex) {
+    return -1;
+  }
   const matchNestedSelector = createNestedSelectorMatcher(parentSelector);
   const lastBlockingIndex = findLastBlockingIndex(parentRule, siblingIndex.writeIndex, parentIndex);
-  const candidateIndexes = siblingIndex.findRulesStartingWith(parentSelector.trim());
   for (
     let position = findFirstPositionAtLeast(candidateIndexes, lastBlockingIndex + 1);
     position < candidateIndexes.length && candidateIndexes[position] < parentIndex;

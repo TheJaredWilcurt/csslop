@@ -8,7 +8,6 @@ import {
 } from './at-rules.js';
 import {
   createLineIndex,
-  createPosition,
   resolveSourceLocation
 } from './positions.js';
 import {
@@ -102,8 +101,8 @@ const BLOCK_CONTENTS = {
 
 /**
  * Creates everything the parse of one stylesheet needs: the reader that walks
- * the text, the line index its positions are resolved against, and the list
- * the errors of a silent parse are collected in.
+ * the text and the list the errors of a silent parse are collected in. The
+ * line index an error is located with is only built once an error needs it.
  *
  * @param  {string} source   The raw CSS text to parse.
  * @param  {object} options  The options the caller parsed with.
@@ -115,8 +114,7 @@ function createParserState (source, options) {
     scanner: createScanner(source),
     sourceName: options.source || '',
     silent: Boolean(options.silent),
-    preserveFormatting: Boolean(options.preserveFormatting),
-    lineStartOffsets: createLineIndex(source),
+    lineStartOffsets: null,
     parsingErrors: []
   };
 }
@@ -130,6 +128,7 @@ function createParserState (source, options) {
  * @param {string} message  What the parser expected to find.
  */
 function recordError (state, message) {
+  state.lineStartOffsets ||= createLineIndex(state.source);
   const location = resolveSourceLocation(state.lineStartOffsets, state.scanner.index);
   const error = new Error(state.sourceName + ':' + location.line + ':' + location.column + ': ' + message);
   Object.assign(error, {
@@ -146,81 +145,18 @@ function recordError (state, message) {
 }
 
 /**
- * Finishes a node by recording the span of text it was parsed from, then
- * steps over the whitespace behind it so that the next node starts at the
- * text it is actually made of.
+ * Finishes a node by stepping over the whitespace behind it, so that the next
+ * node starts at the text it is actually made of. The minifier rebuilds every
+ * node from its fields, so neither the node's position nor the whitespace
+ * around it is kept.
  *
- * @param  {object} state        The state of the parse.
- * @param  {object} node         The node that was parsed.
- * @param  {number} startOffset  The offset the node began at.
- * @return {object}              The finished node.
+ * @param  {object} state  The state of the parse.
+ * @param  {object} node   The node that was parsed.
+ * @return {object}        The finished node.
  */
-function finishNode (state, node, startOffset) {
-  node.position = createPosition(
-    state.lineStartOffsets,
-    startOffset,
-    state.scanner.index,
-    state.sourceName
-  );
+function finishNode (state, node) {
   skipWhitespace(state.scanner);
   return node;
-}
-
-/**
- * Records the raw text a node's prelude was written with, which is everything
- * in front of its block, so that the node can be written back out exactly as
- * it was read.
- *
- * @param {object} state             The state of the parse.
- * @param {object} node              The node the prelude belongs to.
- * @param {number} startOffset       The offset the node began at.
- * @param {number} preludeEndOffset  The offset the prelude ended at.
- */
-function addRawPrelude (state, node, startOffset, preludeEndOffset) {
-  if (state.preserveFormatting) {
-    node.rawPrelude = state.source.slice(startOffset, preludeEndOffset);
-  }
-}
-
-/**
- * Fills the gaps between the nodes of a block with the whitespace that was
- * written there, so that a stylesheet can be rebuilt character for character.
- * The gaps hold more than spaces: the semicolon behind a declaration is part
- * of what separates it from the declaration that follows.
- *
- * @param  {object} state           The state of the parse.
- * @param  {Array}  nodes           The nodes of the block, in source order.
- * @param  {number} containerStart  The offset the block's contents begin at.
- * @param  {number} containerEnd    The offset the block's contents end at.
- * @return {Array}                  The nodes, with the whitespace between them spliced in.
- */
-function insertWhitespaceNodes (state, nodes, containerStart, containerEnd) {
-  if (!state.preserveFormatting) {
-    return nodes;
-  }
-  const result = [];
-  let cursor = containerStart;
-  for (const node of nodes) {
-    const startOffset = node.position?.start?.offset;
-    if (startOffset > cursor) {
-      result.push({
-        type: 'whitespace',
-        value: state.source.slice(cursor, startOffset)
-      });
-    }
-    result.push(node);
-    const endOffset = node.position?.end?.offset;
-    if (endOffset !== undefined) {
-      cursor = endOffset;
-    }
-  }
-  if (cursor < containerEnd) {
-    result.push({
-      type: 'whitespace',
-      value: state.source.slice(cursor, containerEnd)
-    });
-  }
-  return result;
 }
 
 /**
@@ -238,14 +174,13 @@ function parseComment (state) {
   if (!isComment) {
     return null;
   }
-  const startOffset = scanner.index;
   const match = consumePattern(scanner, COMMENT_PATTERN);
   const text = match[0];
   if (!text.endsWith('*/')) {
     recordError(state, 'End of comment missing');
-    return finishNode(state, { type: 'comment', comment: text.slice(2) }, startOffset);
+    return finishNode(state, { type: 'comment', comment: text.slice(2) });
   }
-  return finishNode(state, { type: 'comment', comment: text.slice(2, -2) }, startOffset);
+  return finishNode(state, { type: 'comment', comment: text.slice(2, -2) });
 }
 
 /**
@@ -327,18 +262,14 @@ function parseDeclaration (state) {
     valueEndIndex = source.length;
   }
   const rawValue = consumeTo(scanner, valueEndIndex);
-  const node = {
+  skipSemicolonsAndWhitespace(scanner);
+  return {
     type: 'declaration',
     property,
-    value: rawValue.trim().replace(COMMENT_SEARCH_PATTERN, '')
+    value: rawValue.trim().replace(COMMENT_SEARCH_PATTERN, ''),
+    rawBetween: source.slice(startOffset + property.length, afterColonOffset),
+    rawValue
   };
-  if (state.preserveFormatting) {
-    node.rawBetween = source.slice(startOffset + property.length, afterColonOffset);
-    node.rawValue = rawValue;
-  }
-  finishNode(state, node, startOffset);
-  skipSemicolonsAndWhitespace(scanner);
-  return node;
 }
 
 /**
@@ -437,13 +368,11 @@ function parseBlockItems (state, contents) {
  */
 function parseBlock (state, contents) {
   const { scanner } = state;
-  const afterOpenOffset = scanner.index + 1;
   if (!consumeOpenBrace(scanner)) {
     recordError(state, 'missing \'{\'');
     return null;
   }
   const items = parseBlockItems(state, contents);
-  const beforeCloseOffset = scanner.index;
   if (!consumeCloseBrace(scanner)) {
     recordError(state, 'missing \'}\'');
     // The end of the stylesheet closes every block still open at it, so a
@@ -452,7 +381,7 @@ function parseBlock (state, contents) {
       return null;
     }
   }
-  return insertWhitespaceNodes(state, items, afterOpenOffset, beforeCloseOffset);
+  return items;
 }
 
 /**
@@ -463,20 +392,16 @@ function parseBlock (state, contents) {
  * @return {object|null}        The rule node, or null when a rule is not what comes next.
  */
 function parseRule (state) {
-  const startOffset = state.scanner.index;
   const selectors = parseSelectorList(state);
   if (!selectors) {
     recordError(state, 'selector missing');
     return null;
   }
-  const preludeEndOffset = state.scanner.index;
-  const node = {
+  return finishNode(state, {
     type: 'rule',
     selectors,
     declarations: parseBlock(state, BLOCK_CONTENTS.rulesAndDeclarations) || []
-  };
-  addRawPrelude(state, node, startOffset, preludeEndOffset);
-  return finishNode(state, node, startOffset);
+  });
 }
 
 /**
@@ -488,7 +413,6 @@ function parseRule (state) {
  */
 function parseKeyframe (state) {
   const { scanner } = state;
-  const startOffset = scanner.index;
   const values = [];
   let stopMatch = consumePattern(scanner, KEYFRAME_STOP_PATTERN);
   while (stopMatch) {
@@ -499,18 +423,15 @@ function parseKeyframe (state) {
   if (!values.length) {
     return null;
   }
-  const preludeEndOffset = scanner.index;
   const declarations = parseBlock(state, BLOCK_CONTENTS.declarationsOnly);
   if (!declarations) {
     return null;
   }
-  const node = {
+  return finishNode(state, {
     type: 'keyframe',
     values,
     declarations
-  };
-  addRawPrelude(state, node, startOffset, preludeEndOffset);
-  return finishNode(state, node, startOffset);
+  });
 }
 
 /**
@@ -522,7 +443,6 @@ function parseKeyframe (state) {
  */
 function parseKeyframesBlock (state) {
   const { scanner } = state;
-  const afterOpenOffset = scanner.index + 1;
   if (!consumeOpenBrace(scanner)) {
     recordError(state, '@keyframes missing \'{\'');
     return null;
@@ -535,12 +455,11 @@ function parseKeyframesBlock (state) {
     parseComments(state, frames);
     frame = parseKeyframe(state);
   }
-  const beforeCloseOffset = scanner.index;
   if (!consumeCloseBrace(scanner)) {
     recordError(state, '@keyframes missing \'}\'');
     return null;
   }
-  return insertWhitespaceNodes(state, frames, afterOpenOffset, beforeCloseOffset);
+  return frames;
 }
 
 /**
@@ -565,12 +484,11 @@ function readPreludeFields (definition, match) {
  * engine reads some of these, `@charset` above all, as bytes rather than as
  * CSS.
  *
- * @param  {object}      state        The state of the parse.
- * @param  {object}      definition   How the at-rule is written.
- * @param  {number}      startOffset  The offset the at-rule began at.
- * @return {object|null}              The at-rule node, or null when the at-rule was not written as a statement.
+ * @param  {object}      state       The state of the parse.
+ * @param  {object}      definition  How the at-rule is written.
+ * @return {object|null}             The at-rule node, or null when the at-rule was not written as a statement.
  */
-function parseStatementAtRule (state, definition, startOffset) {
+function parseStatementAtRule (state, definition) {
   const {
     scanner,
     source
@@ -585,14 +503,10 @@ function parseStatementAtRule (state, definition, startOffset) {
     return null;
   }
   consumeTo(scanner, terminatorIndex === -1 ? source.length : terminatorIndex + 1);
-  const node = {
+  return finishNode(state, {
     type: definition.type,
     ...preludeParts
-  };
-  if (state.preserveFormatting) {
-    node.rawSource = source.slice(startOffset, scanner.index);
-  }
-  return finishNode(state, node, startOffset);
+  });
 }
 
 /**
@@ -657,21 +571,19 @@ function parseAtRuleBody (state, definition, node) {
  * that is not written the way its name says it should be is not parsed here,
  * so that it can be read as a generic at-rule instead.
  *
- * @param  {object}      state        The state of the parse.
- * @param  {object}      definition   How the at-rule is written.
- * @param  {number}      startOffset  The offset the at-rule began at.
- * @return {object|null}              The at-rule node, or null when the at-rule is written some other way.
+ * @param  {object}      state       The state of the parse.
+ * @param  {object}      definition  How the at-rule is written.
+ * @return {object|null}             The at-rule node, or null when the at-rule is written some other way.
  */
-function parseDefinedAtRule (state, definition, startOffset) {
+function parseDefinedAtRule (state, definition) {
   const { scanner } = state;
   if (definition.body === AT_RULE_BODY.statement) {
-    return parseStatementAtRule(state, definition, startOffset);
+    return parseStatementAtRule(state, definition);
   }
   const preludeMatch = consumePattern(scanner, definition.preludePattern);
   if (!preludeMatch) {
     return null;
   }
-  const preludeEndOffset = scanner.index;
   const node = {
     type: definition.type,
     ...readPreludeFields(definition, preludeMatch)
@@ -688,16 +600,12 @@ function parseDefinedAtRule (state, definition, startOffset) {
   );
   if (isStatementForm) {
     skipSemicolonsAndWhitespace(scanner);
-    if (state.preserveFormatting) {
-      node.rawSource = state.source.slice(startOffset, scanner.index);
-    }
-    return finishNode(state, node, startOffset);
+    return finishNode(state, node);
   }
   if (!parseAtRuleBody(state, definition, node)) {
     return null;
   }
-  addRawPrelude(state, node, startOffset, preludeEndOffset);
-  return finishNode(state, node, startOffset);
+  return finishNode(state, node);
 }
 
 /**
@@ -722,7 +630,6 @@ function parseGenericAtRule (state, name, startOffset) {
   if (preludeEnd > scanner.index) {
     prelude = consumeTo(scanner, preludeEnd).trim();
   }
-  const preludeEndOffset = scanner.index;
   const node = {
     type: 'at-rule',
     name,
@@ -730,11 +637,10 @@ function parseGenericAtRule (state, name, startOffset) {
   };
   if (characterCodeAt(scanner) !== CHARACTER_CODE.openBrace) {
     skipSemicolonsAndWhitespace(scanner);
-    return finishNode(state, node, startOffset);
+    return finishNode(state, node);
   }
   node.rules = parseBlock(state, BLOCK_CONTENTS.rulesAndDeclarations) || [];
-  addRawPrelude(state, node, startOffset, preludeEndOffset);
-  return finishNode(state, node, startOffset);
+  return finishNode(state, node);
 }
 
 /**
@@ -757,7 +663,7 @@ function parseAtRule (state) {
   const definition = findAtRuleDefinition(name);
   if (definition) {
     scanner.index += nameMatch[0].length;
-    const node = parseDefinedAtRule(state, definition, startOffset);
+    const node = parseDefinedAtRule(state, definition);
     if (node) {
       return node;
     }
@@ -803,7 +709,7 @@ function parseRuleList (state) {
  * Parses a string of CSS into an abstract syntax tree.
  *
  * @param  {string} input    Any valid CSS input
- * @param  {object} options  How to parse: `source` names the file, `silent` collects errors instead of throwing them, and `preserveFormatting` keeps the whitespace and raw text the CSS was written with.
+ * @param  {object} options  How to parse: `source` names the file, and `silent` collects errors instead of throwing them.
  * @return {object}          An object representation of the syntax
  */
 export const parse = function (input, options = {}) {
@@ -819,7 +725,7 @@ export const parse = function (input, options = {}) {
     type: 'stylesheet',
     stylesheet: {
       source: state.sourceName,
-      rules: insertWhitespaceNodes(state, rules, 0, source.length),
+      rules,
       parsingErrors: state.parsingErrors
     }
   };

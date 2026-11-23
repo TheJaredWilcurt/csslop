@@ -1,101 +1,89 @@
 /**
- * @file Indexes sibling rules by their first selector, so a pass looking for
- * the rules that could nest under a parent selector only visits the rules
- * whose selector starts with that parent.
+ * @file Indexes sibling rules by the parent selectors their first selector
+ * could nest under, so a pass looking for the rules that could nest under a
+ * parent selector only visits the rules that have a chance to.
  */
 
 /**
- * Compares two indexed selectors by their selector text, using the same
- * code unit ordering as `<`, so every selector sharing a prefix sorts into
- * one contiguous block.
+ * Matches a character that can follow a parent selector within a selector
+ * nested under it: whitespace before a descendant or explicit combinator, the
+ * colon of a pseudo-class, or an explicit combinator itself. A selector can
+ * only nest under the parts in front of these characters, or under the whole
+ * of itself.
  *
- * @param  {object} first   The first `{ selector, index }` entry.
- * @param  {object} second  The second `{ selector, index }` entry.
- * @return {number}         Negative, zero, or positive, like any sort comparator.
+ * @type {RegExp}
  */
-function compareIndexedSelectors (first, second) {
-  if (first.selector < second.selector) {
-    return -1;
+// Any whitespace character, a colon, or one of the explicit combinators
+const NESTING_BOUNDARY_PATTERN = /[\s:>+~]/g;
+
+/**
+ * The result of looking up a parent no rule could nest under. Lookups only
+ * ever read the indexes they are given, so it is shared.
+ *
+ * @type {Array<number>}
+ */
+const NO_INDEXES = Object.freeze([]);
+
+/**
+ * Adds a rule's index to the list of rules that could nest under a parent.
+ *
+ * @param {Map<string, Array<number>>} indexesByParent  Map of parent selector to the ascending indexes of the rules that could nest under it.
+ * @param {string}                     parent           The parent selector.
+ * @param {number}                     index            The rule's index among its siblings.
+ */
+function addNestingCandidate (indexesByParent, parent, index) {
+  const indexes = indexesByParent.get(parent);
+  if (indexes) {
+    indexes.push(index);
+  } else {
+    indexesByParent.set(parent, [index]);
   }
-  if (first.selector > second.selector) {
-    return 1;
-  }
-  return first.index - second.index;
 }
 
 /**
- * Finds the position of the first sorted selector that is not ordered before
- * a prefix, which is where the block of selectors starting with it begins.
+ * Indexes every rule with selectors under each parent selector its trimmed
+ * first selector could nest under: the first selector itself, and every part
+ * of it in front of a nesting boundary. The rules are visited in order, so
+ * each list of indexes is already ascending.
  *
- * @param  {Array}  sortedSelectors  The `{ selector, index }` entries, sorted by selector.
- * @param  {string} prefix           The prefix to look for.
- * @return {number}                  The position of the first selector not before the prefix.
+ * @param  {Array}                      entries  The sibling AST entries.
+ * @return {Map<string, Array<number>>}          Map of parent selector to the ascending indexes of the rules that could nest under it.
  */
-function findPrefixBlockStart (sortedSelectors, prefix) {
-  let low = 0;
-  let high = sortedSelectors.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (sortedSelectors[middle].selector < prefix) {
-      low = middle + 1;
-    } else {
-      high = middle;
+function indexNestingCandidates (entries) {
+  const indexesByParent = new Map();
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index];
+    if (entry.type !== 'rule' || !entry.selectors?.length) {
+      continue;
+    }
+    const selector = entry.selectors[0].trim();
+    addNestingCandidate(indexesByParent, selector, index);
+    NESTING_BOUNDARY_PATTERN.lastIndex = 0;
+    let boundary = NESTING_BOUNDARY_PATTERN.exec(selector);
+    while (boundary) {
+      addNestingCandidate(indexesByParent, selector.slice(0, boundary.index), index);
+      boundary = NESTING_BOUNDARY_PATTERN.exec(selector);
     }
   }
-  return low;
+  return indexesByParent;
 }
 
 /**
- * Collects the trimmed first selector of every rule with selectors, paired
- * with the rule's index among the siblings, sorted by selector.
- *
- * @param  {Array} entries  The sibling AST entries.
- * @return {Array}          The `{ selector, index }` entries, sorted by selector.
- */
-function collectSortedFirstSelectors (entries) {
-  const sortedSelectors = [];
-  entries.forEach((entry, index) => {
-    if (entry.type === 'rule' && entry.selectors?.length) {
-      sortedSelectors.push({
-        index,
-        selector: entry.selectors[0].trim()
-      });
-    }
-  });
-  return sortedSelectors.sort(compareIndexedSelectors);
-}
-
-/**
- * Builds a lookup of the sibling rules whose first selector starts with a
- * given prefix. Only those rules can nest under a parent selector equal to
- * the prefix, since nesting requires every one of a rule's selectors to start
- * with the parent. Each prefix is only looked up once, then remembered.
+ * Builds a lookup of the sibling rules that could nest under a given parent
+ * selector. Nesting requires every one of a rule's selectors to be the parent
+ * itself, or to continue past the parent with a nesting boundary, so only the
+ * rules whose first selector does so are returned. Every rule left out could
+ * never nest under the parent, which lets a pass skip them without changing
+ * which rules it nests.
  *
  * @param  {Array}                           entries  The sibling AST entries. They must not be reordered while the lookup is in use.
- * @return {function(string): Array<number>}          Returns the ascending indexes of the rules whose first selector starts with the prefix.
+ * @return {function(string): Array<number>}          Returns the ascending indexes of the rules that could nest under the parent. The list must not be changed.
  */
 function createSelectorPrefixIndex (entries) {
-  let sortedSelectors = null;
-  const indexesByPrefix = new Map();
-  return (prefix) => {
-    let indexes = indexesByPrefix.get(prefix);
-    if (indexes) {
-      return indexes;
-    }
-    sortedSelectors = sortedSelectors || collectSortedFirstSelectors(entries);
-    indexes = [];
-    for (let position = findPrefixBlockStart(sortedSelectors, prefix); position < sortedSelectors.length; position++) {
-      const { index, selector } = sortedSelectors[position];
-      if (!selector.startsWith(prefix)) {
-        break;
-      }
-      indexes.push(index);
-    }
-    indexes.sort((first, second) => {
-      return first - second;
-    });
-    indexesByPrefix.set(prefix, indexes);
-    return indexes;
+  let indexesByParent = null;
+  return (parent) => {
+    indexesByParent = indexesByParent || indexNestingCandidates(entries);
+    return indexesByParent.get(parent) || NO_INDEXES;
   };
 }
 
