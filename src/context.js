@@ -5,15 +5,15 @@
 import { isUnicodeCompatibleCharset } from './charset.js';
 
 /**
- * Creates a fresh minification context used to track `@property`-registered custom properties, their declared syntax types, and the properties that a newly assembled shorthand must not silently reset, across the entire stylesheet.
+ * Creates a fresh minification context used to track `@property`-registered custom properties, their declared syntax types, and the properties the stylesheet declares, so that a newly assembled shorthand never silently resets a value set elsewhere.
  *
- * @return {object} A context object with a registeredCustomProperties Set, a registeredCustomPropertySyntax Map, and a stylesheetResetProperties Set.
+ * @return {object} A context object with a registeredCustomProperties Set, a registeredCustomPropertySyntax Map, and a stylesheetDeclaredProperties Set.
  */
 function createMinifyContext () {
   return {
     registeredCustomProperties: new Set(),
     registeredCustomPropertySyntax: new Map(),
-    stylesheetResetProperties: new Set()
+    stylesheetDeclaredProperties: new Set()
   };
 }
 

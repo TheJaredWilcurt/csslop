@@ -41,6 +41,13 @@ const PARTIAL_MERGE_REQUIREMENTS = {
 };
 
 /**
+ * The shorthands that may be built from only some of their longhands.
+ *
+ * @type {Array<string>}
+ */
+const PARTIAL_MERGE_SHORTHANDS = Object.keys(PARTIAL_MERGE_REQUIREMENTS);
+
+/**
  * Checks whether a rule declares enough of a shorthand's longhands for the
  * shorthand to be built from the subset it does declare.
  *
@@ -54,6 +61,19 @@ function meetsPartialMergeRequirements (requirementGroups, declaredProperties) {
       return declaredProperties.has(property);
     });
   });
+}
+
+/**
+ * Reports whether a rule declares enough longhands of a partial shorthand for
+ * the shorthand to be built from them.
+ *
+ * @param  {string}  shorthandName       The shorthand property name.
+ * @param  {Set}     declaredProperties  The property names the rule currently declares.
+ * @return {boolean}                     Whether the shorthand can be built from the declared longhands.
+ */
+function canBuildPartialShorthand (shorthandName, declaredProperties) {
+  const requirementGroups = PARTIAL_MERGE_REQUIREMENTS[shorthandName];
+  return Boolean(requirementGroups) && meetsPartialMergeRequirements(requirementGroups, declaredProperties);
 }
 
 /**
@@ -323,7 +343,9 @@ function tryMergeToShorthand (properties, declarations, shorthandName = '', cont
 }
 
 export {
+  canBuildPartialShorthand,
   canMergeVarValue,
   getMergeProps,
+  PARTIAL_MERGE_SHORTHANDS,
   tryMergeToShorthand
 };

@@ -164,7 +164,7 @@ function resetsEarlierDeclaration (declarations, shorthandName, insertionIndex) 
  * @param  {Array}      declarations        The declarations of a single rule.
  * @param  {string}     shorthandName       The target shorthand property name.
  * @param  {Set}        declaredProperties  The property names the rule currently declares.
- * @param  {object}     context             The minification context with the stylesheet's reset properties.
+ * @param  {object}     context             The minification context with the stylesheet's declared properties.
  * @return {Array|null}                     The rewritten declarations, or null when the rewrite does not apply.
  */
 function rewriteGroupAsKeywordShorthand (declarations, shorthandName, declaredProperties, context) {
@@ -269,7 +269,7 @@ function mayDeclareCssWideKeyword (declarations) {
  * overrides the one that differs.
  *
  * @param  {Array}  declarations  The declarations of a single rule.
- * @param  {object} context       The minification context with the stylesheet's reset properties.
+ * @param  {object} context       The minification context with the stylesheet's declared properties.
  * @return {Array}                The declarations, with eligible groups rewritten.
  */
 function hoistCssWideKeywordsIntoShorthands (declarations, context) {
