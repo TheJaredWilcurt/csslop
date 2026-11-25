@@ -135,7 +135,7 @@ function findLastDeclarationIndex (declarations, property) {
  * differ by edge. Only shorter rewrites with uniform importance are used.
  *
  * @param  {Array}  declarations  The declarations of a single rule.
- * @param  {object} context       The minification context with the stylesheet's reset properties.
+ * @param  {object} context       The minification context with the stylesheet's declared properties.
  * @return {Array}                The declarations, with the trio rewritten when it is shorter.
  */
 function collapseBorderTrioWithPerEdgeOverrides (declarations, context) {

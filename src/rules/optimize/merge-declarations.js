@@ -2,6 +2,11 @@
  * @file Folds a rule into the rule that follows it when the later rule restates everything the earlier one declares, so the two can share a selector list.
  */
 
+import { expandToLeafProperties } from '../../declarations/config.js';
+import {
+  canBuildPartialShorthand,
+  PARTIAL_MERGE_SHORTHANDS
+} from '../../declarations/merge.js';
 import { minifyValue } from '../../value/minify.js';
 
 import {
@@ -148,6 +153,80 @@ function nestedBlocksSignature (nestedBlocks) {
 }
 
 /**
+ * Whether a merge that would split a partial shorthand is held back. The
+ * optimizer lifts the hold to compare the result against the merged output, so
+ * `blocked` records that a merge was actually held back in the current run.
+ *
+ * @type {{enforced: boolean, blocked: boolean}}
+ */
+const partialShorthandGuard = {
+  enforced: true,
+  blocked: false
+};
+
+/**
+ * Sets whether merges that would split a partial shorthand are held back, and
+ * clears the record of any held back in an earlier run.
+ *
+ * @param {boolean} enforced  True to hold such merges back, false to allow them.
+ */
+function setPartialShorthandGuard (enforced) {
+  partialShorthandGuard.enforced = enforced;
+  partialShorthandGuard.blocked = false;
+}
+
+/**
+ * Reports whether the current run held back a merge that would split a partial shorthand.
+ *
+ * @return {boolean} True when such a merge was held back.
+ */
+function wasPartialShorthandMergeBlocked () {
+  return partialShorthandGuard.blocked;
+}
+
+/**
+ * Reports whether moving declarations out of a rule would stop the rule from
+ * being written as a partial shorthand it can be written as now. A partial
+ * shorthand resets the longhands it leaves out, so once a moved longhand is
+ * stated in the shared rule instead, the shorthand written from what remains
+ * would cancel that value.
+ *
+ * @param  {object}  rule             The rule the declarations would move out of.
+ * @param  {Set}     movedProperties  The property names that would move out of the rule.
+ * @return {boolean}                  True when a partial shorthand the rule has would be lost.
+ */
+function movingBreaksPartialShorthand (rule, movedProperties) {
+  const declaredProperties = new Set(partitionRuleBody(rule.declarations).plainDeclarations.map((declaration) => {
+    return declaration.property;
+  }));
+  const movedLeaves = new Set([...movedProperties].flatMap((property) => {
+    return [...expandToLeafProperties(property)];
+  }));
+  return PARTIAL_MERGE_SHORTHANDS.some((shorthand) => {
+    return canBuildPartialShorthand(shorthand, declaredProperties) && [...expandToLeafProperties(shorthand)].some((leafProperty) => {
+      return movedLeaves.has(leafProperty);
+    });
+  });
+}
+
+/**
+ * Holds back a merge that would split a partial shorthand, while the guard is
+ * enforced. Whether such a merge pays off depends on the rules around it, so
+ * the optimizer compares the output with and without it instead.
+ *
+ * @param  {object}  rule             The rule the declarations would move out of.
+ * @param  {Set}     movedProperties  The property names that would move out of the rule.
+ * @return {boolean}                  True when the merge is held back.
+ */
+function holdsBackPartialShorthandMerge (rule, movedProperties) {
+  if (!partialShorthandGuard.enforced || !movingBreaksPartialShorthand(rule, movedProperties)) {
+    return false;
+  }
+  partialShorthandGuard.blocked = true;
+  return true;
+}
+
+/**
  * Combines an earlier rule with the rule that follows it when everything the
  * earlier one styles is restated by the later one, so the earlier selector can
  * simply join the later rule's shared part and the remainder stays behind in a
@@ -204,6 +283,9 @@ function mergeRuleIntoPredecessor (previousRule, rule) {
       return declaration.property;
     })
   );
+  if (holdsBackPartialShorthandMerge(rule, restatedProperties)) {
+    return null;
+  }
   const remainingDeclarations = currentBody.plainDeclarations.filter((declaration) => {
     return !restatedProperties.has(declaration.property);
   });
@@ -421,9 +503,15 @@ function buildFirstRuleMerge (adjacentRules) {
       return (declaration.value || '').trim() !== (firstRuleValue.value || '').trim();
     });
     keptDeclarations.push(...differingDeclarations);
-    restatedDeclarations.push(...ruleBody.plainDeclarations.filter((declaration) => {
+    const restatedInRule = ruleBody.plainDeclarations.filter((declaration) => {
       return !differingDeclarations.includes(declaration);
-    }));
+    });
+    restatedDeclarations.push(...restatedInRule);
+    if (holdsBackPartialShorthandMerge(rule, new Set(restatedInRule.map((declaration) => {
+      return declaration.property;
+    })))) {
+      return null;
+    }
 
     if (differingDeclarations.length > 0) {
       result.push({
@@ -457,6 +545,14 @@ function buildSharedDeclarationMerge (adjacentRules, commonProps) {
     return splitSharedDeclarations(ruleBody.plainDeclarations, commonProps);
   });
   if (remainingDeclarationOverlapsShared(declarationSplits)) {
+    return null;
+  }
+  const movesPartialShorthandAway = adjacentRules.some((rule, ruleIndex) => {
+    return holdsBackPartialShorthandMerge(rule, new Set(declarationSplits[ruleIndex].sharedDeclarations.map((declaration) => {
+      return declaration.property;
+    })));
+  });
+  if (movesPartialShorthandAway) {
     return null;
   }
 
@@ -1301,5 +1397,7 @@ function mergeByDeclarations (rules) {
 }
 
 export {
-  mergeByDeclarations
+  mergeByDeclarations,
+  setPartialShorthandGuard,
+  wasPartialShorthandMergeBlocked
 };

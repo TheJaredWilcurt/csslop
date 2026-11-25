@@ -310,6 +310,27 @@ function hoistNestingParents (rules) {
 }
 
 /**
+ * Writes the nested rules of a rule body back in place of its first nested
+ * rule, leaving every other entry where it stood. Entries such as a nested
+ * `@media` block keep their position relative to the rules around them, so
+ * minifying the output again yields the same output.
+ *
+ * @param  {Array} declarations  The entries of a rule body, including its nested rules.
+ * @param  {Array} nestedRules   The nested rules after nesting has been applied.
+ * @return {Array}               The rule body with the nested rules in place.
+ */
+function placeNestedRules (declarations, nestedRules) {
+  const firstRuleIndex = declarations.findIndex((declaration) => {
+    return declaration.type === 'rule';
+  });
+  const entriesBefore = declarations.slice(0, firstRuleIndex);
+  const entriesAfter = declarations.slice(firstRuleIndex).filter((declaration) => {
+    return declaration.type !== 'rule';
+  });
+  return [...entriesBefore, ...nestedRules, ...entriesAfter];
+}
+
+/**
  * Groups flat CSS rules into nested structures where a child selector can be expressed relative to a preceding parent, reducing output size through CSS nesting.
  *
  * @param  {Array} rules  The flat AST rule nodes to nest.
@@ -377,10 +398,7 @@ function nestFlatRules (rules) {
         return declaration.type === 'rule';
       });
       if (innerRules.length > 0) {
-        const nonRuleDeclarations = rule.declarations.filter((declaration) => {
-          return declaration.type !== 'rule';
-        });
-        rule.declarations = [...nonRuleDeclarations, ...nestFlatRules(innerRules)];
+        rule.declarations = placeNestedRules(rule.declarations, nestFlatRules(innerRules));
       }
     }
   }

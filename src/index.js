@@ -15,7 +15,7 @@ import {
   clearIgnoredValueCache,
   removeStarHackDeclarations
 } from './declarations/invalid-values.js';
-import { recordStylesheetResetProperties } from './declarations/reset-hazards.js';
+import { recordStylesheetDeclaredProperties } from './declarations/reset-hazards.js';
 import { parse } from './parser/index.js';
 import { splitTopLevelCommaList } from './parser/source-search.js';
 import { preprocessDeclarationBlocks } from './preprocess.js';
@@ -219,7 +219,7 @@ export const minifyCSS = function (input) {
 
     // Which properties a shorthand may not silently reset is a question about
     // the whole stylesheet, so it is answered before any rule is rewritten.
-    recordStylesheetResetProperties(ast.stylesheet.rules, context);
+    recordStylesheetDeclaredProperties(ast.stylesheet.rules, context);
 
     const {
       positionTryRules,

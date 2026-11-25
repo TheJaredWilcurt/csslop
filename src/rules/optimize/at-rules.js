@@ -2,6 +2,7 @@
  * @file Consolidates grouping at-rules by merging matching `@media` and `@layer` blocks, and drops the `@keyframes` that a later definition replaces.
  */
 
+import { minifyValue } from '../../value/minify.js';
 import {
   containsIEHack,
   normalizeLayerNames,
@@ -167,20 +168,50 @@ function canFoldMediaIntoRule (rule, mediaBlock) {
 }
 
 /**
- * Folds a `@media` block into the rule it repeats, writing the block as a nested `@media` placed after that rule's existing declarations. The block's content keeps its order, and it stays after the rule, so the cascade is unchanged.
+ * Reports whether a declaration already holds the value it would give an
+ * element when the rule before it is applied. Only the last earlier declaration
+ * that writes any of the same leaf properties counts, since a later overlapping
+ * write would take precedence over an identical one.
+ *
+ * @param  {Array}   precedingEntries  The declarations of the rule, in source order.
+ * @param  {object}  declaration       The declaration that would be written again.
+ * @return {boolean}                   True when the declaration writes nothing new.
+ */
+function isAlreadyInEffect (precedingEntries, declaration) {
+  if (!isPropertyDeclaration(declaration)) {
+    return false;
+  }
+  const declaredLeaves = collectWrittenLeafProperties([declaration]);
+  const lastOverlapping = precedingEntries.findLast((entry) => {
+    return propertySetsOverlap(collectWrittenLeafProperties([entry]), declaredLeaves);
+  });
+  return Boolean(lastOverlapping) &&
+    isPropertyDeclaration(lastOverlapping) &&
+    lastOverlapping.property === declaration.property &&
+    minifyValue(lastOverlapping) === minifyValue(declaration);
+}
+
+/**
+ * Folds a `@media` block into the rule it repeats, writing the block as a nested `@media` placed after that rule's existing declarations. The block's content keeps its order, and it stays after the rule, so the cascade is unchanged. Declarations the rule already holds in effect are left out, and when none remain the block is dropped entirely.
  *
  * @param  {object} rule        The rule that receives the nested block.
  * @param  {object} mediaBlock  The `@media` rule node whose rules all repeat `rule`'s selector.
- * @return {object}             A new rule node with the nested `@media` block added to its declarations.
+ * @return {object}             The rule with the nested `@media` block added to its declarations, or the rule unchanged when the block adds nothing.
  */
 function foldMediaIntoRule (rule, mediaBlock) {
+  const ruleDeclarations = rule.declarations || [];
   const nestedDeclarations = mediaBlock.rules.flatMap((child) => {
     return child.declarations || [];
+  }).filter((declaration) => {
+    return !isAlreadyInEffect(ruleDeclarations, declaration);
   });
+  if (!nestedDeclarations.length) {
+    return rule;
+  }
   const nestedMedia = { ...mediaBlock, rules: nestedDeclarations };
   return {
     ...rule,
-    declarations: [...(rule.declarations || []), nestedMedia]
+    declarations: [...ruleDeclarations, nestedMedia]
   };
 }
 

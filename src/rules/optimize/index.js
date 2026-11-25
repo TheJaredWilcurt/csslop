@@ -20,7 +20,11 @@ import {
   factorCommonParents,
   factorSelectorBranches
 } from './factor-parents.js';
-import { mergeByDeclarations } from './merge-declarations.js';
+import {
+  mergeByDeclarations,
+  setPartialShorthandGuard,
+  wasPartialShorthandMergeBlocked
+} from './merge-declarations.js';
 import { mergeIdenticalNestedRules } from './merge-nested-rules.js';
 import { mergeSelectorRules } from './merge-selectors.js';
 import {
@@ -143,6 +147,7 @@ function runOptimizationPasses (rules, context) {
   result = mergeSelectorRules(result);
   result = mergeIdenticalNestedRules(result);
   result = nestFlatRules(result);
+  result = foldRepeatedMediaRules(result);
   result = expandPureNestedRules(result);
   result.forEach(factorSelectorBranches);
   return mergeIdenticalNestedRules(result);
@@ -260,17 +265,44 @@ function optimizeRuleList (rules, context) {
 }
 
 /**
+ * Optimizes the top-level rules with merges that split a partial shorthand
+ * held back or allowed, and stringifies the result.
+ *
+ * @param  {Array}   rules          The top-level AST rule nodes, which are rewritten.
+ * @param  {object}  context        The minification context.
+ * @param  {boolean} guardEnforced  Whether merges that would split a partial shorthand are held back.
+ * @return {Array}                  The minified CSS string of each optimized rule.
+ */
+function optimizeAndStringifyWithGuard (rules, context, guardEnforced) {
+  setPartialShorthandGuard(guardEnforced);
+  const optimized = optimizeAndMeasureRuleList(rules, context);
+  return optimized.ruleStrings || stringifyRuleList(optimized.rules, context);
+}
+
+/**
  * Optimizes the top-level rules of a stylesheet and stringifies the result.
  * Nothing rewrites the rules once they are optimized, so the strings measured
  * while optimizing them are already the final output.
+ *
+ * A merge that would split a partial shorthand, such as moving
+ * `background-repeat` out of a rule that is otherwise written as `background`,
+ * is first held back. Whether such a merge pays off depends on the rules that
+ * remain, so when one was held back the stylesheet is optimized again with it
+ * allowed, and the shorter of the two outputs is kept.
  *
  * @param  {Array}  rules    The top-level AST rule nodes.
  * @param  {object} context  The minification context.
  * @return {Array}           The minified CSS string of each optimized rule.
  */
 function optimizeAndStringifyRuleList (rules, context) {
-  const optimized = optimizeAndMeasureRuleList(rules, context);
-  return optimized.ruleStrings || stringifyRuleList(optimized.rules, context);
+  const unguardedRules = cloneSyntaxTree(rules);
+  const guardedOutput = optimizeAndStringifyWithGuard(rules, context, true);
+  if (!wasPartialShorthandMergeBlocked()) {
+    return guardedOutput;
+  }
+  clearOptimizationCaches();
+  const unguardedOutput = optimizeAndStringifyWithGuard(unguardedRules, context, false);
+  return measureRuleStrings(unguardedOutput) < measureRuleStrings(guardedOutput) ? unguardedOutput : guardedOutput;
 }
 
 export {
