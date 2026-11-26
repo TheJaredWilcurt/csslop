@@ -15,6 +15,7 @@
     "test": "node ./tests/index.test.js",
     "real": "node ./tests/realworld.test.js",
     "real-time": "node ./tests/realworld.test.js true",
+    "real-nice": "sudo nice -n -18 /home/owner/.proto/tools/node/26.13.1/bin/node ./tests/realworld.test.js",
     "idem": "node ./tests/idempotency.test.js",
     "lint": "eslint *.js scripts src tests --fix",
     "fix": "npm run lint",
