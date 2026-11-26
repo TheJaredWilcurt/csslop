@@ -156,12 +156,16 @@ function nestedBlocksSignature (nestedBlocks) {
  * Whether a merge that would split a partial shorthand is held back. The
  * optimizer lifts the hold to compare the result against the merged output, so
  * `blocked` records that a merge was actually held back in the current run.
+ * `heldBackCount` only ever grows, so comparing it before and after a pass
+ * tells whether that pass held a merge back, and so whether lifting the hold
+ * could change what the pass produces.
  *
- * @type {{enforced: boolean, blocked: boolean}}
+ * @type {{enforced: boolean, blocked: boolean, heldBackCount: number}}
  */
 const partialShorthandGuard = {
   enforced: true,
-  blocked: false
+  blocked: false,
+  heldBackCount: 0
 };
 
 /**
@@ -182,6 +186,37 @@ function setPartialShorthandGuard (enforced) {
  */
 function wasPartialShorthandMergeBlocked () {
   return partialShorthandGuard.blocked;
+}
+
+/**
+ * Reports whether merges that would split a partial shorthand are currently
+ * held back.
+ *
+ * @return {boolean} True when the guard is enforced.
+ */
+function isPartialShorthandGuardEnforced () {
+  return partialShorthandGuard.enforced;
+}
+
+/**
+ * Counts every merge held back to keep a partial shorthand whole, across every
+ * run. A pass that leaves the count unchanged produced exactly what it would
+ * have with the guard lifted.
+ *
+ * @return {number} The number of merges held back so far.
+ */
+function countHeldBackPartialShorthandMerges () {
+  return partialShorthandGuard.heldBackCount;
+}
+
+/**
+ * Records that a merge was held back to keep a partial shorthand whole. Reusing
+ * a result that held a merge back counts as holding it back again, since the
+ * reused result still depends on the guard.
+ */
+function recordHeldBackPartialShorthandMerge () {
+  partialShorthandGuard.blocked = true;
+  partialShorthandGuard.heldBackCount++;
 }
 
 /**
@@ -222,8 +257,24 @@ function holdsBackPartialShorthandMerge (rule, movedProperties) {
   if (!partialShorthandGuard.enforced || !movingBreaksPartialShorthand(rule, movedProperties)) {
     return false;
   }
-  partialShorthandGuard.blocked = true;
+  recordHeldBackPartialShorthandMerge();
   return true;
+}
+
+/**
+ * Reports whether a later rule restates every one of a list of declarations
+ * with an equal value. The check stops at the first declaration that is not
+ * restated, so the values of the rest are never compared.
+ *
+ * @param  {Array}   declarations                The declarations that must be restated.
+ * @param  {Map}     laterDeclarationByProperty  The later rule's last declaration of each property.
+ * @return {boolean}                             True when every declaration is restated.
+ */
+function isRestatedBy (declarations, laterDeclarationByProperty) {
+  return declarations.every((declaration) => {
+    const laterDeclaration = laterDeclarationByProperty.get(declaration.property);
+    return laterDeclaration !== undefined && getComparableValue(laterDeclaration) === getComparableValue(declaration);
+  });
 }
 
 /**
@@ -255,23 +306,21 @@ function mergeRuleIntoPredecessor (previousRule, rule) {
   if (!previousBody.plainDeclarations.length || !currentBody.plainDeclarations.length) {
     return null;
   }
+  // The last declaration of each property is the one a restated value is read from
+  const currentDeclarationByProperty = new Map(
+    currentBody.plainDeclarations.map((declaration) => {
+      return [declaration.property, declaration];
+    })
+  );
+  // `all` rewrites every other property, so the later rule restating a value is
+  // no promise that it applies the same way once `all` has run.
+  const currentResetsEverything = currentDeclarationByProperty.has('all');
+  if (currentResetsEverything || !isRestatedBy(previousBody.plainDeclarations, currentDeclarationByProperty)) {
+    return null;
+  }
   const previousNesting = nestedBlocksSignature(previousBody.nestedBlocks);
   const currentNesting = nestedBlocksSignature(currentBody.nestedBlocks);
   if (previousNesting === null || previousNesting !== currentNesting) {
-    return null;
-  }
-  const currentValueByProperty = new Map(
-    currentBody.plainDeclarations.map((declaration) => {
-      return [declaration.property, getComparableValue(declaration)];
-    })
-  );
-  const previousIsRestated = previousBody.plainDeclarations.every((declaration) => {
-    return currentValueByProperty.get(declaration.property) === getComparableValue(declaration);
-  });
-  // `all` rewrites every other property, so the later rule restating a value is
-  // no promise that it applies the same way once `all` has run.
-  const currentResetsEverything = currentValueByProperty.has('all');
-  if (!previousIsRestated || currentResetsEverything) {
     return null;
   }
   const combinedSelectors = deduplicateSelectors([...previousRule.selectors, ...rule.selectors]);
@@ -1051,6 +1100,10 @@ function createFirstRuleMergeMeasure (context) {
  * @param {object} facts    The merge facts of the rule being added.
  */
 function addToFirstRuleMerge (measure, context, facts) {
+  // Once refused, the merge stays refused, so nothing more needs measuring
+  if (measure.overlaps) {
+    return;
+  }
   const { allLeafId, firstPairs, keptLeaves, restatedLeaves } = context;
   let keptCount = 0;
   let keptSize = 0;
@@ -1175,6 +1228,22 @@ function getDeclaredIds (facts) {
 }
 
 /**
+ * Reports whether a rule declares every property another rule declares.
+ *
+ * @param  {Set}     propertyIds  The ids of the properties the rule declares.
+ * @param  {object}  facts        The merge facts of the other rule.
+ * @return {boolean}              True when each of the other rule's properties is declared.
+ */
+function declaresEveryProperty (propertyIds, facts) {
+  for (const declaration of facts.declarations) {
+    if (!propertyIds.has(declaration.propertyId)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Walks forward from a start index, growing the run one rule at a time, and
  * measures the merge `mergeCommonProperties` would build for each run, so only
  * the runs that would merge are ever built. The walk stops at the first rule
@@ -1236,9 +1305,7 @@ function findMergingRunEnds (runFacts, start, context) {
     end++;
     originalSize += facts.selectorSize + facts.declarationSize;
     combinedSelectorSize = addCombinedSelectors(seenSelectors, facts, combinedSelectorSize);
-    restatesFirstRule = restatesFirstRule && firstFacts.declarations.every((declaration) => {
-      return declaredIds.propertyIds.has(declaration.propertyId);
-    });
+    restatesFirstRule = restatesFirstRule && declaresEveryProperty(declaredIds.propertyIds, firstFacts);
 
     let merge;
     let mergedSize;
@@ -1292,15 +1359,19 @@ function mergeLongestRun (rules, start, mergingEnds) {
 /**
  * Forgets the failed starts whose runs reached a rule a merge changed, since
  * those runs must be tried again, while every other failed start is unchanged.
+ * A failed run can only reach the merge when it starts no further before the
+ * merge than the longest failed run spans, so no earlier start is visited.
  *
- * @param  {Array}  failedRunEnds  The exclusive run end of each failed start, updated in place.
- * @param  {number} mergeStart     The index the merge started at.
- * @return {number}                The earliest start that must be tried again.
+ * @param  {Array}  failedRunEnds         The exclusive run end of each failed start, updated in place.
+ * @param  {number} mergeStart            The index the merge started at.
+ * @param  {number} longestFailedRunSpan  The most rules any failed run has spanned.
+ * @return {number}                       The earliest start that must be tried again.
  */
-function forgetChangedRuns (failedRunEnds, mergeStart) {
+function forgetChangedRuns (failedRunEnds, mergeStart, longestFailedRunSpan) {
   failedRunEnds.length = Math.min(failedRunEnds.length, mergeStart);
   let earliestStart = mergeStart;
-  for (let start = mergeStart - 1; start >= 0; start--) {
+  const earliestReachingStart = Math.max(0, mergeStart - longestFailedRunSpan);
+  for (let start = mergeStart - 1; start >= earliestReachingStart; start--) {
     if (failedRunEnds[start] >= mergeStart) {
       failedRunEnds[start] = undefined;
       earliestStart = start;
@@ -1334,6 +1405,7 @@ function mergeAdjacentRuleRunBySubruns (adjacentRules) {
   // The exclusive end of the longest combinable run at each start index that
   // has already failed to merge, kept until a merge changes a rule it reached
   const failedRunEnds = [];
+  let longestFailedRunSpan = 0;
   const rules = [...adjacentRules];
   const runFacts = rules.map(getRuleMergeFacts);
   let start = 0;
@@ -1346,6 +1418,7 @@ function mergeAdjacentRuleRunBySubruns (adjacentRules) {
     const merge = mergeLongestRun(rules, start, mergingEnds);
     if (!merge) {
       failedRunEnds[start] = runEnd;
+      longestFailedRunSpan = Math.max(longestFailedRunSpan, runEnd - start);
       start++;
       continue;
     }
@@ -1354,7 +1427,7 @@ function mergeAdjacentRuleRunBySubruns (adjacentRules) {
     }
     rules.splice(start, merge.end - start, ...merge.mergedRules);
     runFacts.splice(start, merge.end - start, ...merge.mergedRules.map(getRuleMergeFacts));
-    start = forgetChangedRuns(failedRunEnds, start);
+    start = forgetChangedRuns(failedRunEnds, start, longestFailedRunSpan);
   }
   return rules;
 }
@@ -1397,7 +1470,10 @@ function mergeByDeclarations (rules) {
 }
 
 export {
+  countHeldBackPartialShorthandMerges,
+  isPartialShorthandGuardEnforced,
   mergeByDeclarations,
+  recordHeldBackPartialShorthandMerge,
   setPartialShorthandGuard,
   wasPartialShorthandMergeBlocked
 };

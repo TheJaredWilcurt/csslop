@@ -33,19 +33,38 @@ function buildSelectorKey (rule) {
 }
 
 /**
- * Returns a rule's selector key, building it the first time it is needed. A
- * merge only ever grows a rule's declarations, never its selectors, so a key
- * stays valid for every pass of the merge.
+ * The selector key of each selector list array seen during the current
+ * stylesheet. Passes replace a rule's selectors with a new array rather than
+ * changing the array in place, so a key stays valid for as long as its array
+ * lives, across every merge.
  *
- * @param  {object} rule               The AST rule node.
- * @param  {Map}    selectorKeyByRule  The selector keys already built, shared by every pass of one merge.
- * @return {string}                    The normalized, order independent selector key.
+ * @type {WeakMap<Array, string>}
  */
-function getSelectorKey (rule, selectorKeyByRule) {
-  let selectorKey = selectorKeyByRule.get(rule);
+let selectorKeyBySelectors = new WeakMap();
+
+/**
+ * Discards every memoized selector key. The minifier calls this around each
+ * stylesheet, so the cache does not outlive the pass that filled it.
+ */
+function clearSelectorKeyCache () {
+  selectorKeyBySelectors = new WeakMap();
+}
+
+/**
+ * Returns a rule's selector key, building it the first time its selector list
+ * is seen.
+ *
+ * @param  {object} rule  The AST rule node.
+ * @return {string}       The normalized, order independent selector key.
+ */
+function getSelectorKey (rule) {
+  if (!rule.selectors) {
+    return '';
+  }
+  let selectorKey = selectorKeyBySelectors.get(rule.selectors);
   if (selectorKey === undefined) {
     selectorKey = buildSelectorKey(rule);
-    selectorKeyByRule.set(rule, selectorKey);
+    selectorKeyBySelectors.set(rule.selectors, selectorKey);
   }
   return selectorKey;
 }
@@ -170,7 +189,7 @@ function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPos
  * Merges rules with identical normalized selectors by combining their declarations, as long as `chooseMergePlacement` finds a spot for the combined rule that the cascade reads the same way. Non-rule entries that affect the cascade (like `@media`) break the merge window, while comments do not, since comments never influence how declarations apply.
  *
  * @param  {Array}  rules        The AST rule nodes to merge.
- * @param  {object} mergeCaches  The write profiles and selector keys shared by every pass of one merge.
+ * @param  {object} mergeCaches  The write profiles shared by every pass of one merge.
  * @return {Array}               A new array of rules with same-selector rules combined.
  */
 function mergeSelectorRulePass (rules, mergeCaches) {
@@ -192,7 +211,7 @@ function mergeSelectorRulePass (rules, mergeCaches) {
       }
       continue;
     }
-    const selectorKey = getSelectorKey(rule, mergeCaches.selectorKeyByRule);
+    const selectorKey = getSelectorKey(rule);
     const existingRule = selectorKey && selectorMap.get(selectorKey);
     if (existingRule) {
       const existingPosition = positionByRule.get(existingRule);
@@ -236,8 +255,7 @@ function mergeSelectorRulePass (rules, mergeCaches) {
  */
 function mergeSelectorRules (rules) {
   const mergeCaches = {
-    profileByRule: new Map(),
-    selectorKeyByRule: new Map()
+    profileByRule: new Map()
   };
   let previousRules = rules;
   let mergedRules = mergeSelectorRulePass(previousRules, mergeCaches);
@@ -249,5 +267,6 @@ function mergeSelectorRules (rules) {
 }
 
 export {
+  clearSelectorKeyCache,
   mergeSelectorRules
 };

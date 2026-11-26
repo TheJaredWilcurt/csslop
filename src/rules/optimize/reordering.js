@@ -24,8 +24,12 @@ function collectWrittenProperties (entries, properties = new Set()) {
         }
       }
     }
-    collectWrittenProperties(entry.declarations, properties);
-    collectWrittenProperties(entry.rules, properties);
+    if (entry.declarations) {
+      collectWrittenProperties(entry.declarations, properties);
+    }
+    if (entry.rules) {
+      collectWrittenProperties(entry.rules, properties);
+    }
   }
   return properties;
 }
