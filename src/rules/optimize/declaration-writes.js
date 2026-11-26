@@ -78,8 +78,12 @@ function collectWrittenLeafProperties (entries, writtenProperties = new Set()) {
         writtenProperties.add(leafProperty);
       }
     }
-    collectWrittenLeafProperties(entry.declarations || [], writtenProperties);
-    collectWrittenLeafProperties(entry.rules || [], writtenProperties);
+    if (entry.declarations) {
+      collectWrittenLeafProperties(entry.declarations, writtenProperties);
+    }
+    if (entry.rules) {
+      collectWrittenLeafProperties(entry.rules, writtenProperties);
+    }
   }
   return writtenProperties;
 }

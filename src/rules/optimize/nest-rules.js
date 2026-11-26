@@ -276,6 +276,23 @@ function findEarliestNestableChildIndex (rules, parentIndex, siblingIndex) {
 }
 
 /**
+ * Collects the selector of every rule that could be hoisted as a nesting
+ * parent, which are the only parents that hoisting ever looks up.
+ *
+ * @param  {Array}       rules  The sibling AST entries.
+ * @return {Set<string>}        The trimmed selectors of the single-selector rules.
+ */
+function collectHoistableParentSelectors (rules) {
+  const parentSelectors = new Set();
+  for (const rule of rules) {
+    if (rule.type === 'rule' && rule.selectors?.length === 1) {
+      parentSelectors.add(rule.selectors[0].trim());
+    }
+  }
+  return parentSelectors;
+}
+
+/**
  * Moves a parent rule before earlier rules that can safely nest under it.
  *
  * @param  {Array} rules  The sibling AST entries to reorder.
@@ -284,7 +301,9 @@ function findEarliestNestableChildIndex (rules, parentIndex, siblingIndex) {
 function hoistNestingParents (rules) {
   const result = [...rules];
   const getWrittenProperties = createWrittenPropertiesCache();
-  let siblingIndex = createSiblingIndex(result, getWrittenProperties);
+  // Reordering never changes which rules there are, so neither do the parents
+  const parentSelectors = collectHoistableParentSelectors(result);
+  let siblingIndex = createSiblingIndex(result, getWrittenProperties, parentSelectors);
   let parentIndex = 1;
 
   while (parentIndex < result.length) {
@@ -302,7 +321,7 @@ function hoistNestingParents (rules) {
     result.splice(parentIndex, 1);
     result.splice(earliestChildIndex, 0, parentRule);
     // The indexes no longer match the reordered siblings
-    siblingIndex = createSiblingIndex(result, getWrittenProperties);
+    siblingIndex = createSiblingIndex(result, getWrittenProperties, parentSelectors);
     parentIndex = earliestChildIndex + 1;
   }
 

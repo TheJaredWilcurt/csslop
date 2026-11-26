@@ -18,11 +18,12 @@ import { createSelectorPrefixIndex } from './selector-prefix-index.js';
  *
  * @param  {Array}                 entries                 The sibling AST entries.
  * @param  {function(object): Set} [getWrittenProperties]  Returns the properties a rule writes.
+ * @param  {Set<string>|null}      [queriedParents]        The only parent selectors `findNestingCandidates` will be asked about, or null when any may be.
  * @return {object}                                        The `findNestingCandidates` parent lookup and the `writeIndex` of the siblings.
  */
-function createSiblingIndex (entries, getWrittenProperties = createWrittenPropertiesCache()) {
+function createSiblingIndex (entries, getWrittenProperties = createWrittenPropertiesCache(), queriedParents = null) {
   return {
-    findNestingCandidates: createSelectorPrefixIndex(entries),
+    findNestingCandidates: createSelectorPrefixIndex(entries, queriedParents),
     writeIndex: createWriteIndex(entries, getWrittenProperties)
   };
 }
