@@ -26,13 +26,21 @@ const MIXED_IMPORTANT_SHORTHANDS = new Set(['margin', 'padding', 'inset', 'posit
  * The shorthands that may be built from only some of their longhands, and the
  * longhands each of them cannot do without. Every listed group has to be
  * satisfied by at least one of the properties it holds, so `font` needs both a
- * size and a family, while `background` needs a color or an image.
+ * size and a family, while `background` needs a color or an image, and states
+ * its repeat, position, and attachment, since the shorthand would reset any it
+ * leaves out.
  *
  * @type {{[key: string]: Array}}
  */
 const PARTIAL_MERGE_REQUIREMENTS = {
   animation: [['animation-name'], ['animation-duration']],
-  background: [['background-color', 'background-image']],
+  background: [
+    ['background-color', 'background-image'],
+    ['background-repeat'],
+    ['background-position', 'background-position-x'],
+    ['background-position', 'background-position-y'],
+    ['background-attachment']
+  ],
   'background-position': [['background-position-x'], ['background-position-y']],
   'border-image': [['border-image-source']],
   columns: [['column-width', 'column-count', 'column-height']],

@@ -358,6 +358,11 @@ const OPTIMIZATION_PASSES = [
   },
   {
     run: function (rules) {
+      return factorCommonParents(rules);
+    }
+  },
+  {
+    run: function (rules) {
       rules.forEach(factorSelectorBranches);
       return mergeIdenticalNestedRules(rules);
     }

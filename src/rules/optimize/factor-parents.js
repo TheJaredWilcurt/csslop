@@ -13,6 +13,7 @@ import {
   isSelectorWhitespace
 } from './nest-rules.js';
 import { canMoveRuleAcrossRange } from './reordering.js';
+import { normalizeSelector } from './selector-normalization.js';
 import { createSiblingIndex } from './sibling-index.js';
 import { findFirstPositionAtLeast } from './sorted-indexes.js';
 import { selectorsShareSpecificity } from './specificity.js';
@@ -107,6 +108,48 @@ const LEADING_TYPE_SELECTOR_PATTERN = /^[a-z][a-z0-9-]*(?=[:.#[])/i;
 const COMPOUND_SEPARATOR_PATTERN = /[\s>+~]/;
 
 /**
+ * Matches a single pseudo-class or pseudo-element at the very end of a
+ * selector, including its argument list when it has one, such as `:before`,
+ * `:hover`, or `:not(.x)`. Its first capture is the colon-prefixed pseudo, so
+ * the text before the match is the compound the pseudo applies to.
+ *
+ * @type {RegExp}
+ */
+const TRAILING_PSEUDO_PATTERN = /:{1,2}[a-z][a-z-]*(?:\([^()]*\))?$/i;
+
+/**
+ * Matches a selector ending in whitespace or an explicit combinator, which
+ * would leave a nested selector with nothing to attach to.
+ *
+ * @type {RegExp}
+ */
+const DANGLING_COMBINATOR_PATTERN = /[\s>+~]$/;
+
+/**
+ * Splits a selector right before its trailing pseudo-class or pseudo-element,
+ * so selectors that differ only in their leading compound, such as `a:before`
+ * and `b:before`, can share the pseudo through nesting as `&:before`.
+ *
+ * @param  {string}      selector  The selector string to split.
+ * @return {object|null}           The `head` and the `nestedSelector` written with a leading `&`, or null when the selector does not end with a pseudo that follows a compound.
+ */
+function splitSelectorPseudoTail (selector) {
+  const trimmed = normalizeSelector(selector);
+  const pseudoMatch = trimmed.match(TRAILING_PSEUDO_PATTERN);
+  if (!pseudoMatch || pseudoMatch.index === 0) {
+    return null;
+  }
+  const head = trimmed.slice(0, pseudoMatch.index);
+  if (DANGLING_COMBINATOR_PATTERN.test(head)) {
+    return null;
+  }
+  return {
+    head,
+    nestedSelector: '&' + pseudoMatch[0]
+  };
+}
+
+/**
  * Splits a selector right after its leading type selector, so the rest of the
  * selector can be nested under that type selector with a leading `&`. Only a
  * rest that holds a combinator is split, since a bare compound such as
@@ -159,12 +202,12 @@ function factorRuleBySplit (rule, splitSelector) {
   const heads = splits.map((split) => {
     return split.head;
   });
-  if (!selectorsShareSpecificity(heads)) {
+  if (!selectorsShareSpecificity(heads) || new Set(heads).size !== heads.length) {
     return null;
   }
   const flatLength = rule.selectors.join(',').length;
   const factoredLength = heads.join(',').length + nestedSelector.length + 2;
-  if (factoredLength >= flatLength) {
+  if (factoredLength > flatLength) {
     return null;
   }
   return {
@@ -182,20 +225,29 @@ function factorRuleBySplit (rule, splitSelector) {
 }
 
 /**
+ * Every split a multi-selector rule may be factored by, once it is nested
+ * under a wrapper.
+ *
+ * @type {Array<function(string): (object|null)>}
+ */
+const ALL_TRAILING_SPLITTERS = [splitSelectorTail, splitSelectorHead, splitSelectorPseudoTail];
+
+/**
  * Rewrites a multi-selector rule whose selectors only differ before their
  * final combinator into a wrapper rule that nests the shared trailing
  * compound once, such as `&:hover .x,&:focus .x` becoming
  * `&:hover,&:focus{.x{...}}`. The shorter of the trailing-combinator split and
  * the leading type selector split is used.
  *
- * @param  {object} rule  The AST rule node whose selector list may be factored.
- * @return {object}       The rule, rewritten when factoring is valid and shorter.
+ * @param  {object}                                 rule       The AST rule node whose selector list may be factored.
+ * @param  {Array<function(string): (object|null)>} splitters  The split functions to try, each splitting one selector into its `head` and `nestedSelector`.
+ * @return {object}                                            The rule, rewritten when factoring is valid and shorter.
  */
-function factorCommonTrailingCompound (rule) {
+function factorCommonTrailingCompound (rule, splitters) {
   if (rule.type !== 'rule' || !rule.selectors || rule.selectors.length < 2) {
     return rule;
   }
-  const factorings = [splitSelectorTail, splitSelectorHead].map((splitSelector) => {
+  const factorings = splitters.map((splitSelector) => {
     return factorRuleBySplit(rule, splitSelector);
   }).filter((factoring) => {
     return factoring !== null;
@@ -416,6 +468,12 @@ function factorCommonParentsPass (rules, allowTrailingCompound = false) {
       index++;
       continue;
     }
+    const pseudoFactoredRule = allowTrailingCompound ? rule : factorCommonTrailingCompound(rule, [splitSelectorPseudoTail]);
+    if (pseudoFactoredRule !== rule) {
+      result.push(pseudoFactoredRule);
+      index++;
+      continue;
+    }
     let bestGrouping = null;
     for (const candidateParent of collectSharedParentCandidates(rule)) {
       if (!candidateParent || candidateParent === '&' || containsPseudoElement(candidateParent)) {
@@ -443,7 +501,7 @@ function factorCommonParentsPass (rules, allowTrailingCompound = false) {
     }
     if (!bestGrouping) {
       if (allowTrailingCompound) {
-        result.push(factorCommonTrailingCompound(rule));
+        result.push(factorCommonTrailingCompound(rule, ALL_TRAILING_SPLITTERS));
       } else {
         result.push(rule);
       }
