@@ -287,13 +287,13 @@ function isBlockedAboveEarlierWrites (entry, precedingWrites) {
 }
 
 /**
- * Entry types that may be reordered past a `@media` block. Style rules are
- * reordered only when they write nothing the block writes, while comments
- * never affect the cascade.
+ * Entry types that may be reordered past a `@media` block. Style rules and
+ * other `@media` blocks are reordered only when they write nothing the block
+ * writes, while comments never affect the cascade.
  *
  * @type {Set<string>}
  */
-const REORDERABLE_ENTRY_TYPES = new Set(['rule', 'comment']);
+const REORDERABLE_ENTRY_TYPES = new Set(['rule', 'comment', 'media']);
 
 /**
  * Finds the `@media` block that a block at `mediaIndex` repeats, if only
@@ -347,6 +347,7 @@ function hoistRulesAboveRepeatedMedia (rules) {
     const mediaRules = [result[earlierIndex], ...repeatedMediaRules, result[mediaIndex]];
     const entriesBeforeMedia = [];
     const entriesAfterMedia = [];
+    const movedMediaWrites = collectWrittenLeafProperties(mediaRules.slice(1));
     const allMediaWrites = collectWrittenLeafProperties(mediaRules);
     const precedingMediaRules = [mediaRules[0]];
     let canMerge = true;
@@ -364,15 +365,17 @@ function hoistRulesAboveRepeatedMedia (rules) {
       // An entry moves above the block when the rules it would pass cannot
       // change its cascade, and it does not pass an entry that stays behind.
       // Failing that, it moves below the block when it writes nothing the
-      // block writes.
+      // block writes. Another `@media` block only needs to avoid what the
+      // repeated blocks write, since it stays after the first block.
       const entryWrites = collectWrittenLeafProperties([entry]);
+      const blockWritesToAvoid = entry.type === 'media' ? movedMediaWrites : allMediaWrites;
       const crossesEntriesAfter = entriesAfterMedia.some((entryAfter) => {
         return propertySetsOverlap(collectWrittenLeafProperties([entryAfter]), entryWrites);
       });
       const precedingWrites = collectStrongestLeafWrites(precedingMediaRules);
       if (!crossesEntriesAfter && !isBlockedAboveEarlierWrites(entry, precedingWrites)) {
         entriesBeforeMedia.push(entry);
-      } else if (!propertySetsOverlap(entryWrites, allMediaWrites)) {
+      } else if (!propertySetsOverlap(entryWrites, blockWritesToAvoid)) {
         entriesAfterMedia.push(entry);
       } else {
         canMerge = false;
@@ -571,6 +574,7 @@ function mergeLayerRules (rules, mergeSelectorRules) {
 }
 
 export {
+  canFoldMediaIntoRule,
   deduplicateKeyframes,
   foldRepeatedMediaRules,
   mergeContainerRules,

@@ -428,7 +428,9 @@ function collectSiblingRun (rules, startIndex, parentSelector, siblingIndex) {
     const siblingPosition = candidateIndexes[position];
     const sibling = rules[siblingPosition];
     const nestedSelectors = nestSelectorsUnderParent(sibling, matchNestedSelector);
-    if (nestedSelectors && canMoveRuleAcrossRange(sibling, writeIndex, lastSelectedIndex, siblingPosition)) {
+    // A rule that repeats the parent selector itself is only combined where no crossed rule overrides it, whatever their specificity
+    const repeatsParentSelector = nestedSelectors?.includes('&');
+    if (nestedSelectors && canMoveRuleAcrossRange(sibling, writeIndex, lastSelectedIndex, siblingPosition, !repeatsParentSelector)) {
       selectedIndexes.add(siblingPosition);
       lastSelectedIndex = siblingPosition;
       run.push({ sibling, nestedSelectors });

@@ -13,6 +13,7 @@ import {
 } from './border.js';
 import { rgbaToHex } from './color/conversion.js';
 import { shortenColorValues } from './color/shorten.js';
+import { minifyFlexValue } from './flex.js';
 import { minifyFontShorthand } from './font.js';
 import { collapseHyphenateLimitChars } from './hyphenate-limit-chars.js';
 import { resolveInitialKeyword } from './initial-keywords.js';
@@ -162,28 +163,6 @@ function minifyAnimationValue (value) {
   // Restore space between step-start/step-end keyword and following token
   // (the parenthesis whitespace stripping removes the space before replacement)
   return value.replace(/(step-start|step-end)(?=[a-zA-Z0-9#-])/g, '$1 ');
-}
-
-/**
- * Minifies a `flex` value by removing the zero basis that the shorthand
- * already reads an unwritten basis as (flex: 0 0 0px -> flex: 0 0).
- *
- * @param  {string} value  The `flex` value.
- * @return {string}        The minified value.
- */
-function minifyFlexValue (value) {
-  // Remove trailing zero-pixel basis value
-  value = value.replace(/\s+0px/g, ' ');
-  // Remove leading zero-pixel value
-  value = value.replace(/^0px\s*/, '');
-  // Remove an explicit zero basis: a trailing zero is only a basis when grow
-  // and shrink precede it, and the shorthand already reads an unwritten basis
-  // as 0. In `0 0` the trailing zero is the shrink, which the shorthand
-  // defaults to 1 instead, so dropping it would size the element differently.
-  value = value.replace(/^(\S+\s+\S+)\s+0$/, '$1');
-  // Remove standalone zero-pixel value
-  value = value.replace(/^0px$/, '');
-  return value.trim();
 }
 
 /**

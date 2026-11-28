@@ -3,6 +3,7 @@
  */
 
 import { splitTopLevelComponents } from '../parser/source-search.js';
+import { serializeFlexComponents } from '../value/flex.js';
 import { collapseShorthandParts } from '../value/shared.js';
 
 import { buildBackgroundShorthandValue } from './background.js';
@@ -282,7 +283,8 @@ function buildFontValue ({ valueMap, importantSuffix }) {
 }
 
 /**
- * Builds a `flex` value from its three required components.
+ * Builds a `flex` value from its three required components, written in the
+ * shortest form that reads back the same grow, shrink, and basis.
  *
  * @param  {ShorthandComponents} components  The collected longhand values.
  * @return {string|null}                     The shorthand value, or null when it cannot be built.
@@ -294,7 +296,7 @@ function buildFlexValue ({ valueMap, importantSuffix }) {
   if (!grow || !shrink || !basis) {
     return null;
   }
-  return [grow, shrink, basis].join(' ') + importantSuffix;
+  return serializeFlexComponents(grow, shrink, basis) + importantSuffix;
 }
 
 /**
