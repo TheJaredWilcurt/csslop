@@ -1,0 +1,10 @@
+div,
+span {
+  border: 1px dashed red;
+}
+div,
+span {
+  border-width: 1px;
+  border-style: dashed;
+  border-color: red;
+}

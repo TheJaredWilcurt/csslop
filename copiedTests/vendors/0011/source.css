@@ -1,0 +1,7 @@
+a {
+  -webkit-transition: background 300ms; /* Chrome < 26, Safari < 7 */
+     -moz-transition: background 300ms; /* Firefox < 16 */
+      -ms-transition: background 300ms; /* Never used by any browser */
+       -o-transition: background 300ms; /* Opera < 12.10 */
+          transition: background 300ms; /* IE10+, Firefox 16+, Chrome 36+, Opera 12.10 */
+}

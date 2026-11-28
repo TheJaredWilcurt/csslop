@@ -1,0 +1,8 @@
+div,
+span {
+  color: red;
+  background: tan;
+}
+:is(div, span) {
+  color: red;
+}
