@@ -2,6 +2,9 @@
  * @file Merges rules that share a selector, placing the merged rule wherever the cascade reads it the same way it read the two rules apart.
  */
 
+import { deduplicateDeclarations } from '../../declarations/process.js';
+
+import { canFoldMediaIntoRule } from './at-rules.js';
 import {
   expandToOverridableProperties,
   isImportantDeclaration,
@@ -159,9 +162,10 @@ function decidesAnythingAfterMerge (rule, decidingDeclarations) {
  * @param  {object}      laterRule        The second of the two rules with this selector.
  * @param  {number}      earlierPosition  The slot the earlier rule occupies.
  * @param  {number}      laterPosition    The slot the later rule would occupy.
+ * @param  {object|null} followingEntry   The entry that sits right after the earlier rule's slot.
  * @return {string|null}                  Where to place the merged rule, or null when merging is unsafe.
  */
-function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPosition, laterPosition) {
+function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPosition, laterPosition, followingEntry) {
   const rulesAreAdjacent = earlierPosition === laterPosition - 1;
   if (rulesAreAdjacent) {
     return MERGE_AT_LATER_RULE;
@@ -176,17 +180,21 @@ function chooseMergePlacement (overrideIndex, earlierRule, laterRule, earlierPos
   if (!decidesAnythingAfterMerge(earlierRule, decidingDeclarations)) {
     return MERGE_AT_LATER_RULE;
   }
-  if (!overrideIndex.blocksRelocation(earlierRule, earlierPosition)) {
-    return MERGE_AT_LATER_RULE;
-  }
-  if (!overrideIndex.blocksRelocation(laterRule, earlierPosition)) {
+  const canRiseAbove = !overrideIndex.blocksRelocation(laterRule, earlierPosition);
+  const canSinkBelow = !overrideIndex.blocksRelocation(earlierRule, earlierPosition);
+  // A merged rule left right in front of a `@media` block that repeats its selector can fold that block in
+  const isFoldableMediaAfter = followingEntry?.type === 'media' && canFoldMediaIntoRule(earlierRule, followingEntry);
+  if (canRiseAbove && (isFoldableMediaAfter || !canSinkBelow)) {
     return MERGE_AT_EARLIER_RULE;
+  }
+  if (canSinkBelow) {
+    return MERGE_AT_LATER_RULE;
   }
   return null;
 }
 
 /**
- * Merges rules with identical normalized selectors by combining their declarations, as long as `chooseMergePlacement` finds a spot for the combined rule that the cascade reads the same way. Non-rule entries that affect the cascade (like `@media`) break the merge window, while comments do not, since comments never influence how declarations apply.
+ * Merges rules with identical normalized selectors by combining their declarations, as long as `chooseMergePlacement` finds a spot for the combined rule that the cascade reads the same way. Entries that are not rules, such as `@media` blocks, are indexed so the placement check can see what they write, while other non-rule entries break the merge window. Comments do not, since comments never influence how declarations apply.
  *
  * @param  {Array}  rules        The AST rule nodes to merge.
  * @param  {object} mergeCaches  The write profiles shared by every pass of one merge.
@@ -203,12 +211,15 @@ function mergeSelectorRulePass (rules, mergeCaches) {
   const overrideIndex = createOverrideIndex(mergeCaches.profileByRule);
   for (const rule of rules) {
     if (rule.type !== 'rule') {
-      slots.push(rule);
-      // Clearing a map replaces its storage, so already empty maps are left alone
-      if (rule.type !== 'comment' && selectorMap.size) {
+      // A `@media` block is indexed, so a rule can still merge across it when nothing it writes is overridden there
+      if (rule.type === 'media') {
+        overrideIndex.recordRule(rule, slots.length);
+      } else if (rule.type !== 'comment' && selectorMap.size) {
+        // Clearing a map replaces its storage, so already empty maps are left alone
         selectorMap.clear();
         positionByRule.clear();
       }
+      slots.push(rule);
       continue;
     }
     const selectorKey = getSelectorKey(rule);
@@ -216,10 +227,10 @@ function mergeSelectorRulePass (rules, mergeCaches) {
     if (existingRule) {
       const existingPosition = positionByRule.get(existingRule);
       const mergedPosition = slots.length;
-      const placement = chooseMergePlacement(overrideIndex, existingRule, rule, existingPosition, mergedPosition);
+      const placement = chooseMergePlacement(overrideIndex, existingRule, rule, existingPosition, mergedPosition, slots[existingPosition + 1]);
       if (placement) {
         overrideIndex.absorbRule(existingRule, rule);
-        existingRule.declarations.push(...(rule.declarations || []));
+        existingRule.declarations = deduplicateDeclarations([...existingRule.declarations, ...(rule.declarations || [])]);
         if (placement === MERGE_AT_LATER_RULE) {
           slots[existingPosition] = null;
           positionByRule.set(existingRule, mergedPosition);

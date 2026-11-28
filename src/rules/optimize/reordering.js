@@ -3,8 +3,19 @@
  * writes in the cascade.
  */
 
-import { expandToOverridableProperties } from './declaration-writes.js';
-import { findLastIndexBefore } from './sorted-indexes.js';
+import {
+  expandToOverridableProperties,
+  isImportantDeclaration
+} from './declaration-writes.js';
+import {
+  findFirstPositionAtLeast,
+  findLastIndexBefore
+} from './sorted-indexes.js';
+import {
+  compareSpecificity,
+  maximumRuleSpecificity,
+  minimumRuleSpecificity
+} from './specificity.js';
 
 /**
  * Collects every property written by a list of declarations and nested rules.
@@ -125,6 +136,7 @@ function createWriteIndex (entries, getWrittenProperties) {
   let propertyWrites = null;
   return {
     barrierIndexes: collectBarrierIndexes(entries),
+    entries,
     getWrittenProperties,
     getPropertyWrites: function () {
       propertyWrites = propertyWrites || indexPropertyWrites(entries, getWrittenProperties);
@@ -134,17 +146,75 @@ function createWriteIndex (entries, getWrittenProperties) {
 }
 
 /**
+ * Reports whether a rule's declarations can be compared by specificity alone:
+ * it is a style rule that nests nothing and holds no `!important` declaration,
+ * since either would let a declaration win regardless of specificity.
+ *
+ * @param  {object}  rule  The sibling AST entry.
+ * @return {boolean}       True when the rule's cascade position depends only on its selectors.
+ */
+function isPlainStyleRule (rule) {
+  return rule.type === 'rule' && Boolean(rule.selectors?.length) && (rule.declarations || []).every((entry) => {
+    return entry.type === 'comment' || (entry.type === 'declaration' && !isImportantDeclaration(entry));
+  });
+}
+
+/**
+ * Reports whether a sibling wins every property it shares with a moving rule
+ * whichever of the two comes first. That holds when the sibling's weakest
+ * selector is strictly more specific than the moving rule's strongest, so the
+ * moving rule loses either way and the order between them is irrelevant.
+ *
+ * @param  {object}  siblingRule  The sibling AST entry the moving rule would cross.
+ * @param  {object}  movingRule   The rule that would move.
+ * @return {boolean}              True when the sibling always outranks the moving rule.
+ */
+function alwaysOutranks (siblingRule, movingRule) {
+  return (
+    isPlainStyleRule(siblingRule) &&
+    isPlainStyleRule(movingRule) &&
+    compareSpecificity(minimumRuleSpecificity(siblingRule.selectors), maximumRuleSpecificity(movingRule.selectors)) > 0
+  );
+}
+
+/**
+ * Finds the last sibling before a bound that writes a property and could still
+ * decide the cascade against a moving rule. Siblings that always outrank the
+ * moving rule are passed over, since they cannot block its move.
+ *
+ * @param  {Array<number>|undefined} sortedIndexes            The ascending indexes of the siblings that write the property.
+ * @param  {object}                  movingRule               The rule that would move.
+ * @param  {Array}                   entries                  The sibling AST entries.
+ * @param  {number}                  beforeIndex              The exclusive end of the range searched backwards.
+ * @param  {boolean}                 passesOutrankedSiblings  Whether siblings that always outrank the moving rule are passed over.
+ * @return {number}                                           The index of the last contested sibling before the bound, or -1 when there is none.
+ */
+function findLastContestedIndexBefore (sortedIndexes, movingRule, entries, beforeIndex, passesOutrankedSiblings) {
+  if (!sortedIndexes) {
+    return -1;
+  }
+  let position = findFirstPositionAtLeast(sortedIndexes, beforeIndex) - 1;
+  while (passesOutrankedSiblings && position >= 0 && alwaysOutranks(entries[sortedIndexes[position]], movingRule)) {
+    position--;
+  }
+  return position >= 0 ? sortedIndexes[position] : -1;
+}
+
+/**
  * Finds the nearest sibling before an index that a rule could not move
  * across. A rule blocks the move when the two write any of the same
  * properties, and an `all` write overlaps any rule that writes something.
+ * When `passesOutrankedSiblings` is set, a sibling that always outranks the
+ * rule on every property they share does not block it.
  *
- * @param  {object} movingRule   The rule that would move.
- * @param  {object} writeIndex   The index built by `createWriteIndex` for the siblings.
- * @param  {number} beforeIndex  The exclusive end of the range searched backwards.
- * @return {number}              The index of the last blocking sibling before the bound, or -1 when nothing blocks the move.
+ * @param  {object}  movingRule               The rule that would move.
+ * @param  {object}  writeIndex               The index built by `createWriteIndex` for the siblings.
+ * @param  {number}  beforeIndex              The exclusive end of the range searched backwards.
+ * @param  {boolean} passesOutrankedSiblings  Whether siblings that always outrank the moving rule are passed over.
+ * @return {number}                           The index of the last blocking sibling before the bound, or -1 when nothing blocks the move.
  */
-function findLastBlockingIndex (movingRule, writeIndex, beforeIndex) {
-  const { barrierIndexes, getWrittenProperties } = writeIndex;
+function findLastBlockingIndex (movingRule, writeIndex, beforeIndex, passesOutrankedSiblings = false) {
+  const { barrierIndexes, entries, getWrittenProperties } = writeIndex;
   const movingProperties = getWrittenProperties(movingRule);
   const lastBarrierIndex = findLastIndexBefore(barrierIndexes, beforeIndex);
   if (movingProperties.size === 0) {
@@ -156,7 +226,10 @@ function findLastBlockingIndex (movingRule, writeIndex, beforeIndex) {
   }
   let lastBlockingIndex = Math.max(lastBarrierIndex, findLastIndexBefore(indexesByProperty.get('all'), beforeIndex));
   for (const property of movingProperties) {
-    lastBlockingIndex = Math.max(lastBlockingIndex, findLastIndexBefore(indexesByProperty.get(property), beforeIndex));
+    lastBlockingIndex = Math.max(
+      lastBlockingIndex,
+      findLastContestedIndexBefore(indexesByProperty.get(property), movingRule, entries, beforeIndex, passesOutrankedSiblings)
+    );
   }
   return lastBlockingIndex;
 }
@@ -165,17 +238,18 @@ function findLastBlockingIndex (movingRule, writeIndex, beforeIndex) {
  * Checks whether a rule can move across every sibling strictly between two
  * indexes, leaving their property writes in the same cascade order.
  *
- * @param  {object}  movingRule   The rule that would move.
- * @param  {object}  writeIndex   The index built by `createWriteIndex` for the siblings.
- * @param  {number}  afterIndex   The exclusive start of the crossed range.
- * @param  {number}  beforeIndex  The exclusive end of the crossed range.
- * @return {boolean}              Whether the move is safe.
+ * @param  {object}  movingRule               The rule that would move.
+ * @param  {object}  writeIndex               The index built by `createWriteIndex` for the siblings.
+ * @param  {number}  afterIndex               The exclusive start of the crossed range.
+ * @param  {number}  beforeIndex              The exclusive end of the crossed range.
+ * @param  {boolean} passesOutrankedSiblings  Whether siblings that always outrank the moving rule may be crossed.
+ * @return {boolean}                          Whether the move is safe.
  */
-function canMoveRuleAcrossRange (movingRule, writeIndex, afterIndex, beforeIndex) {
+function canMoveRuleAcrossRange (movingRule, writeIndex, afterIndex, beforeIndex, passesOutrankedSiblings) {
   if (beforeIndex - afterIndex < 2) {
     return true;
   }
-  return findLastBlockingIndex(movingRule, writeIndex, beforeIndex) <= afterIndex;
+  return findLastBlockingIndex(movingRule, writeIndex, beforeIndex, passesOutrankedSiblings) <= afterIndex;
 }
 
 export {

@@ -75,6 +75,10 @@ function addWrittenProperties (profile, rule, specificity) {
       }
     }
   }
+  // A grouping block such as `@media` holds rules of its own, each applied with its own specificity
+  for (const childRule of rule.rules || []) {
+    addWrittenProperties(profile, childRule, maximumRuleSpecificity(childRule.selectors));
+  }
 }
 
 /**

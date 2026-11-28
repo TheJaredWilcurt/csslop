@@ -618,7 +618,7 @@ function buildSharedDeclarationMerge (adjacentRules, commonProps) {
     selectors: combineSelectors(adjacentRules),
     declarations: declarationSplits[0].sharedDeclarations
   };
-  return [...remainingRules, mergedRule];
+  return [mergedRule, ...remainingRules];
 }
 
 /**
@@ -1262,7 +1262,7 @@ function declaresEveryProperty (propertyIds, facts) {
  * @param  {Array}  runFacts  The merge facts of the consecutive rules.
  * @param  {number} start     The index the runs start at.
  * @param  {object} context   The context from `createRunMeasureContext`.
- * @return {object}           The exclusive `runEnd` of the longest combinable run, and the ascending `mergingEnds` of the runs that would merge.
+ * @return {object}           The exclusive `runEnd` of the longest combinable run, and the ascending `mergingEnds` of the runs that would merge, each with the characters it saves.
  */
 function findMergingRunEnds (runFacts, start, context) {
   const mergingEnds = [];
@@ -1323,7 +1323,7 @@ function findMergingRunEnds (runFacts, start, context) {
       mergedSize = combinedSelectorSize + sharedMerge.sharedSize + sharedMerge.leftBehindSize;
     }
     if (!merge.overlaps && mergedSize < originalSize) {
-      mergingEnds.push(end);
+      mergingEnds.push({ end, savings: originalSize - mergedSize });
     }
   }
   return {
@@ -1333,17 +1333,20 @@ function findMergingRunEnds (runFacts, start, context) {
 }
 
 /**
- * Merges the longest run from a start index that `findMergingRunEnds` found
- * would merge, the same way the run would be merged on its own.
+ * Merges the run from a start index that `findMergingRunEnds` found would
+ * merge and saves the most characters, the same way the run would be merged on
+ * its own. Between runs that save the same, the longer one is merged.
  *
  * @param  {Array}       rules        The consecutive rule nodes.
  * @param  {number}      start        The index the runs start at.
- * @param  {Array}       mergingEnds  The ascending exclusive ends of the runs that would merge.
+ * @param  {Array}       mergingEnds  The exclusive ends of the runs that would merge, each with the characters it saves.
  * @return {object|null}              The `end` of the merged run and the `mergedRules` replacing it, or null when no run merged.
  */
-function mergeLongestRun (rules, start, mergingEnds) {
-  for (let position = mergingEnds.length - 1; position >= 0; position--) {
-    const end = mergingEnds[position];
+function mergeBestRun (rules, start, mergingEnds) {
+  const candidates = [...mergingEnds].sort((first, second) => {
+    return second.savings - first.savings || second.end - first.end;
+  });
+  for (const { end } of candidates) {
     const subRun = rules.slice(start, end);
     const mergedRules = mergeAdjacentRuleRun(subRun);
     if (mergedRules !== subRun) {
@@ -1415,7 +1418,7 @@ function mergeAdjacentRuleRunBySubruns (adjacentRules) {
       continue;
     }
     const { mergingEnds, runEnd } = findMergingRunEnds(runFacts, start, context);
-    const merge = mergeLongestRun(rules, start, mergingEnds);
+    const merge = mergeBestRun(rules, start, mergingEnds);
     if (!merge) {
       failedRunEnds[start] = runEnd;
       longestFailedRunSpan = Math.max(longestFailedRunSpan, runEnd - start);

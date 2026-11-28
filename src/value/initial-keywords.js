@@ -73,6 +73,10 @@ function resolveInitialKeyword (value, property) {
   if (value !== 'initial') {
     return value;
   }
+  // The initial flex is `0 1 auto`, which its shorthand writes one character shorter as `0 auto`
+  if (property === 'flex') {
+    return '0 auto';
+  }
   if (NUMERIC_INITIAL_PROPERTIES.has(property)) {
     // Just leaving them or mapping some: opacity: initial -> opacity: 1
     if (property === 'opacity') {
